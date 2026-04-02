@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block title %}打刻編集{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>打刻編集</h2>
+  <p>{{ record['brand_name'] }} / {{ record['store_name'] }} / {{ record['full_name'] }} / {{ record['work_date'] }}</p>
+  <form method="post" class="grid-form cols-2">
+    <label>出勤
+      <input type="datetime-local" name="clock_in" value="{{ record['clock_in'][:16] if record['clock_in'] else '' }}">
+    </label>
+    <label>退勤
+      <input type="datetime-local" name="clock_out" value="{{ record['clock_out'][:16] if record['clock_out'] else '' }}">
+    </label>
+    <label>休憩開始
+      <input type="datetime-local" name="break_start" value="{{ record['break_start'][:16] if record['break_start'] else '' }}">
+    </label>
+    <label>休憩終了
+      <input type="datetime-local" name="break_end" value="{{ record['break_end'][:16] if record['break_end'] else '' }}">
+    </label>
+    <label>休憩合計(分)
+      <input type="number" name="break_minutes" value="{{ record['break_minutes'] or 0 }}">
+    </label>
+    <label>備考
+      <input type="text" name="note" value="{{ record['note'] or '' }}">
+    </label>
+    <button type="submit">保存</button>
+  </form>
+</div>
+{% endblock %}

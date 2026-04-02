@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% block title %}ダッシュボード{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>本日の打刻</h2>
+  <div class="status-grid">
+    <div><strong>出勤</strong><br>{{ today_attendance['clock_in']|format_dt if today_attendance else '-' }}</div>
+    <div><strong>休憩開始</strong><br>{{ today_attendance['break_start']|format_dt if today_attendance else '-' }}</div>
+    <div><strong>休憩終了</strong><br>{{ today_attendance['break_end']|format_dt if today_attendance else '-' }}</div>
+    <div><strong>退勤</strong><br>{{ today_attendance['clock_out']|format_dt if today_attendance else '-' }}</div>
+    <div><strong>休憩合計</strong><br>{{ today_attendance['break_minutes'] if today_attendance else 0 }} 分</div>
+    <div><strong>実働</strong><br>{{ today_attendance['work_minutes'] if today_attendance and today_attendance['work_minutes'] else '-' }} 分</div>
+  </div>
+  <div class="button-row">
+    <form method="post" action="{{ url_for('punch', action='clock_in') }}"><button>出勤</button></form>
+    <form method="post" action="{{ url_for('punch', action='break_start') }}"><button>休憩開始</button></form>
+    <form method="post" action="{{ url_for('punch', action='break_end') }}"><button>休憩終了</button></form>
+    <form method="post" action="{{ url_for('punch', action='clock_out') }}"><button class="danger">退勤</button></form>
+  </div>
+</div>
+
+<div class="card">
+  <h2>直近の打刻履歴</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>日付</th><th>出勤</th><th>退勤</th><th>休憩(分)</th><th>実働(分)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in recent_logs %}
+      <tr>
+        <td>{{ row['work_date'] }}</td>
+        <td>{{ row['clock_in']|format_dt if row['clock_in'] else '-' }}</td>
+        <td>{{ row['clock_out']|format_dt if row['clock_out'] else '-' }}</td>
+        <td>{{ row['break_minutes'] }}</td>
+        <td>{{ row['work_minutes'] if row['work_minutes'] else '-' }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5">まだ履歴がありません。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}
