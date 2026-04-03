@@ -27,7 +27,11 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE = os.path.join(BASE_DIR, "timecard.db")
+
+if os.environ.get("RENDER"):
+    DATABASE = "/tmp/timecard.db"
+else:
+    DATABASE = os.path.join(BASE_DIR, "timecard.db")
 COMPANY_NAME = "株式会社まごころグループ"
 DEFAULT_ADMIN_PASSWORD = "admin1234"
 TOKYO_TZ = ZoneInfo("Asia/Tokyo")
