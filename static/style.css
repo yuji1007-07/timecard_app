@@ -154,3 +154,5 @@ th {
     grid-template-columns: 1fr;
   }
 }
+
+.inline-form { display: contents; }

@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}店舗管理{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>新店舗追加</h2>
+  <p class="muted">店舗名を入力すると、ブランドは自動判定されます。例：からだラボ整骨院 星川院 / ラコンシェル武蔵小杉店</p>
+  <form method="post" class="grid-form cols-2">
+    <input type="hidden" name="action" value="create">
+    <label class="full">店舗名
+      <input type="text" name="display_name" required placeholder="からだラボ整骨院 星川院">
+    </label>
+    <button type="submit">店舗を追加</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>店舗一覧</h2>
+  <table>
+    <thead><tr><th>ブランド</th><th>店舗名</th><th>状態</th><th>更新</th></tr></thead>
+    <tbody>
+      {% for store in stores %}
+      <tr>
+        <form method="post">
+          <input type="hidden" name="action" value="update">
+          <input type="hidden" name="store_id" value="{{ store['id'] }}">
+          <td>{{ store['brand_name'] }}</td>
+          <td><input type="text" name="display_name" value="{{ store['display_name'] }}" required></td>
+          <td>
+            <select name="is_active">
+              <option value="1" {% if store['is_active'] %}selected{% endif %}>有効</option>
+              <option value="0" {% if not store['is_active'] %}selected{% endif %}>無効</option>
+            </select>
+          </td>
+          <td><button type="submit">保存</button></td>
+        </form>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

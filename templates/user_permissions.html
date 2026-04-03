@@ -1,11 +1,18 @@
 {% extends 'base.html' %}
-{% block title %}担当店舗設定{% endblock %}
+{% block title %}所属・担当店舗設定{% endblock %}
 {% block content %}
 <div class="card narrow">
-  <h2>担当店舗設定</h2>
+  <h2>所属・担当店舗設定</h2>
   <p><strong>{{ user['full_name'] }}</strong>（{{ user['username'] }}）</p>
-  <p class="muted">主所属店舗: {{ user['display_name'] }}</p>
-  <form method="post">
+  <p class="muted">異動時は「主所属店舗」を変更してください。店舗責任者にしたい場合は、管理を許可する店舗にチェックを入れます。</p>
+  <form method="post" class="grid-form">
+    <label>主所属店舗
+      <select name="store_id" required>
+        {% for store in stores %}
+        <option value="{{ store['id'] }}" {% if store['id'] == user['store_id'] %}selected{% endif %}>{{ store['display_name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
     <fieldset class="checkbox-grid">
       <legend>管理を許可する店舗</legend>
       {% for store in stores %}

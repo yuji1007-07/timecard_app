@@ -9,6 +9,7 @@ CREATE TABLE stores (
     brand_name TEXT NOT NULL,
     store_name TEXT NOT NULL,
     display_name TEXT NOT NULL,
+    is_active INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

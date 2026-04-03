@@ -48,7 +48,7 @@
 <div class="card">
   <h2>スタッフ一覧</h2>
   <table>
-    <thead><tr><th>氏名</th><th>ID</th><th>権限</th><th>ブランド</th><th>店舗</th><th>担当店舗</th><th>操作</th></tr></thead>
+    <thead><tr><th>氏名</th><th>ID</th><th>権限</th><th>ブランド</th><th>所属店舗</th><th>担当店舗</th><th>操作</th></tr></thead>
     <tbody>
       {% for user in users %}
       <tr>
@@ -60,9 +60,7 @@
         <td>{{ permission_map.get(user['id'], '-') }}</td>
         <td>
           <div class="action-stack">
-            {% if user['role'] != 'admin' %}
-            <a class="button-link secondary small" href="{{ url_for('edit_user_permissions', user_id=user['id']) }}">担当店舗設定</a>
-            {% endif %}
+            <a class="button-link secondary small" href="{{ url_for('edit_user_permissions', user_id=user['id']) }}">所属・担当変更</a>
             {% if user['id'] == session.get('user_id') %}
             <span class="muted">自分は削除不可</span>
             {% else %}

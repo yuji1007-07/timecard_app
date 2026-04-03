@@ -27,7 +27,6 @@ from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
 if os.environ.get("RENDER"):
     DATABASE = "/tmp/timecard.db"
 else:
@@ -38,31 +37,58 @@ TOKYO_TZ = ZoneInfo("Asia/Tokyo")
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = "change-this-secret-key-v30"
-app.config["SESSION_COOKIE_NAME"] = "magokoro_timecard_v30"
+app.config["SESSION_COOKIE_NAME"] = "magokoro_timecard_v33"
 
 
 ALL_STORES = [
-    "からだﾗﾎﾞ駅前院",
-    "からだﾗﾎﾞ桜台院",
-    "ﾗｺﾝｼｪﾙ青葉台店",
-    "鍼灸ﾗｺﾝｼｪﾙ青葉台店",
-    "からだﾗﾎﾞ溝の口院",
-    "ﾗｺﾝｼｪﾙ三軒茶屋",
-    "からだﾗﾎﾞ駒沢大学駅院",
+    "からだラボ整骨院 たまプラーザ院",
+    "からだラボ整骨院 センター北院",
+    "からだラボ整骨院 マプレ院",
+    "からだラボ整骨院 向ヶ丘遊園院",
+    "からだラボ整骨院 新百合ヶ丘北口院",
+    "からだラボ整骨院 桜台院",
+    "からだラボ武蔵整骨院 武蔵小杉院",
+    "からだラボ整骨院 溝の口分院",
+    "からだラボ整骨院 溝の口院",
     "狛江駅前整骨院",
-    "からだﾗﾎﾞ新百合ヶ丘北口院",
-    "からだﾗﾎﾞ溝の口分院",
-    "からだﾗﾎﾞたまﾌﾟﾗｰｻﾞ院",
-    "鍼灸ﾗｺﾝｼｪﾙたまﾌﾟﾗｰｻﾞ店",
-    "ﾗｺﾝｼｪﾙ溝の口店",
-    "鍼灸ﾗｺﾝｼｪﾙ代々木上原店",
-    "ラ・コンシェル町田店",
-    "からだラボ整骨院　センター北院",
-    "からだラボ整骨院　マプレ院",
-    "からだﾗﾎﾞ武蔵小杉院",
-    "からだﾗﾎﾞ用賀院",
-    "からだﾗﾎﾞ向ヶ丘遊園院",
+    "からだラボ整骨院 用賀院",
+    "からだラボ駅前整骨院",
+    "からだラボ整骨院 駒沢大学駅院",
+    "からだラボ整骨院 星川院",
+    "ラコンシェル三軒茶屋",
+    "ラコンシェル溝の口店",
+    "ラコンシェル町田店",
+    "ラコンシェル青葉台店",
+    "ラコンシェル武蔵小杉店",
+    "鍼灸ラコンシェルたまプラーザ店",
+    "鍼灸ラコンシェル代々木上原店",
+    "鍼灸ラコンシェル青葉台店",
+    "鍼灸ラコンシェル町田店",
+    "鍼灸ラコンシェル武蔵小杉店",
 ]
+
+STORE_RENAMES = {
+    "からだラボ駅前院": "からだラボ駅前整骨院",
+    "からだラボ桜台院": "からだラボ整骨院 桜台院",
+    "ラコンシェル青葉台店": "ラコンシェル青葉台店",
+    "鍼灸ラコンシェル青葉台店": "鍼灸ラコンシェル青葉台店",
+    "からだラボ溝の口院": "からだラボ整骨院 溝の口院",
+    "ラコンシェル三軒茶屋": "ラコンシェル三軒茶屋",
+    "からだラボ駒沢大学駅院": "からだラボ整骨院 駒沢大学駅院",
+    "からだラボ新百合ヶ丘北口院": "からだラボ整骨院 新百合ヶ丘北口院",
+    "からだラボ溝の口分院": "からだラボ整骨院 溝の口分院",
+    "からだラボたまプラーザ院": "からだラボ整骨院 たまプラーザ院",
+    "鍼灸ラコンシェルたまプラーザ店": "鍼灸ラコンシェルたまプラーザ店",
+    "ラコンシェル溝の口店": "ラコンシェル溝の口店",
+    "鍼灸ラコンシェル代々木上原店": "鍼灸ラコンシェル代々木上原店",
+    "ラ・コンシェル町田店": "ラコンシェル町田店",
+    "からだラボ整骨院 センター北院": "からだラボ整骨院 センター北院",
+    "からだラボ整骨院 マプレ院": "からだラボ整骨院 マプレ院",
+    "からだラボ武蔵小杉院": "からだラボ武蔵整骨院 武蔵小杉院",
+    "からだラボ用賀院": "からだラボ整骨院 用賀院",
+    "からだラボ向ヶ丘遊園院": "からだラボ整骨院 向ヶ丘遊園院",
+}
+
 
 
 # ---------- DB helpers ----------
@@ -81,6 +107,11 @@ def close_db(exception=None):
         db.close()
 
 
+def column_exists(db, table_name: str, column_name: str) -> bool:
+    rows = db.execute(f"PRAGMA table_info({table_name})").fetchall()
+    return any(row[1] == column_name for row in rows)
+
+
 def ensure_runtime_schema(db):
     db.execute(
         """
@@ -95,6 +126,10 @@ def ensure_runtime_schema(db):
         )
         """
     )
+    if not column_exists(db, "stores", "is_active"):
+        db.execute("ALTER TABLE stores ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    if not column_exists(db, "users", "is_active"):
+        db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     db.commit()
 
 
@@ -113,8 +148,12 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
         return "ラコンシェル", normalized.replace("ラコンシェル", "", 1).strip()
     if normalized.startswith("ラ・コンシェル"):
         return "ラコンシェル", normalized.replace("ラ・コンシェル", "", 1).strip()
+    if normalized.startswith("からだラボ武蔵整骨院"):
+        return "からだラボ整骨院", normalized.replace("からだラボ武蔵整骨院", "", 1).strip()
     if normalized.startswith("からだラボ整骨院"):
         return "からだラボ整骨院", normalized.replace("からだラボ整骨院", "", 1).strip()
+    if normalized.startswith("からだラボ駅前整骨院"):
+        return "からだラボ整骨院", "駅前整骨院"
     if normalized.startswith("からだラボ"):
         return "からだラボ整骨院", normalized.replace("からだラボ", "", 1).strip()
 
@@ -122,7 +161,6 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
         return "からだラボ整骨院", normalized
 
     return "からだラボ整骨院", normalized
-
 
 
 
@@ -141,22 +179,38 @@ def database_ready() -> bool:
 
 
 def sync_master_stores(db):
+    # 旧店舗名を新しい正式名称へ寄せる
+    existing_rows = db.execute("SELECT id, display_name FROM stores").fetchall()
+    current_names = {normalize_text(row["display_name"]): row["id"] for row in existing_rows}
+
+    for old_name, new_name in STORE_RENAMES.items():
+        old_norm = normalize_text(old_name)
+        new_norm = normalize_text(new_name)
+        if old_norm in current_names and new_norm not in current_names:
+            store_id = current_names[old_norm]
+            brand_name, store_name = detect_brand_and_store(new_name)
+            db.execute(
+                "UPDATE stores SET brand_name = ?, store_name = ?, display_name = ?, is_active = 1 WHERE id = ?",
+                (brand_name, store_name, new_norm, store_id),
+            )
+
     existing_rows = db.execute("SELECT id, display_name FROM stores").fetchall()
     existing = {normalize_text(row["display_name"]): row["id"] for row in existing_rows}
 
     for store_display_name in ALL_STORES:
         normalized_display = normalize_text(store_display_name)
         if normalized_display in existing:
+            db.execute("UPDATE stores SET is_active = 1 WHERE id = ?", (existing[normalized_display],))
             continue
         brand_name, store_name = detect_brand_and_store(store_display_name)
         db.execute(
-            "INSERT INTO stores (company_name, brand_name, store_name, display_name) VALUES (?, ?, ?, ?)",
+            "INSERT INTO stores (company_name, brand_name, store_name, display_name, is_active) VALUES (?, ?, ?, ?, 1)",
             (COMPANY_NAME, brand_name, store_name, normalized_display),
         )
 
     admin_row = db.execute("SELECT id FROM users WHERE username = ?", ("admin",)).fetchone()
     if admin_row is None:
-        first_store = db.execute("SELECT id FROM stores ORDER BY id LIMIT 1").fetchone()
+        first_store = db.execute("SELECT id FROM stores WHERE is_active = 1 ORDER BY id LIMIT 1").fetchone()
         if first_store:
             db.execute(
                 "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
@@ -369,7 +423,7 @@ def get_today_attendance(user_id: int):
 def get_allowed_store_filter(requested_store_id: str | None):
     db = get_db()
     if g.user["role"] == "admin":
-        stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
+        stores = db.execute("SELECT * FROM stores WHERE is_active = 1 ORDER BY brand_name, store_name").fetchall()
         if requested_store_id:
             return requested_store_id, stores, None
         return None, stores, None
@@ -380,7 +434,7 @@ def get_allowed_store_filter(requested_store_id: str | None):
 
     placeholders = ",".join(["?"] * len(accessible_ids))
     stores = db.execute(
-        f"SELECT * FROM stores WHERE id IN ({placeholders}) ORDER BY brand_name, store_name",
+        f"SELECT * FROM stores WHERE is_active = 1 AND id IN ({placeholders}) ORDER BY brand_name, store_name",
         accessible_ids,
     ).fetchall()
 
@@ -777,7 +831,7 @@ def manage_users():
         ORDER BY s.brand_name, s.store_name, u.full_name
         """
     ).fetchall()
-    stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
+    stores = db.execute("SELECT * FROM stores WHERE is_active = 1 ORDER BY brand_name, store_name").fetchall()
     permission_map = get_permission_display_map()
     return render_template("users.html", users=users, stores=stores, permission_map=permission_map)
 
@@ -800,16 +854,19 @@ def edit_user_permissions(user_id: int):
         flash("対象スタッフが見つかりません。", "error")
         return redirect(url_for("manage_users"))
 
-    stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
+    stores = db.execute("SELECT * FROM stores WHERE is_active = 1 ORDER BY brand_name, store_name").fetchall()
     selected_store_ids = {
         row["store_id"]
         for row in db.execute("SELECT store_id FROM user_store_permissions WHERE user_id = ?", (user_id,)).fetchall()
     }
 
     if request.method == "POST":
+        new_store_id = int(request.form["store_id"])
         permission_store_ids = request.form.getlist("permission_store_ids")
+        db.execute("UPDATE users SET store_id = ? WHERE id = ?", (new_store_id, user_id))
         set_user_store_permissions(user_id, permission_store_ids)
-        flash("担当店舗を更新しました。", "success")
+        db.commit()
+        flash("所属店舗と担当店舗を更新しました。", "success")
         return redirect(url_for("manage_users"))
 
     return render_template(
@@ -818,6 +875,52 @@ def edit_user_permissions(user_id: int):
         stores=stores,
         selected_store_ids=selected_store_ids,
     )
+
+
+@app.route("/admin/stores", methods=["GET", "POST"])
+@login_required
+@admin_required
+def manage_stores():
+    db = get_db()
+    if request.method == "POST":
+        action = request.form.get("action", "create")
+        if action == "create":
+            display_name = normalize_text(request.form.get("display_name", ""))
+            if not display_name:
+                flash("店舗名を入力してください。", "error")
+                return redirect(url_for("manage_stores"))
+            brand_name, store_name = detect_brand_and_store(display_name)
+            existing = db.execute("SELECT id FROM stores WHERE display_name = ?", (display_name,)).fetchone()
+            if existing:
+                db.execute("UPDATE stores SET is_active = 1 WHERE id = ?", (existing["id"],))
+                flash("既存店舗を再有効化しました。", "success")
+            else:
+                db.execute(
+                    "INSERT INTO stores (company_name, brand_name, store_name, display_name, is_active) VALUES (?, ?, ?, ?, 1)",
+                    (COMPANY_NAME, brand_name, store_name, display_name),
+                )
+                flash("店舗を追加しました。", "success")
+            db.commit()
+            return redirect(url_for("manage_stores"))
+
+        store_id = int(request.form.get("store_id"))
+        if action == "update":
+            display_name = normalize_text(request.form.get("display_name", ""))
+            if not display_name:
+                flash("店舗名を入力してください。", "error")
+                return redirect(url_for("manage_stores"))
+            brand_name, store_name = detect_brand_and_store(display_name)
+            is_active = 1 if request.form.get("is_active") == "1" else 0
+            db.execute(
+                "UPDATE stores SET brand_name = ?, store_name = ?, display_name = ?, is_active = ? WHERE id = ?",
+                (brand_name, store_name, display_name, is_active, store_id),
+            )
+            db.commit()
+            flash("店舗情報を更新しました。", "success")
+            return redirect(url_for("manage_stores"))
+
+    stores = db.execute("SELECT * FROM stores ORDER BY is_active DESC, brand_name, store_name").fetchall()
+    return render_template("stores.html", stores=stores)
 
 
 @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
