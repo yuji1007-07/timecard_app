@@ -4,7 +4,8 @@ import os
 import sqlite3
 import unicodedata
 from contextlib import closing
-from datetime import date, datetime
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from functools import wraps
 
 from flask import (
@@ -45,7 +46,7 @@ ALL_STORES = [
     "鍼灸ﾗｺﾝｼｪﾙたまﾌﾟﾗｰｻﾞ店",
     "ﾗｺﾝｼｪﾙ溝の口店",
     "鍼灸ﾗｺﾝｼｪﾙ代々木上原店",
-    "ラ・コンシェル町田店",
+    "ラコンシェル町田店",
     "からだラボ整骨院　センター北院",
     "からだラボ整骨院　マプレ院",
     "からだﾗﾎﾞ武蔵小杉院",
@@ -327,7 +328,8 @@ def dashboard():
 def punch(action):
     db = get_db()
     record = get_today_attendance(g.user["id"])
-    now = datetime.now().replace(second=0, microsecond=0).isoformat()
+　　from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Tokyo").replace(second=0, microsecond=0).isoformat()
 
     if action == "clock_in":
         if record and record["clock_in"]:
