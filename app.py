@@ -120,43 +120,60 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
     return "からだラボ整骨院", normalized
 
 
-def sync_master_stores(db):
-    existing = {normalize_text(row["display_name"]): row["id"] for row in db.execute("SELECT id, display_name FROM stores").fetchall()}
-    admin_hash = generate_password_hash(DEFAULT_ADMIN_PASSWORD)
-    first_store = db.execute("SELECT id FROM stores ORDER BY id LIMIT 1").fetchone()
-    admin_user_id = db.execute(
-        "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-        (first_store["id"], "admin", admin_hash, "全体管理者", "admin"),
-    ).lastrowid
 
-    sample_staff = [
-        ("kawahara", "河原", "からだラボ整骨院", "溝の口院", ["からだﾗﾎﾞ溝の口院", "からだﾗﾎﾞ溝の口分院"]),
-        ("kaneko", "金子", "からだラボ整骨院", "武蔵小杉院", []),
-        ("iwamura", "岩村", "ラコンシェル", "町田店", ["ラ・コンシェル町田店"]),
-        ("hanada", "花田", "鍼灸ラコンシェル", "代々木上原店", ["鍼灸ﾗｺﾝｼｪﾙ代々木上原店"]),
-    ]
-    for username, full_name, brand_name, store_name, managed_display_names in sample_staff:
-        store = db.execute(
-            "SELECT id FROM stores WHERE brand_name = ? AND store_name = ? LIMIT 1",
-            (brand_name, store_name),
+
+def database_ready() -> bool:
+    if not os.path.exists(DATABASE):
+        return False
+    try:
+        conn = sqlite3.connect(DATABASE)
+        row = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('stores', 'users', 'attendance')"
         ).fetchone()
-        if store:
-            user_id = db.execute(
-                "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-                (store["id"], username, generate_password_hash("staff1234"), full_name, "staff"),
-            ).lastrowid
-            for display_name in managed_display_names:
-                managed_store = db.execute(
-                    "SELECT id FROM stores WHERE display_name = ? LIMIT 1",
-                    (normalize_text(display_name),),
-                ).fetchone()
-                if managed_store:
-                    db.execute(
-                        "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
-                        (user_id, managed_store["id"]),
-                    )
+        conn.close()
+        return row is not None and int(row[0]) == 3
+    except sqlite3.Error:
+        return False
 
+
+def sync_master_stores(db):
+    existing_rows = db.execute("SELECT id, display_name FROM stores").fetchall()
+    existing = {normalize_text(row["display_name"]): row["id"] for row in existing_rows}
+
+    for store_display_name in ALL_STORES:
+        normalized_display = normalize_text(store_display_name)
+        if normalized_display in existing:
+            continue
+        brand_name, store_name = detect_brand_and_store(store_display_name)
+        db.execute(
+            "INSERT INTO stores (company_name, brand_name, store_name, display_name) VALUES (?, ?, ?, ?)",
+            (COMPANY_NAME, brand_name, store_name, normalized_display),
+        )
+
+    admin_row = db.execute("SELECT id FROM users WHERE username = ?", ("admin",)).fetchone()
+    if admin_row is None:
+        first_store = db.execute("SELECT id FROM stores ORDER BY id LIMIT 1").fetchone()
+        if first_store:
+            db.execute(
+                "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
+                (first_store["id"], "admin", generate_password_hash(DEFAULT_ADMIN_PASSWORD), "全体管理者", "admin"),
+            )
     db.commit()
+
+
+def seed_data(db):
+    # 既存データを壊さないため、初期データは最低限（店舗マスタとadmin）のみにする
+    sync_master_stores(db)
+
+
+def init_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    with closing(open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8")) as f:
+        conn.executescript(f.read())
+    conn.commit()
+    seed_data(conn)
+    conn.close()
 
 
 # ---------- auth / permissions ----------
