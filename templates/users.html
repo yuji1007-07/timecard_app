@@ -31,6 +31,20 @@
   </form>
 </div>
 
+
+<div class="card">
+  <h2>一括登録</h2>
+  <p class="muted">1行に1名ずつ、<strong>氏名,ユーザーID,初期PW,主所属店舗,権限,担当店舗1|担当店舗2</strong> の順で貼り付けてください。<br>権限は省略すると staff、担当店舗は省略OKです。</p>
+  <form method="post">
+    <label class="full">一括登録テキスト
+      <textarea name="bulk_text" rows="8" placeholder="北村優次,kitamura,pass123,からだﾗﾎﾞ溝の口院,admin
+河原,kawahara,staff1234,からだﾗﾎﾞ溝の口院,staff,からだﾗﾎﾞ溝の口院|からだﾗﾎﾞ溝の口分院
+岩村,iwamura,staff1234,ラ・コンシェル町田店,staff,ラ・コンシェル町田店"></textarea>
+    </label>
+    <button type="submit">一括登録する</button>
+  </form>
+</div>
+
 <div class="card">
   <h2>スタッフ一覧</h2>
   <table>

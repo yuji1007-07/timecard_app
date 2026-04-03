@@ -19,6 +19,7 @@ from flask import (
     request,
     send_file,
     session,
+    abort,
     url_for,
 )
 from openpyxl import Workbook
@@ -119,41 +120,8 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
     return "からだラボ整骨院", normalized
 
 
-def database_ready() -> bool:
-    if not os.path.exists(DATABASE):
-        return False
-    try:
-        conn = sqlite3.connect(DATABASE)
-        row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
-        ensure_runtime_schema(conn)
-        conn.close()
-        return row is not None
-    except sqlite3.Error:
-        return False
-
-
-def init_db():
-    conn = sqlite3.connect(DATABASE)
-    conn.row_factory = sqlite3.Row
-    with closing(open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8")) as f:
-        conn.executescript(f.read())
-    conn.commit()
-    seed_data(conn)
-    conn.close()
-
-
-def seed_data(db):
-    existing_admin = db.execute("SELECT id FROM users WHERE username = ?", ("admin",)).fetchone()
-    if existing_admin:
-        return
-
-    for store_display_name in ALL_STORES:
-        brand_name, store_name = detect_brand_and_store(store_display_name)
-        db.execute(
-            "INSERT INTO stores (company_name, brand_name, store_name, display_name) VALUES (?, ?, ?, ?)",
-            (COMPANY_NAME, brand_name, store_name, normalize_text(store_display_name)),
-        )
-
+def sync_master_stores(db):
+    existing = {normalize_text(row["display_name"]): row["id"] for row in db.execute("SELECT id, display_name FROM stores").fetchall()}
     admin_hash = generate_password_hash(DEFAULT_ADMIN_PASSWORD)
     first_store = db.execute("SELECT id FROM stores ORDER BY id LIMIT 1").fetchone()
     admin_user_id = db.execute(
@@ -433,6 +401,94 @@ def set_user_store_permissions(user_id: int, store_ids: list[str]):
     db.commit()
 
 
+def resolve_store_id(db, value: str | None):
+    normalized = normalize_text(value or "")
+    if not normalized:
+        return None
+
+    row = db.execute("SELECT id FROM stores WHERE display_name = ? LIMIT 1", (normalized,)).fetchone()
+    if row:
+        return row["id"]
+
+    row = db.execute("SELECT id FROM stores WHERE store_name = ? LIMIT 1", (normalized,)).fetchone()
+    if row:
+        return row["id"]
+
+    # exact normalized compare against company-entered names
+    rows = db.execute("SELECT id, display_name, store_name FROM stores").fetchall()
+    for row in rows:
+        if normalize_text(row["display_name"]) == normalized or normalize_text(row["store_name"]) == normalized:
+            return row["id"]
+    return None
+
+
+def create_user_record(db, store_id: int, username: str, full_name: str, password: str, role: str, permission_store_ids: list[int]):
+    user_id = db.execute(
+        "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
+        (store_id, username, generate_password_hash(password), full_name, role),
+    ).lastrowid
+    if role == "staff":
+        for perm_store_id in permission_store_ids:
+            db.execute(
+                "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
+                (user_id, int(perm_store_id)),
+            )
+    return user_id
+
+
+def process_bulk_users(db, raw_text: str):
+    raw_text = (raw_text or "").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not raw_text:
+        return 0, []
+
+    created = 0
+    errors = []
+    stream = io.StringIO(raw_text)
+    reader = csv.reader(stream)
+
+    for idx, row in enumerate(reader, start=1):
+        row = [normalize_text(col) for col in row]
+        if not any(row):
+            continue
+        if len(row) < 4:
+            errors.append(f"{idx}行目: 項目数が足りません。『氏名,ユーザーID,初期PW,主所属店舗,権限,担当店舗1|担当店舗2』で入力してください。")
+            continue
+
+        full_name, username, password, primary_store_name = row[:4]
+        role = row[4] if len(row) >= 5 and row[4] else "staff"
+        permissions_raw = row[5] if len(row) >= 6 else ""
+
+        if role not in ("admin", "staff"):
+            errors.append(f"{idx}行目: 権限は admin または staff のみ使えます。")
+            continue
+
+        store_id = resolve_store_id(db, primary_store_name)
+        if not store_id:
+            errors.append(f"{idx}行目: 主所属店舗『{primary_store_name}』が見つかりません。")
+            continue
+
+        permission_store_ids = []
+        if permissions_raw:
+            for name in [normalize_text(x) for x in permissions_raw.split("|") if normalize_text(x)]:
+                perm_id = resolve_store_id(db, name)
+                if not perm_id:
+                    errors.append(f"{idx}行目: 担当店舗『{name}』が見つかりません。")
+                    permission_store_ids = None
+                    break
+                permission_store_ids.append(perm_id)
+        if permission_store_ids is None:
+            continue
+
+        try:
+            create_user_record(db, store_id, username, full_name, password, role, permission_store_ids)
+            created += 1
+        except sqlite3.IntegrityError:
+            errors.append(f"{idx}行目: ユーザーID『{username}』が重複しています。")
+
+    db.commit()
+    return created, errors
+
+
 def query_attendance_records(month: str, scoped_store_ids: list[int] | None, selected_store_id: str | None):
     db = get_db()
     query = """
@@ -493,11 +549,17 @@ def init_db_route():
     if existing_db is not None:
         existing_db.close()
 
-    if os.path.exists(DATABASE):
-        os.remove(DATABASE)
+    if not os.path.exists(DATABASE) or not database_ready():
+        init_db()
+        return f"DB initialized. Login with admin / {DEFAULT_ADMIN_PASSWORD}"
 
-    init_db()
-    return f"DB initialized. Login with admin / {DEFAULT_ADMIN_PASSWORD}"
+    db = sqlite3.connect(DATABASE)
+    db.row_factory = sqlite3.Row
+    ensure_runtime_schema(db)
+    sync_master_stores(db)
+    seed_data(db)
+    db.close()
+    return "DB already initialized. Existing users and attendance were kept."
 
 
 @app.route("/", methods=["GET", "POST"])
@@ -661,23 +723,25 @@ def admin_panel():
 def manage_users():
     db = get_db()
     if request.method == "POST":
+        bulk_text = request.form.get("bulk_text", "").strip()
+        if bulk_text:
+            created, errors = process_bulk_users(db, bulk_text)
+            if created:
+                flash(f"一括登録で {created} 名を追加しました。", "success")
+            for error in errors[:10]:
+                flash(error, "error")
+            if errors and len(errors) > 10:
+                flash(f"ほか {len(errors) - 10} 件のエラーがあります。入力を見直してください。", "error")
+            return redirect(url_for("manage_users"))
+
         store_id = request.form["store_id"]
         username = request.form["username"].strip()
         full_name = request.form["full_name"].strip()
         password = request.form["password"]
         role = request.form["role"]
-        permission_store_ids = request.form.getlist("permission_store_ids")
+        permission_store_ids = [int(x) for x in request.form.getlist("permission_store_ids")]
         try:
-            user_id = db.execute(
-                "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-                (store_id, username, generate_password_hash(password), full_name, role),
-            ).lastrowid
-            if role == "staff" and permission_store_ids:
-                for perm_store_id in permission_store_ids:
-                    db.execute(
-                        "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
-                        (user_id, int(perm_store_id)),
-                    )
+            create_user_record(db, int(store_id), username, full_name, password, role, permission_store_ids)
             db.commit()
             flash("スタッフを追加しました。", "success")
         except sqlite3.IntegrityError:
