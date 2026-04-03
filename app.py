@@ -4,7 +4,7 @@ import os
 import sqlite3
 import unicodedata
 from contextlib import closing
-from datetime import datetime
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
 from functools import wraps
 
