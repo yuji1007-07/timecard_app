@@ -9,7 +9,7 @@
     </label>
     <label>店舗
       <select name="store_id">
-        <option value="">全店舗</option>
+        <option value="">{% if can_view_all %}全店舗{% else %}担当全店舗{% endif %}</option>
         {% for store in stores %}
         <option value="{{ store['id'] }}" {% if selected_store_id == store['id']|string %}selected{% endif %}>{{ store['display_name'] }}</option>
         {% endfor %}
@@ -17,6 +17,7 @@
     </label>
     <button type="submit">表示</button>
     <a class="button-link" href="{{ url_for('export_csv', month=selected_month, store_id=selected_store_id) }}">CSV出力</a>
+    <a class="button-link secondary" href="{{ url_for('export_excel', month=selected_month, store_id=selected_store_id) }}">Excel出力</a>
   </form>
 
   <table>
@@ -31,6 +32,8 @@
         <td>{{ row['staff_count'] }}</td>
         <td>{{ row['total_minutes']|minutes_to_hours_text }}</td>
       </tr>
+      {% else %}
+      <tr><td colspan="4">該当データがありません。</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -53,8 +56,8 @@
         <td>{{ row['full_name'] }}</td>
         <td>{{ row['clock_in']|format_dt if row['clock_in'] else '-' }}</td>
         <td>{{ row['clock_out']|format_dt if row['clock_out'] else '-' }}</td>
-        <td>{{ row['break_minutes'] }}分</td>
-        <td>{{ row['work_minutes']|minutes_to_hours_text if row['work_minutes'] is not none else '-' }}</td>
+        <td>{{ row['break_minutes']|minutes_to_hhmm if row['break_minutes'] is not none else '-' }}</td>
+        <td>{{ row['work_minutes']|minutes_to_hhmm if row['work_minutes'] is not none else '-' }}</td>
         <td><a href="{{ url_for('edit_attendance', attendance_id=row['id']) }}">編集</a></td>
       </tr>
       {% else %}

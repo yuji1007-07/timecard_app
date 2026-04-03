@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+{% block title %}担当店舗設定{% endblock %}
+{% block content %}
+<div class="card narrow">
+  <h2>担当店舗設定</h2>
+  <p><strong>{{ user['full_name'] }}</strong>（{{ user['username'] }}）</p>
+  <p class="muted">主所属店舗: {{ user['display_name'] }}</p>
+  <form method="post">
+    <fieldset class="checkbox-grid">
+      <legend>管理を許可する店舗</legend>
+      {% for store in stores %}
+      <label>
+        <input type="checkbox" name="permission_store_ids" value="{{ store['id'] }}" {% if store['id'] in selected_store_ids %}checked{% endif %}>
+        {{ store['display_name'] }}
+      </label>
+      {% endfor %}
+    </fieldset>
+    <div class="button-row left">
+      <button type="submit">保存する</button>
+      <a class="button-link secondary" href="{{ url_for('manage_users') }}">戻る</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

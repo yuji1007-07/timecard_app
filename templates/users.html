@@ -3,6 +3,7 @@
 {% block content %}
 <div class="card">
   <h2>スタッフ追加</h2>
+  <p class="muted">責任者にしたい場合は「担当店舗」を1つ以上選択してください。選択した店舗のみ管理画面・CSV・Excel出力が可能になります。</p>
   <form method="post" class="grid-form cols-2">
     <label>氏名<input type="text" name="full_name" required></label>
     <label>ユーザーID<input type="text" name="username" required></label>
@@ -13,13 +14,19 @@
         <option value="admin">admin</option>
       </select>
     </label>
-    <label class="full">店舗
+    <label class="full">主所属店舗
       <select name="store_id" required>
         {% for store in stores %}
         <option value="{{ store['id'] }}">{{ store['display_name'] }}</option>
         {% endfor %}
       </select>
     </label>
+    <fieldset class="full checkbox-grid">
+      <legend>担当店舗（責任者用）</legend>
+      {% for store in stores %}
+      <label><input type="checkbox" name="permission_store_ids" value="{{ store['id'] }}"> {{ store['display_name'] }}</label>
+      {% endfor %}
+    </fieldset>
     <button type="submit">追加する</button>
   </form>
 </div>
@@ -27,23 +34,29 @@
 <div class="card">
   <h2>スタッフ一覧</h2>
   <table>
-    <thead><tr><th>氏名</th><th>ID</th><th>権限</th><th>ブランド</th><th>店舗</th><th>操作</th></tr></thead>
+    <thead><tr><th>氏名</th><th>ID</th><th>権限</th><th>ブランド</th><th>店舗</th><th>担当店舗</th><th>操作</th></tr></thead>
     <tbody>
       {% for user in users %}
       <tr>
         <td>{{ user['full_name'] }}</td>
         <td>{{ user['username'] }}</td>
-        <td>{{ user['role'] }}</td>
+        <td>{% if user['role'] == 'admin' %}全体管理者{% elif permission_map.get(user['id']) %}店舗責任者{% else %}一般スタッフ{% endif %}</td>
         <td>{{ user['brand_name'] }}</td>
         <td>{{ user['display_name'] }}</td>
+        <td>{{ permission_map.get(user['id'], '-') }}</td>
         <td>
-          {% if user['id'] == session.get('user_id') %}
-          <span class="muted">自分は削除不可</span>
-          {% else %}
-          <form method="post" action="{{ url_for('delete_user', user_id=user['id']) }}" onsubmit="return confirm('本当に {{ user['full_name'] }} を削除しますか？打刻履歴も削除されます。');">
-            <button type="submit" class="danger-button">削除</button>
-          </form>
-          {% endif %}
+          <div class="action-stack">
+            {% if user['role'] != 'admin' %}
+            <a class="button-link secondary small" href="{{ url_for('edit_user_permissions', user_id=user['id']) }}">担当店舗設定</a>
+            {% endif %}
+            {% if user['id'] == session.get('user_id') %}
+            <span class="muted">自分は削除不可</span>
+            {% else %}
+            <form method="post" action="{{ url_for('delete_user', user_id=user['id']) }}" onsubmit="return confirm('本当に {{ user['full_name'] }} を削除しますか？打刻履歴も削除されます。');">
+              <button type="submit" class="danger-button">削除</button>
+            </form>
+            {% endif %}
+          </div>
         </td>
       </tr>
       {% endfor %}

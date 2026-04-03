@@ -11,14 +11,16 @@
     <div>
       <h1>株式会社まごころグループ 勤怠アプリ</h1>
       {% if g.user %}
-      <p class="subhead">{{ g.user['brand_name'] }} / {{ g.user['display_name'] }} / {{ g.user['full_name'] }}</p>
+      <p class="subhead">{{ g.user['brand_name'] }} / {{ g.user['display_name'] }} / {{ g.user['full_name'] }}{% if g.can_manage_stores and session.get('role') != 'admin' %} / 店舗責任者{% elif session.get('role') == 'admin' %} / 全体管理者{% endif %}</p>
       {% endif %}
     </div>
     {% if g.user %}
     <nav>
       <a href="{{ url_for('dashboard') }}">ダッシュボード</a>
-      {% if session.get('role') == 'admin' %}
+      {% if session.get('role') == 'admin' or g.can_manage_stores %}
       <a href="{{ url_for('admin_panel') }}">管理画面</a>
+      {% endif %}
+      {% if session.get('role') == 'admin' %}
       <a href="{{ url_for('manage_users') }}">スタッフ管理</a>
       {% endif %}
       <a href="{{ url_for('logout') }}">ログアウト</a>

@@ -1,3 +1,4 @@
+DROP TABLE IF EXISTS user_store_permissions;
 DROP TABLE IF EXISTS attendance;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS stores;
@@ -38,6 +39,16 @@ CREATE TABLE attendance (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, work_date),
+    FOREIGN KEY (user_id) REFERENCES users (id),
+    FOREIGN KEY (store_id) REFERENCES stores (id)
+);
+
+CREATE TABLE user_store_permissions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    store_id INTEGER NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, store_id),
     FOREIGN KEY (user_id) REFERENCES users (id),
     FOREIGN KEY (store_id) REFERENCES stores (id)
 );

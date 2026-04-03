@@ -1,12 +1,14 @@
+import calendar
 import csv
 import io
 import os
 import sqlite3
 import unicodedata
+from collections import defaultdict
 from contextlib import closing
-from datetime import datetime, date
-from zoneinfo import ZoneInfo
+from datetime import date, datetime
 from functools import wraps
+from zoneinfo import ZoneInfo
 
 from flask import (
     Flask,
@@ -19,16 +21,19 @@ from flask import (
     session,
     url_for,
 )
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE = os.path.join(BASE_DIR, "timecard.db")
 COMPANY_NAME = "株式会社まごころグループ"
 DEFAULT_ADMIN_PASSWORD = "admin1234"
+TOKYO_TZ = ZoneInfo("Asia/Tokyo")
 
 app = Flask(__name__)
-app.config["SECRET_KEY"] = "change-this-secret-key-v21"
-app.config["SESSION_COOKIE_NAME"] = "magokoro_timecard_v21"
+app.config["SECRET_KEY"] = "change-this-secret-key-v30"
+app.config["SESSION_COOKIE_NAME"] = "magokoro_timecard_v30"
 
 
 ALL_STORES = [
@@ -46,7 +51,7 @@ ALL_STORES = [
     "鍼灸ﾗｺﾝｼｪﾙたまﾌﾟﾗｰｻﾞ店",
     "ﾗｺﾝｼｪﾙ溝の口店",
     "鍼灸ﾗｺﾝｼｪﾙ代々木上原店",
-    "ラコンシェル町田店",
+    "ラ・コンシェル町田店",
     "からだラボ整骨院　センター北院",
     "からだラボ整骨院　マプレ院",
     "からだﾗﾎﾞ武蔵小杉院",
@@ -60,6 +65,7 @@ def get_db():
     if "db" not in g:
         g.db = sqlite3.connect(DATABASE)
         g.db.row_factory = sqlite3.Row
+        ensure_runtime_schema(g.db)
     return g.db
 
 
@@ -68,6 +74,23 @@ def close_db(exception=None):
     db = g.pop("db", None)
     if db is not None:
         db.close()
+
+
+def ensure_runtime_schema(db):
+    db.execute(
+        """
+        CREATE TABLE IF NOT EXISTS user_store_permissions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            store_id INTEGER NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(user_id, store_id),
+            FOREIGN KEY (user_id) REFERENCES users (id),
+            FOREIGN KEY (store_id) REFERENCES stores (id)
+        )
+        """
+    )
+    db.commit()
 
 
 def normalize_text(value: str) -> str:
@@ -102,6 +125,7 @@ def database_ready() -> bool:
     try:
         conn = sqlite3.connect(DATABASE)
         row = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='users'").fetchone()
+        ensure_runtime_schema(conn)
         conn.close()
         return row is not None
     except sqlite3.Error:
@@ -132,32 +156,42 @@ def seed_data(db):
 
     admin_hash = generate_password_hash(DEFAULT_ADMIN_PASSWORD)
     first_store = db.execute("SELECT id FROM stores ORDER BY id LIMIT 1").fetchone()
-    db.execute(
+    admin_user_id = db.execute(
         "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
         (first_store["id"], "admin", admin_hash, "全体管理者", "admin"),
-    )
+    ).lastrowid
 
     sample_staff = [
-        ("kawahara", "河原", "からだラボ整骨院", "溝の口院"),
-        ("kaneko", "金子", "からだラボ整骨院", "武蔵小杉院"),
-        ("iwamura", "岩村", "ラコンシェル", "町田店"),
-        ("hanada", "花田", "鍼灸ラコンシェル", "代々木上原店"),
+        ("kawahara", "河原", "からだラボ整骨院", "溝の口院", ["からだﾗﾎﾞ溝の口院", "からだﾗﾎﾞ溝の口分院"]),
+        ("kaneko", "金子", "からだラボ整骨院", "武蔵小杉院", []),
+        ("iwamura", "岩村", "ラコンシェル", "町田店", ["ラ・コンシェル町田店"]),
+        ("hanada", "花田", "鍼灸ラコンシェル", "代々木上原店", ["鍼灸ﾗｺﾝｼｪﾙ代々木上原店"]),
     ]
-    for username, full_name, brand_name, store_name in sample_staff:
+    for username, full_name, brand_name, store_name, managed_display_names in sample_staff:
         store = db.execute(
             "SELECT id FROM stores WHERE brand_name = ? AND store_name = ? LIMIT 1",
             (brand_name, store_name),
         ).fetchone()
         if store:
-            db.execute(
+            user_id = db.execute(
                 "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
                 (store["id"], username, generate_password_hash("staff1234"), full_name, "staff"),
-            )
+            ).lastrowid
+            for display_name in managed_display_names:
+                managed_store = db.execute(
+                    "SELECT id FROM stores WHERE display_name = ? LIMIT 1",
+                    (normalize_text(display_name),),
+                ).fetchone()
+                if managed_store:
+                    db.execute(
+                        "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
+                        (user_id, managed_store["id"]),
+                    )
 
     db.commit()
 
 
-# ---------- auth ----------
+# ---------- auth / permissions ----------
 def login_required(view):
     @wraps(view)
     def wrapped_view(**kwargs):
@@ -168,32 +202,88 @@ def login_required(view):
     return wrapped_view
 
 
-
 def admin_required(view):
     @wraps(view)
     def wrapped_view(**kwargs):
         if session.get("role") != "admin":
-            flash("管理者のみ利用できます。", "error")
+            flash("全体管理者のみ利用できます。", "error")
             return redirect(url_for("dashboard"))
         return view(**kwargs)
 
     return wrapped_view
 
 
+def store_manager_required(view):
+    @wraps(view)
+    def wrapped_view(**kwargs):
+        if session.get("role") == "admin" or getattr(g, "can_manage_stores", False):
+            return view(**kwargs)
+        flash("この機能は責任者以上のみ利用できます。", "error")
+        return redirect(url_for("dashboard"))
+
+    return wrapped_view
+
+
+def get_primary_store_id(user_row) -> int | None:
+    return user_row["store_id"] if user_row and user_row["store_id"] else None
+
+
+def get_managed_store_ids(user_id: int, primary_store_id: int | None = None) -> list[int]:
+    db = get_db()
+    rows = db.execute(
+        "SELECT store_id FROM user_store_permissions WHERE user_id = ? ORDER BY store_id",
+        (user_id,),
+    ).fetchall()
+    ids = {row["store_id"] for row in rows}
+    if primary_store_id and rows:
+        ids.add(primary_store_id)
+    return sorted(ids)
+
+
+def get_accessible_store_ids(user_row) -> list[int] | None:
+    if not user_row:
+        return []
+    if user_row["role"] == "admin":
+        return None
+    managed_ids = get_managed_store_ids(user_row["id"], user_row["store_id"])
+    return managed_ids
+
+
+def can_manage_stores(user_row) -> bool:
+    if not user_row:
+        return False
+    if user_row["role"] == "admin":
+        return True
+    return len(get_managed_store_ids(user_row["id"], user_row["store_id"])) > 0
+
+
+def user_can_access_store(user_row, store_id: int) -> bool:
+    ids = get_accessible_store_ids(user_row)
+    if ids is None:
+        return True
+    return store_id in ids
+
+
 @app.before_request
 def load_logged_in_user():
     if request.endpoint == "init_db_route":
         g.user = None
+        g.can_manage_stores = False
+        g.accessible_store_ids = []
         return
 
     if not database_ready():
         session.clear()
         g.user = None
+        g.can_manage_stores = False
+        g.accessible_store_ids = []
         return
 
     user_id = session.get("user_id")
     if user_id is None:
         g.user = None
+        g.can_manage_stores = False
+        g.accessible_store_ids = []
     else:
         g.user = get_db().execute(
             """
@@ -206,45 +296,192 @@ def load_logged_in_user():
         ).fetchone()
         if g.user is None:
             session.clear()
+            g.can_manage_stores = False
+            g.accessible_store_ids = []
+        else:
+            g.can_manage_stores = can_manage_stores(g.user)
+            g.accessible_store_ids = get_accessible_store_ids(g.user) or []
 
 
-# ---------- business logic ----------
-def get_today_attendance(user_id: int):
-    db = get_db()
-    return db.execute(
-        "SELECT * FROM attendance WHERE user_id = ? AND work_date = ?",
-        (user_id, date.today().isoformat()),
-    ).fetchone()
+# ---------- date / time ----------
+def tokyo_now():
+    return datetime.now(TOKYO_TZ)
 
 
+def tokyo_today():
+    return tokyo_now().date()
 
-def calculate_work_minutes(clock_in, clock_out, break_minutes):
-    if not clock_in or not clock_out:
+
+def parse_dt(value: str | None):
+    if not value:
         return None
-    start = datetime.fromisoformat(clock_in)
-    end = datetime.fromisoformat(clock_out)
-    total = int((end - start).total_seconds() // 60) - (break_minutes or 0)
-    return max(total, 0)
-
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=TOKYO_TZ)
+    return dt.astimezone(TOKYO_TZ)
 
 
 def format_dt(dt_str):
-    if not dt_str:
+    dt = parse_dt(dt_str)
+    if not dt:
         return None
-    return datetime.fromisoformat(dt_str).strftime("%Y-%m-%d %H:%M")
+    return dt.strftime("%Y-%m-%d %H:%M")
 
+
+def format_time_only(dt_str):
+    dt = parse_dt(dt_str)
+    if not dt:
+        return ""
+    return dt.strftime("%H:%M")
+
+
+def jp_weekday(date_str: str) -> str:
+    d = datetime.fromisoformat(date_str).date()
+    return ["月", "火", "水", "木", "金", "土", "日"][d.weekday()]
+
+
+def minutes_to_hhmm(minutes):
+    if minutes in (None, ""):
+        return ""
+    minutes = int(minutes)
+    return f"{minutes // 60}:{minutes % 60:02d}"
 
 
 def minutes_to_hours_text(minutes):
     if minutes is None:
         return "-"
-    hours = minutes // 60
-    mins = minutes % 60
-    return f"{hours}時間 {mins}分"
+    hours = int(minutes) // 60
+    mins = int(minutes) % 60
+    return f"{hours}時間 {mins:02d}分"
+
+
+def calculate_work_minutes(clock_in, clock_out, break_minutes):
+    start = parse_dt(clock_in)
+    end = parse_dt(clock_out)
+    if not start or not end:
+        return None
+    total = int((end - start).total_seconds() // 60) - int(break_minutes or 0)
+    return max(total, 0)
 
 
 app.jinja_env.filters["format_dt"] = format_dt
 app.jinja_env.filters["minutes_to_hours_text"] = minutes_to_hours_text
+app.jinja_env.filters["minutes_to_hhmm"] = minutes_to_hhmm
+
+
+# ---------- business logic ----------
+def get_today_attendance(user_id: int):
+    return get_db().execute(
+        "SELECT * FROM attendance WHERE user_id = ? AND work_date = ?",
+        (user_id, tokyo_today().isoformat()),
+    ).fetchone()
+
+
+def get_allowed_store_filter(requested_store_id: str | None):
+    db = get_db()
+    if g.user["role"] == "admin":
+        stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
+        if requested_store_id:
+            return requested_store_id, stores, None
+        return None, stores, None
+
+    accessible_ids = g.accessible_store_ids
+    if not accessible_ids:
+        return None, [], []
+
+    placeholders = ",".join(["?"] * len(accessible_ids))
+    stores = db.execute(
+        f"SELECT * FROM stores WHERE id IN ({placeholders}) ORDER BY brand_name, store_name",
+        accessible_ids,
+    ).fetchall()
+
+    if requested_store_id:
+        try:
+            store_id_int = int(requested_store_id)
+        except ValueError:
+            flash("店舗指定が不正です。", "error")
+            return None, stores, accessible_ids
+        if store_id_int not in accessible_ids:
+            flash("担当外の店舗は閲覧できません。", "error")
+            return None, stores, accessible_ids
+        return requested_store_id, stores, [store_id_int]
+
+    return None, stores, accessible_ids
+
+
+def get_permission_display_map() -> dict[int, str]:
+    db = get_db()
+    rows = db.execute(
+        """
+        SELECT usp.user_id, GROUP_CONCAT(s.display_name, ' / ') AS managed_names
+        FROM user_store_permissions usp
+        JOIN stores s ON usp.store_id = s.id
+        GROUP BY usp.user_id
+        """
+    ).fetchall()
+    return {row["user_id"]: row["managed_names"] for row in rows}
+
+
+def set_user_store_permissions(user_id: int, store_ids: list[str]):
+    db = get_db()
+    db.execute("DELETE FROM user_store_permissions WHERE user_id = ?", (user_id,))
+    for store_id in store_ids:
+        db.execute(
+            "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
+            (user_id, int(store_id)),
+        )
+    db.commit()
+
+
+def query_attendance_records(month: str, scoped_store_ids: list[int] | None, selected_store_id: str | None):
+    db = get_db()
+    query = """
+        SELECT a.*, u.full_name, u.username, s.brand_name, s.store_name, s.display_name
+        FROM attendance a
+        JOIN users u ON a.user_id = u.id
+        JOIN stores s ON a.store_id = s.id
+        WHERE substr(a.work_date, 1, 7) = ?
+    """
+    params: list[object] = [month]
+
+    if selected_store_id:
+        query += " AND a.store_id = ?"
+        params.append(int(selected_store_id))
+    elif scoped_store_ids is not None:
+        if not scoped_store_ids:
+            return []
+        placeholders = ",".join(["?"] * len(scoped_store_ids))
+        query += f" AND a.store_id IN ({placeholders})"
+        params.extend(scoped_store_ids)
+
+    query += " ORDER BY a.work_date DESC, s.brand_name, s.store_name, u.full_name"
+    return db.execute(query, params).fetchall()
+
+
+def query_summary(month: str, scoped_store_ids: list[int] | None, selected_store_id: str | None):
+    db = get_db()
+    query = """
+        SELECT s.id, s.brand_name, s.store_name, s.display_name,
+               COUNT(DISTINCT a.user_id) AS staff_count,
+               COALESCE(SUM(a.work_minutes), 0) AS total_minutes
+        FROM stores s
+        LEFT JOIN attendance a ON a.store_id = s.id AND substr(a.work_date, 1, 7) = ?
+        WHERE 1=1
+    """
+    params: list[object] = [month]
+
+    if selected_store_id:
+        query += " AND s.id = ?"
+        params.append(int(selected_store_id))
+    elif scoped_store_ids is not None:
+        if not scoped_store_ids:
+            return []
+        placeholders = ",".join(["?"] * len(scoped_store_ids))
+        query += f" AND s.id IN ({placeholders})"
+        params.extend(scoped_store_ids)
+
+    query += " GROUP BY s.id ORDER BY s.brand_name, s.store_name"
+    return db.execute(query, params).fetchall()
 
 
 # ---------- routes ----------
@@ -306,8 +543,7 @@ def logout():
 @login_required
 def dashboard():
     today_attendance = get_today_attendance(g.user["id"])
-    db = get_db()
-    recent_logs = db.execute(
+    recent_logs = get_db().execute(
         """
         SELECT * FROM attendance
         WHERE user_id = ?
@@ -328,7 +564,7 @@ def dashboard():
 def punch(action):
     db = get_db()
     record = get_today_attendance(g.user["id"])
-    now = datetime.now(ZoneInfo("Asia/Tokyo")).replace(second=0, microsecond=0).isoformat()
+    now = tokyo_now().replace(second=0, microsecond=0).isoformat()
 
     if action == "clock_in":
         if record and record["clock_in"]:
@@ -342,7 +578,7 @@ def punch(action):
             else:
                 db.execute(
                     "INSERT INTO attendance (user_id, store_id, work_date, clock_in) VALUES (?, ?, ?, ?)",
-                    (g.user["id"], g.user["store_id"], date.today().isoformat(), now),
+                    (g.user["id"], g.user["store_id"], tokyo_today().isoformat(), now),
                 )
             db.commit()
             flash("出勤打刻しました。", "success")
@@ -366,8 +602,8 @@ def punch(action):
         elif record["break_end"]:
             flash("休憩終了はすでに記録済みです。", "error")
         else:
-            start = datetime.fromisoformat(record["break_start"])
-            end = datetime.fromisoformat(now)
+            start = parse_dt(record["break_start"])
+            end = parse_dt(now)
             delta_minutes = int((end - start).total_seconds() // 60)
             total_break = (record["break_minutes"] or 0) + max(delta_minutes, 0)
             db.execute(
@@ -399,42 +635,14 @@ def punch(action):
 
 @app.route("/admin")
 @login_required
-@admin_required
+@store_manager_required
 def admin_panel():
-    db = get_db()
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
-    store_id = request.args.get("store_id")
+    month = request.args.get("month") or tokyo_today().strftime("%Y-%m")
+    requested_store_id = request.args.get("store_id") or None
+    selected_store_id, stores, scoped_store_ids = get_allowed_store_filter(requested_store_id)
 
-    query = """
-        SELECT a.*, u.full_name, u.username, s.brand_name, s.store_name, s.display_name
-        FROM attendance a
-        JOIN users u ON a.user_id = u.id
-        JOIN stores s ON a.store_id = s.id
-        WHERE substr(a.work_date, 1, 7) = ?
-    """
-    params = [month]
-    if store_id:
-        query += " AND a.store_id = ?"
-        params.append(store_id)
-    query += " ORDER BY a.work_date DESC, s.brand_name, s.store_name, u.full_name"
-
-    records = db.execute(query, params).fetchall()
-    stores = db.execute(
-        "SELECT * FROM stores ORDER BY brand_name, store_name"
-    ).fetchall()
-
-    summary = db.execute(
-        """
-        SELECT s.id, s.brand_name, s.store_name, s.display_name,
-               COUNT(DISTINCT a.user_id) AS staff_count,
-               COALESCE(SUM(a.work_minutes), 0) AS total_minutes
-        FROM stores s
-        LEFT JOIN attendance a ON a.store_id = s.id AND substr(a.work_date, 1, 7) = ?
-        GROUP BY s.id
-        ORDER BY s.brand_name, s.store_name
-        """,
-        (month,),
-    ).fetchall()
+    records = query_attendance_records(month, scoped_store_ids, selected_store_id)
+    summary = query_summary(month, scoped_store_ids, selected_store_id)
 
     return render_template(
         "admin.html",
@@ -442,7 +650,8 @@ def admin_panel():
         stores=stores,
         summary=summary,
         selected_month=month,
-        selected_store_id=store_id,
+        selected_store_id=selected_store_id or "",
+        can_view_all=(g.user["role"] == "admin"),
     )
 
 
@@ -457,11 +666,18 @@ def manage_users():
         full_name = request.form["full_name"].strip()
         password = request.form["password"]
         role = request.form["role"]
+        permission_store_ids = request.form.getlist("permission_store_ids")
         try:
-            db.execute(
+            user_id = db.execute(
                 "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
                 (store_id, username, generate_password_hash(password), full_name, role),
-            )
+            ).lastrowid
+            if role == "staff" and permission_store_ids:
+                for perm_store_id in permission_store_ids:
+                    db.execute(
+                        "INSERT OR IGNORE INTO user_store_permissions (user_id, store_id) VALUES (?, ?)",
+                        (user_id, int(perm_store_id)),
+                    )
             db.commit()
             flash("スタッフを追加しました。", "success")
         except sqlite3.IntegrityError:
@@ -477,7 +693,46 @@ def manage_users():
         """
     ).fetchall()
     stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
-    return render_template("users.html", users=users, stores=stores)
+    permission_map = get_permission_display_map()
+    return render_template("users.html", users=users, stores=stores, permission_map=permission_map)
+
+
+@app.route("/admin/users/<int:user_id>/permissions", methods=["GET", "POST"])
+@login_required
+@admin_required
+def edit_user_permissions(user_id: int):
+    db = get_db()
+    user = db.execute(
+        """
+        SELECT u.*, s.display_name
+        FROM users u
+        LEFT JOIN stores s ON u.store_id = s.id
+        WHERE u.id = ?
+        """,
+        (user_id,),
+    ).fetchone()
+    if not user:
+        flash("対象スタッフが見つかりません。", "error")
+        return redirect(url_for("manage_users"))
+
+    stores = db.execute("SELECT * FROM stores ORDER BY brand_name, store_name").fetchall()
+    selected_store_ids = {
+        row["store_id"]
+        for row in db.execute("SELECT store_id FROM user_store_permissions WHERE user_id = ?", (user_id,)).fetchall()
+    }
+
+    if request.method == "POST":
+        permission_store_ids = request.form.getlist("permission_store_ids")
+        set_user_store_permissions(user_id, permission_store_ids)
+        flash("担当店舗を更新しました。", "success")
+        return redirect(url_for("manage_users"))
+
+    return render_template(
+        "user_permissions.html",
+        user=user,
+        stores=stores,
+        selected_store_ids=selected_store_ids,
+    )
 
 
 @app.route("/admin/users/<int:user_id>/delete", methods=["POST"])
@@ -498,6 +753,7 @@ def delete_user(user_id: int):
         flash("ログイン中の自分自身は削除できません。", "error")
         return redirect(url_for("manage_users"))
 
+    db.execute("DELETE FROM user_store_permissions WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM attendance WHERE user_id = ?", (user_id,))
     db.execute("DELETE FROM users WHERE id = ?", (user_id,))
     db.commit()
@@ -505,61 +761,171 @@ def delete_user(user_id: int):
     return redirect(url_for("manage_users"))
 
 
+def attendance_rows_for_export(month: str, scoped_store_ids: list[int] | None, selected_store_id: str | None):
+    return query_attendance_records(month, scoped_store_ids, selected_store_id)
+
+
 @app.route("/admin/export")
 @login_required
-@admin_required
+@store_manager_required
 def export_csv():
-    db = get_db()
-    month = request.args.get("month") or date.today().strftime("%Y-%m")
-    store_id = request.args.get("store_id")
-
-    query = """
-        SELECT a.work_date, s.brand_name, s.store_name, s.display_name, u.full_name,
-               a.clock_in, a.break_start, a.break_end, a.clock_out,
-               a.break_minutes, a.work_minutes, a.note
-        FROM attendance a
-        JOIN users u ON a.user_id = u.id
-        JOIN stores s ON a.store_id = s.id
-        WHERE substr(a.work_date, 1, 7) = ?
-    """
-    params = [month]
-    if store_id:
-        query += " AND a.store_id = ?"
-        params.append(store_id)
-    query += " ORDER BY a.work_date, s.brand_name, s.store_name, u.full_name"
-
-    rows = db.execute(query, params).fetchall()
+    month = request.args.get("month") or tokyo_today().strftime("%Y-%m")
+    requested_store_id = request.args.get("store_id") or None
+    selected_store_id, _stores, scoped_store_ids = get_allowed_store_filter(requested_store_id)
+    rows = attendance_rows_for_export(month, scoped_store_ids, selected_store_id)
 
     output = io.StringIO()
     writer = csv.writer(output)
     writer.writerow([
-        "勤務日", "ブランド", "店舗略称", "店舗表示名", "スタッフ名", "出勤", "休憩開始", "休憩終了",
-        "退勤", "休憩合計(分)", "実働(分)", "実働(時間表記)", "備考"
+        "スタッフ名", "ブランド", "店舗", "日", "曜日", "始業時刻", "終業時刻", "休憩時間", "実働時間", "備考"
     ])
     for row in rows:
+        day_date = datetime.fromisoformat(row["work_date"]).date()
         writer.writerow([
-            row["work_date"], row["brand_name"], row["store_name"], row["display_name"], row["full_name"],
-            row["clock_in"] or "", row["break_start"] or "", row["break_end"] or "", row["clock_out"] or "",
-            row["break_minutes"] or 0, row["work_minutes"] or 0, minutes_to_hours_text(row["work_minutes"] or 0), row["note"] or ""
+            row["full_name"],
+            row["brand_name"],
+            row["display_name"],
+            f"{day_date.day}日",
+            jp_weekday(row["work_date"]),
+            format_time_only(row["clock_in"]),
+            format_time_only(row["clock_out"]),
+            minutes_to_hhmm(row["break_minutes"] or 0),
+            minutes_to_hhmm(row["work_minutes"]),
+            row["note"] or "",
         ])
 
     mem = io.BytesIO()
     mem.write(output.getvalue().encode("utf-8-sig"))
     mem.seek(0)
 
-    filename = f"timecard_{month}"
-    if store_id:
-        store = db.execute("SELECT display_name FROM stores WHERE id = ?", (store_id,)).fetchone()
-        if store:
-            filename += f"_{store['display_name']}"
-    filename += ".csv"
-
+    filename = f"timecard_{month}.csv"
     return send_file(mem, as_attachment=True, download_name=filename, mimetype="text/csv")
+
+
+def build_workbook(month: str, rows):
+    year, month_num = map(int, month.split("-"))
+    days_in_month = calendar.monthrange(year, month_num)[1]
+
+    grouped = defaultdict(dict)
+    profile = {}
+    for row in rows:
+        grouped[row["full_name"]][row["work_date"]] = row
+        profile[row["full_name"]] = row
+
+    wb = Workbook()
+    wb.remove(wb.active)
+
+    header_fill = PatternFill("solid", fgColor="D9EAF7")
+    yellow_fill = PatternFill("solid", fgColor="FFF7B2")
+    gray_fill = PatternFill("solid", fgColor="EDEDED")
+    thin = Side(style="thin", color="999999")
+    border = Border(left=thin, right=thin, top=thin, bottom=thin)
+    center = Alignment(horizontal="center", vertical="center")
+
+    for idx, (full_name, row_map) in enumerate(sorted(grouped.items()), start=1):
+        sheet_name = full_name[:28] or f"sheet{idx}"
+        ws = wb.create_sheet(title=sheet_name)
+        info = profile[full_name]
+
+        ws["A1"] = f"{year}年{month_num}月勤務時間計算表"
+        ws["A1"].font = Font(size=18, bold=True)
+        ws.merge_cells("A1:G1")
+
+        ws["B2"] = "氏 名"
+        ws["C2"] = full_name
+        ws["F2"] = "店舗"
+        ws["G2"] = info["display_name"]
+        for cell in ["B2", "C2", "F2", "G2"]:
+            ws[cell].border = border
+            ws[cell].alignment = center
+        ws["B2"].fill = header_fill
+        ws["F2"].fill = header_fill
+        ws["C2"].fill = yellow_fill
+        ws["G2"].fill = yellow_fill
+
+        headers = ["日", "曜日", "始業時刻", "終業時刻", "休憩時間", "実働時間", "備考"]
+        for col_idx, title in enumerate(headers, start=1):
+            cell = ws.cell(row=4, column=col_idx, value=title)
+            cell.fill = header_fill
+            cell.font = Font(bold=True)
+            cell.alignment = center
+            cell.border = border
+
+        total_work_minutes = 0
+        worked_days = 0
+        weekday_map = ["月", "火", "水", "木", "金", "土", "日"]
+        for day in range(1, days_in_month + 1):
+            row_idx = 4 + day
+            work_date = date(year, month_num, day).isoformat()
+            record = row_map.get(work_date)
+            weekday = weekday_map[date(year, month_num, day).weekday()]
+
+            values = [
+                f"{day}日",
+                weekday,
+                format_time_only(record["clock_in"]) if record else "",
+                format_time_only(record["clock_out"]) if record else "",
+                minutes_to_hhmm(record["break_minutes"] or 0) if record else "",
+                minutes_to_hhmm(record["work_minutes"]) if record else "",
+                record["note"] if record and record["note"] else "",
+            ]
+
+            if record and record["work_minutes"]:
+                total_work_minutes += int(record["work_minutes"])
+                worked_days += 1
+
+            for col_idx, value in enumerate(values, start=1):
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = border
+                cell.alignment = center if col_idx < 7 else Alignment(vertical="center")
+                if col_idx in (3, 4):
+                    cell.fill = yellow_fill
+                elif col_idx in (5, 6):
+                    cell.fill = gray_fill
+
+        summary_row = 6 + days_in_month
+        ws.cell(row=summary_row, column=1, value="実働日数").border = border
+        ws.cell(row=summary_row, column=2, value=worked_days).border = border
+        ws.cell(row=summary_row, column=4, value=f"{month_num}月分").alignment = center
+        ws.cell(row=summary_row, column=5, value="実働時間").border = border
+        ws.cell(row=summary_row, column=6, value=minutes_to_hours_text(total_work_minutes)).border = border
+
+        for col in "ABCDEFG":
+            ws.column_dimensions[col].width = 14
+        ws.column_dimensions["G"].width = 24
+
+    if not grouped:
+        ws = wb.create_sheet(title="勤務表")
+        ws["A1"] = f"{month} の勤務データがありません"
+
+    return wb
+
+
+@app.route("/admin/export-excel")
+@login_required
+@store_manager_required
+def export_excel():
+    month = request.args.get("month") or tokyo_today().strftime("%Y-%m")
+    requested_store_id = request.args.get("store_id") or None
+    selected_store_id, _stores, scoped_store_ids = get_allowed_store_filter(requested_store_id)
+    rows = attendance_rows_for_export(month, scoped_store_ids, selected_store_id)
+
+    wb = build_workbook(month, rows)
+    mem = io.BytesIO()
+    wb.save(mem)
+    mem.seek(0)
+    filename = f"timecard_sheet_{month}.xlsx"
+    return send_file(
+        mem,
+        as_attachment=True,
+        download_name=filename,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/admin/edit/<int:attendance_id>", methods=["GET", "POST"])
 @login_required
-@admin_required
+@store_manager_required
 def edit_attendance(attendance_id):
     db = get_db()
     record = db.execute(
@@ -574,6 +940,10 @@ def edit_attendance(attendance_id):
     ).fetchone()
     if not record:
         flash("対象データが見つかりません。", "error")
+        return redirect(url_for("admin_panel"))
+
+    if not user_can_access_store(g.user, record["store_id"]):
+        flash("担当外の店舗データは編集できません。", "error")
         return redirect(url_for("admin_panel"))
 
     if request.method == "POST":
@@ -601,6 +971,5 @@ def edit_attendance(attendance_id):
 
 
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, debug=True)
