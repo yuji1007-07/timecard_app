@@ -328,8 +328,7 @@ def dashboard():
 def punch(action):
     db = get_db()
     record = get_today_attendance(g.user["id"])
-　　from zoneinfo import ZoneInfo
-    now = datetime.now(ZoneInfo("Asia/Tokyo").replace(second=0, microsecond=0).isoformat()
+    now = datetime.now(ZoneInfo("Asia/Tokyo")).replace(second=0, microsecond=0).isoformat()
 
     if action == "clock_in":
         if record and record["clock_in"]:
