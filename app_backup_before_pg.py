@@ -5,6 +5,7 @@ import os
 import sqlite3
 import psycopg2
 import psycopg2.extras
+from urllib.parse import urlparse
 import unicodedata
 from collections import defaultdict
 from contextlib import closing
@@ -91,176 +92,37 @@ STORE_RENAMES = {
 
 
 
-
-def dictify_row(row):
-    if row is None:
-        return None
-    if isinstance(row, dict):
-        return row
-    try:
-        return dict(row)
-    except Exception:
-        return row
-
-
-class CursorWrapper:
-    def __init__(self, cursor, db_type):
-        self.cursor = cursor
-        self.db_type = db_type
-        self._lastrowid = None
-
-    @property
-    def lastrowid(self):
-        return self._lastrowid
-
-    def fetchone(self):
-        row = self.cursor.fetchone()
-        return dictify_row(row)
-
-    def fetchall(self):
-        rows = self.cursor.fetchall()
-        return [dictify_row(r) for r in rows]
-
-
-class DBWrapper:
-    def __init__(self, conn, db_type):
-        self.conn = conn
-        self.db_type = db_type
-
-    def _adapt_query(self, query):
-        q = query
-        if self.db_type == "postgres":
-            q = q.replace("INSERT OR IGNORE INTO", "INSERT INTO")
-            q = q.replace("AUTOINCREMENT", "")
-            q = q.replace("INTEGER PRIMARY KEY", "SERIAL PRIMARY KEY")
-            q = q.replace("INTEGER NOT NULL DEFAULT 1", "INTEGER NOT NULL DEFAULT 1")
-            q = q.replace("CURRENT_TIMESTAMP", "CURRENT_TIMESTAMP")
-            q = q.replace("?", "%s")
-            if "INSERT INTO user_store_permissions" in q and "ON CONFLICT" not in q:
-                q += " ON CONFLICT (user_id, store_id) DO NOTHING"
-        return q
-
-    def execute(self, query, params=()):
-        q = self._adapt_query(query)
-        if self.db_type == "postgres":
-            cur = self.conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-            cur.execute(q, params)
-            cw = CursorWrapper(cur, self.db_type)
-            return cw
-        else:
-            cur = self.conn.execute(q, params)
-            cw = CursorWrapper(cur, self.db_type)
-            try:
-                cw._lastrowid = cur.lastrowid
-            except Exception:
-                pass
-            return cw
-
-    def commit(self):
-        return self.conn.commit()
-
-    def rollback(self):
-        return self.conn.rollback()
-
-    def close(self):
-        return self.conn.close()
-
-
-def postgres_create_schema(db):
-    statements = [
-        """
-        CREATE TABLE IF NOT EXISTS stores (
-            id SERIAL PRIMARY KEY,
-            company_name TEXT NOT NULL,
-            brand_name TEXT NOT NULL,
-            store_name TEXT NOT NULL,
-            display_name TEXT NOT NULL UNIQUE,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            store_id INTEGER NOT NULL REFERENCES stores(id),
-            username TEXT NOT NULL UNIQUE,
-            password_hash TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            role TEXT NOT NULL,
-            is_active INTEGER NOT NULL DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS attendance (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id),
-            store_id INTEGER NOT NULL REFERENCES stores(id),
-            work_date TEXT NOT NULL,
-            clock_in TEXT,
-            break_start TEXT,
-            break_end TEXT,
-            clock_out TEXT,
-            break_minutes INTEGER DEFAULT 0,
-            work_minutes INTEGER,
-            note TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, work_date)
-        )
-        """,
-        """
-        CREATE TABLE IF NOT EXISTS user_store_permissions (
-            id SERIAL PRIMARY KEY,
-            user_id INTEGER NOT NULL REFERENCES users(id),
-            store_id INTEGER NOT NULL REFERENCES stores(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(user_id, store_id)
-        )
-        """
-    ]
-    for st in statements:
-        db.execute(st)
-    db.commit()
-
 # ---------- DB helpers ----------
 def get_db():
     if "db" not in g:
         if DATABASE_URL:
             conn = psycopg2.connect(DATABASE_URL)
-            g.db = DBWrapper(conn, "postgres")
+            conn.autocommit = False
+            g.db = conn
+            g.db_type = "postgres"
         else:
-            conn = sqlite3.connect(SQLITE_DATABASE)
+            conn = sqlite3.connect(
+                SQLITE_DATABASE,
+                detect_types=sqlite3.PARSE_DECLTYPES
+            )
             conn.row_factory = sqlite3.Row
-            g.db = DBWrapper(conn, "sqlite")
-        if DATABASE_URL:
-            postgres_create_schema(g.db)
-        else:
-            ensure_runtime_schema(g.db)
+            g.db = conn
+            g.db_type = "sqlite"
     return g.db
 
 
 @app.teardown_appcontext
-def close_db(exception=None):
+def close_db(e=None):
     db = g.pop("db", None)
+    g.pop("db_type", None)
+
     if db is not None:
         db.close()
 
 
 def column_exists(db, table_name: str, column_name: str) -> bool:
-    if isinstance(db, DBWrapper) and db.db_type == "postgres":
-        row = db.execute(
-            """
-            SELECT 1
-            FROM information_schema.columns
-            WHERE table_name = %s AND column_name = %s
-            LIMIT 1
-            """,
-            (table_name, column_name),
-        ).fetchone()
-        return row is not None
     rows = db.execute(f"PRAGMA table_info({table_name})").fetchall()
-    return any((r[1] if not isinstance(r, dict) else r.get("name")) == column_name for r in rows)
+    return any(row[1] == column_name for row in rows)
 
 
 def ensure_runtime_schema(db):
@@ -277,16 +139,10 @@ def ensure_runtime_schema(db):
         )
         """
     )
-    try:
-        if not column_exists(db, "stores", "is_active"):
-            db.execute("ALTER TABLE stores ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
-    except Exception:
-        pass
-    try:
-        if not column_exists(db, "users", "is_active"):
-            db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
-    except Exception:
-        pass
+    if not column_exists(db, "stores", "is_active"):
+        db.execute("ALTER TABLE stores ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+    if not column_exists(db, "users", "is_active"):
+        db.execute("ALTER TABLE users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
     db.commit()
 
 
@@ -322,29 +178,16 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
 
 
 def database_ready() -> bool:
+    if not os.path.exists(DATABASE):
+        return False
     try:
-        if DATABASE_URL:
-            conn = psycopg2.connect(DATABASE_URL)
-            db = DBWrapper(conn, "postgres")
-            row = db.execute(
-                """
-                SELECT COUNT(*) AS cnt
-                FROM information_schema.tables
-                WHERE table_schema = 'public'
-                  AND table_name IN ('stores', 'users', 'attendance')
-                """
-            ).fetchone()
-            db.close()
-            return row is not None and int(row["cnt"]) >= 3
-        if not os.path.exists(SQLITE_DATABASE):
-            return False
-        conn = sqlite3.connect(SQLITE_DATABASE)
+        conn = sqlite3.connect(DATABASE)
         row = conn.execute(
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('stores', 'users', 'attendance')"
         ).fetchone()
         conn.close()
         return row is not None and int(row[0]) == 3
-    except Exception:
+    except sqlite3.Error:
         return False
 
 
@@ -395,20 +238,13 @@ def seed_data(db):
 
 
 def init_db():
-    if DATABASE_URL:
-        conn = psycopg2.connect(DATABASE_URL)
-        db = DBWrapper(conn, "postgres")
-        postgres_create_schema(db)
-        seed_data(db)
-        db.close()
-    else:
-        conn = sqlite3.connect(SQLITE_DATABASE)
-        conn.row_factory = sqlite3.Row
-        with closing(open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8")) as f:
-            conn.executescript(f.read())
-        conn.commit()
-        seed_data(DBWrapper(conn, "sqlite"))
-        conn.close()
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    with closing(open(os.path.join(BASE_DIR, "schema.sql"), encoding="utf-8")) as f:
+        conn.executescript(f.read())
+    conn.commit()
+    seed_data(conn)
+    conn.close()
 
 
 # ---------- auth / permissions ----------
@@ -675,17 +511,10 @@ def resolve_store_id(db, value: str | None):
 
 
 def create_user_record(db, store_id: int, username: str, full_name: str, password: str, role: str, permission_store_ids: list[int]):
-    if isinstance(db, DBWrapper) and db.db_type == "postgres":
-        row = db.execute(
-            "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (%s, %s, %s, %s, %s, 1) RETURNING id",
-            (store_id, username, generate_password_hash(password), full_name, role),
-        ).fetchone()
-        user_id = row["id"]
-    else:
-        user_id = db.execute(
-            "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
-            (store_id, username, generate_password_hash(password), full_name, role),
-        ).lastrowid
+    user_id = db.execute(
+        "INSERT INTO users (store_id, username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?, 1)",
+        (store_id, username, generate_password_hash(password), full_name, role),
+    ).lastrowid
     if role == "staff":
         for perm_store_id in permission_store_ids:
             db.execute(
