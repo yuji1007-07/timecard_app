@@ -808,17 +808,8 @@ def init_db_route():
     if existing_db is not None:
         existing_db.close()
 
-    if not os.path.exists(DATABASE) or not database_ready():
-        init_db()
-        return f"DB initialized. Login with admin / {DEFAULT_ADMIN_PASSWORD}"
-
-    db = sqlite3.connect(DATABASE)
-    db.row_factory = sqlite3.Row
-    ensure_runtime_schema(db)
-    sync_master_stores(db)
-    seed_data(db)
-    db.close()
-    return "DB already initialized. Existing users and attendance were kept."
+    init_db()
+    return f"DB initialized. Login with admin / {DEFAULT_ADMIN_PASSWORD}"
 
 
 @app.route("/", methods=["GET", "POST"])
