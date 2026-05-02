@@ -1,0 +1,33 @@
+# Render Blueprint。リポジトリ直下に置けば一発でWeb+DBが立ち上がる。
+# 注意: PostgreSQL は永続ストレージで、DB と Web は別サービス。
+#       Web の再デプロイ・スリープでデータは消えない。
+services:
+  - type: web
+    name: magokoro-attendance
+    runtime: python
+    plan: starter        # Free / Starter どちらでも動く
+    region: singapore    # 必要に応じて変更（東京リージョン未対応のためSGが近い）
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -b 0.0.0.0:$PORT wsgi:app
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FLASK_ENV
+        value: production
+      - key: INIT_DB_TOKEN
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: magokoro-attendance-db
+          property: connectionString
+
+databases:
+  - name: magokoro-attendance-db
+    databaseName: magokoro_attendance
+    user: magokoro
+    plan: starter        # Free でも可（ただし90日でデータ削除される点に注意）
+    region: singapore
