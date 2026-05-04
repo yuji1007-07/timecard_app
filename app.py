@@ -633,7 +633,7 @@ def get_permission_display_map() -> dict[int, str]:
     db = get_db()
     rows = db.execute(
         """
-        SELECT usp.user_id, GROUP_CONCAT(s.display_name, ' / ') AS managed_names
+        SELECT usp.user_id, STRING_AGG(s.display_name, ' / ') AS managed_names
         FROM user_store_permissions usp
         JOIN stores s ON usp.store_id = s.id
         GROUP BY usp.user_id
@@ -741,7 +741,7 @@ def process_bulk_users(db, raw_text: str):
         try:
             create_user_record(db, store_id, username, full_name, password, role, permission_store_ids)
             created += 1
-        except sqlite3.IntegrityError:
+        except Exception:
             errors.append(f"{idx}行目: ユーザーID『{username}』が重複しています。")
 
     db.commit()
@@ -994,7 +994,7 @@ def manage_users():
             create_user_record(db, int(store_id), username, full_name, password, role, permission_store_ids)
             db.commit()
             flash("スタッフを追加しました。", "success")
-        except sqlite3.IntegrityError:
+        except Exception:
             flash("ユーザー名が重複しています。", "error")
         return redirect(url_for("manage_users"))
 
