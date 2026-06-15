@@ -47,3 +47,21 @@ export function formatDateJa(ymd) {
 export function go(path) {
   location.hash = path;
 }
+
+// 「読み込み中…」の表示（サーバー通信の待ち時間に出す）
+export function showLoading(container, message = "読み込み中…") {
+  container.innerHTML = `<div class="loading-box">⏳ ${esc(message)}</div>`;
+}
+
+// エラー表示（サーバーに繋がらない・認証切れなど）
+// 認証エラー(401)の場合はログイン画面へ戻れるようにする
+export function showError(container, error) {
+  const isAuth = error && error.code === 401;
+  container.innerHTML = `
+    <div class="empty-box">
+      <p>⚠️ ${esc(error && error.message ? error.message : "通信に失敗しました")}</p>
+      ${isAuth
+        ? `<a href="#/login" class="btn btn--primary">ログインし直す</a>`
+        : `<button class="btn btn--primary" onclick="location.reload()">再読み込み</button>`}
+    </div>`;
+}

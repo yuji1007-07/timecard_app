@@ -99,7 +99,8 @@ export function render(container) {
   });
 
   // 確定ボタン → サイン画像を保存して申込書を確定、PDFプレビューへ
-  container.querySelector("#confirmBtn").addEventListener("click", () => {
+  const confirmBtn = container.querySelector("#confirmBtn");
+  confirmBtn.addEventListener("click", async () => {
     if (!hasDrawn) {
       container.querySelector("#signError").textContent = "サインを記入してください。";
       return;
@@ -108,10 +109,18 @@ export function render(container) {
     draft.signatureDataUrl = canvas.toDataURL("image/png");
     setDraft(draft);
 
-    // 申込書として正式に保存（履歴に残る）
-    saveApplication(draft);
-
-    go("/preview");
+    // 申込書として正式にサーバーへ保存（履歴に残る）
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "保存中…";
+    try {
+      await saveApplication(draft);
+      go("/preview");
+    } catch (e) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "サインを確定 →";
+      container.querySelector("#signError").textContent =
+        "保存に失敗しました。通信状態を確認してもう一度お試しください。";
+    }
   });
 }
 

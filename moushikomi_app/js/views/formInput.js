@@ -5,16 +5,22 @@
 // ============================================================
 
 import { getTemplate, getStores, setDraft, getDraft, newId } from "../storage.js";
-import { esc, todayStr, go } from "../util.js";
+import { esc, todayStr, go, showLoading, showError } from "../util.js";
 
-export function render(container, params) {
-  const template = getTemplate(params.templateId);
+export async function render(container, params) {
+  showLoading(container);
+  let template, stores;
+  try {
+    template = await getTemplate(params.templateId);
+    stores = await getStores();
+  } catch (e) {
+    showError(container, e);
+    return;
+  }
   if (!template) {
     container.innerHTML = `<div class="empty-box"><p>テンプレートが見つかりません。</p><a href="#/select" class="btn">選択画面へ戻る</a></div>`;
     return;
   }
-
-  const stores = getStores();
   // 同じテンプレートの入力途中があれば引き継ぐ（戻ってきた時用）
   const draft = getDraft();
   const prev = draft && draft.templateId === template.id ? draft : null;

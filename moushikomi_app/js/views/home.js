@@ -4,10 +4,23 @@
 // ============================================================
 
 import { getApplications, getTemplates } from "../storage.js";
+import { showError } from "../util.js";
 
-export function render(container) {
-  const apps = getApplications().length;
-  const templates = getTemplates().length;
+export async function render(container) {
+  // サーバーから件数を取得（失敗しても画面自体は出す）
+  let apps = "-";
+  let templates = "-";
+  try {
+    const [a, t] = await Promise.all([getApplications(), getTemplates()]);
+    apps = a.length;
+    templates = t.length;
+  } catch (e) {
+    if (e.code === 401) {
+      showError(container, e);
+      return;
+    }
+    // 件数が取れないだけなら "-" のまま続行
+  }
 
   container.innerHTML = `
     <section class="hero">
@@ -36,7 +49,7 @@ export function render(container) {
     </div>
 
     <p class="home-note">
-      ※ データはこのiPadのブラウザ内に保存されます。受付での試験運用にご利用ください。
+      ※ データは会社のサーバーに保存され、全iPad・PCで共有されます。
     </p>
   `;
 }

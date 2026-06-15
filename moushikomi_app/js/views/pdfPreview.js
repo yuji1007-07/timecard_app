@@ -9,12 +9,23 @@
 // ============================================================
 
 import { getDraft, getApplication, clearDraft } from "../storage.js";
-import { esc, nl2br, formatDateJa, go } from "../util.js";
+import { esc, nl2br, formatDateJa, go, showLoading, showError } from "../util.js";
 
-export function render(container, params) {
+export async function render(container, params) {
   // 表示するデータを決める（履歴から or 作成直後）
   const fromHistory = !!params.appId;
-  const data = fromHistory ? getApplication(params.appId) : getDraft();
+  let data;
+  if (fromHistory) {
+    showLoading(container);
+    try {
+      data = await getApplication(params.appId);
+    } catch (e) {
+      showError(container, e);
+      return;
+    }
+  } else {
+    data = getDraft();
+  }
 
   if (!data) {
     container.innerHTML = `<div class="empty-box"><p>申込書データが見つかりません。</p><a href="#/" class="btn">ホームへ</a></div>`;

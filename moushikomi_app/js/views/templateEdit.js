@@ -8,9 +8,9 @@
 // ============================================================
 
 import { getTemplate, saveTemplate, newId } from "../storage.js";
-import { esc, go } from "../util.js";
+import { esc, go, showLoading, showError } from "../util.js";
 
-export function render(container, params) {
+export async function render(container, params) {
   const isNew = params.id === "new";
 
   // 編集対象の作業用コピーを用意する
@@ -27,7 +27,14 @@ export function render(container, params) {
       terms: "",
     };
   } else {
-    const t = getTemplate(params.id);
+    showLoading(container);
+    let t;
+    try {
+      t = await getTemplate(params.id);
+    } catch (e) {
+      showError(container, e);
+      return;
+    }
     if (!t) {
       container.innerHTML = `<div class="empty-box"><p>テンプレートが見つかりません。</p><a href="#/templates" class="btn">一覧へ</a></div>`;
       return;
@@ -232,14 +239,24 @@ export function render(container, params) {
     );
 
     // 保存
-    container.querySelector("#saveBtn").addEventListener("click", () => {
+    const saveBtn = container.querySelector("#saveBtn");
+    saveBtn.addEventListener("click", async () => {
       syncFromInputs();
       if (!model.name.trim()) {
         container.querySelector("#editError").textContent = "テンプレート名は必須です。";
         return;
       }
-      saveTemplate(model);
-      go("/templates");
+      saveBtn.disabled = true;
+      saveBtn.textContent = "保存中…";
+      try {
+        await saveTemplate(model);
+        go("/templates");
+      } catch (e) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "保存する";
+        container.querySelector("#editError").textContent =
+          "保存に失敗しました。通信状態を確認してください。";
+      }
     });
   }
 

@@ -4,11 +4,13 @@
 // ============================================================
 
 import { getApplications, deleteApplication } from "../storage.js";
-import { esc, formatDateJa, formatDateTime } from "../util.js";
+import { esc, formatDateJa, showError } from "../util.js";
 
 export function render(container) {
   // 検索条件の現在値（画面内だけで保持）
   const filter = { name: "", date: "", category: "", store: "" };
+  // サーバーから取得した申込書を一度だけ保持し、検索は手元で絞り込む
+  let allApps = [];
 
   container.innerHTML = `
     <div class="page-head">
@@ -31,9 +33,7 @@ export function render(container) {
 
   // 一覧を（検索条件で絞り込んで）描画する
   function draw() {
-    let apps = getApplications();
-
-    apps = apps.filter((a) => {
+    let apps = allApps.filter((a) => {
       const name = patientName(a).toLowerCase();
       if (filter.name && !name.includes(filter.name.toLowerCase())) return false;
       if (filter.date && a.applyDate !== filter.date) return false;
@@ -78,10 +78,15 @@ export function render(container) {
 
     // 削除ボタン
     listEl.querySelectorAll("[data-del]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         if (confirm("この申込書を削除しますか？（元に戻せません）")) {
-          deleteApplication(btn.dataset.del);
-          draw();
+          try {
+            await deleteApplication(btn.dataset.del);
+            allApps = allApps.filter((a) => a.id !== btn.dataset.del);
+            draw();
+          } catch (e) {
+            alert("削除に失敗しました。通信状態を確認してください。");
+          }
         }
       });
     });
@@ -107,7 +112,17 @@ export function render(container) {
     draw();
   });
 
-  draw();
+  // サーバーから申込書を読み込んでから一覧表示
+  async function load() {
+    listEl.innerHTML = `<div class="loading-box">⏳ 読み込み中…</div>`;
+    try {
+      allApps = await getApplications();
+      draw();
+    } catch (e) {
+      showError(listEl, e);
+    }
+  }
+  load();
 }
 
 // 申込データから患者氏名を取り出す
