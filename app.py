@@ -33,6 +33,8 @@ DATABASE_URL = os.environ.get("DATABASE_URL")
 SQLITE_DATABASE = os.path.join(BASE_DIR, "timecard.db")
 COMPANY_NAME = "株式会社まごころグループ"
 DEFAULT_ADMIN_PASSWORD = "admin1234"
+# 申込書アプリ用：スタッフ共通の合言葉（本番は環境変数 MOUSHIKOMI_PASSWORD で上書き可）
+MOUSHIKOMI_PASSWORD = os.environ.get("MOUSHIKOMI_PASSWORD", "magokoro2026")
 TOKYO_TZ = ZoneInfo("Asia/Tokyo")
 
 app = Flask(__name__)
@@ -1331,6 +1333,16 @@ def edit_attendance(attendance_id):
         return redirect(url_for("admin_panel"))
 
     return render_template("edit_attendance.html", record=record)
+
+
+# ---------- 申込書アプリ用クラウド保存API を有効化 ----------
+# 既存の勤怠アプリには影響しない独立したAPI（/api/moushikomi/...）。
+try:
+    from moushikomi_api import init_moushikomi
+    init_moushikomi(app, get_db, MOUSHIKOMI_PASSWORD)
+except Exception as _e:
+    # 何かあっても勤怠アプリ本体は止めない
+    print("申込書API初期化に失敗:", _e)
 
 
 if __name__ == "__main__":
