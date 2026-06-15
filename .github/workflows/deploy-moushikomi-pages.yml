@@ -1,0 +1,52 @@
+# ============================================================
+# 申込書アプリ（moushikomi_app）を GitHub Pages に自動公開する設定
+# これにより、iPadのブラウザでURLを開くだけで申込書アプリが使えます。
+#
+# ・公開されるのは moushikomi_app フォルダの中身（静的Webアプリ）だけ
+# ・勤怠アプリ（Flask/Render）には影響しません
+# ・申込データは各iPadのブラウザ内に保存され、ネットには送られません
+# ============================================================
+
+name: Deploy moushikomi app to GitHub Pages
+
+on:
+  # この作業ブランチに変更が入ったら自動で公開を更新
+  push:
+    branches: ["claude/magical-allen-qk46qp"]
+  # 手動でも実行できるように
+  workflow_dispatch:
+
+# GitHub Pages への公開に必要な権限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同時に走らないように1つずつ実行
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: ソースコードを取得
+        uses: actions/checkout@v4
+
+      - name: GitHub Pages を有効化・設定（初回も自動でON）
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 申込書アプリのフォルダを公開用にアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./moushikomi_app"
+
+      - name: GitHub Pages へ公開
+        id: deployment
+        uses: actions/deploy-pages@v4
