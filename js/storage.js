@@ -76,11 +76,29 @@ export async function checkAuth() {
   }
 }
 
+// サーバーが寝てしまわないよう、アプリを開いている間は定期的に
+// 軽い問い合わせ(ping)を送って起こし続ける（セッション中の遅延を防ぐ）。
+let _keepAliveTimer = null;
+export function startKeepAlive() {
+  if (_keepAliveTimer) return;
+  _keepAliveTimer = setInterval(() => {
+    api("/ping").catch(() => {}); // 失敗しても無視
+  }, 4 * 60 * 1000); // 4分ごと
+}
+
 // ============================================================
 // テンプレート（申込書のひな形）
 // ============================================================
-export async function getTemplates() {
-  return await api("/templates");
+// 一度読んだテンプレート・店舗一覧は記憶しておき、画面移動のたびに
+// 再通信しないようにします（体感速度が大きく改善します）。
+// データを変更したときは記憶を消して、次回に最新を読み直します。
+let _templatesCache = null;
+let _storesCache = null;
+
+export async function getTemplates(force = false) {
+  if (!force && _templatesCache) return _templatesCache;
+  _templatesCache = await api("/templates");
+  return _templatesCache;
 }
 
 export async function getTemplate(id) {
@@ -96,11 +114,13 @@ export async function saveTemplate(template) {
     method: "PUT",
     body: JSON.stringify(template),
   });
+  _templatesCache = null; // 記憶を消して次回に最新を読み直す
   return template;
 }
 
 export async function deleteTemplate(id) {
   await api("/templates/" + encodeURIComponent(id), { method: "DELETE" });
+  _templatesCache = null;
 }
 
 export async function duplicateTemplate(id) {
@@ -146,9 +166,13 @@ export async function deleteApplication(id) {
 // 店舗一覧（勤怠アプリの店舗マスタを利用）
 // ============================================================
 export async function getStores() {
+  if (_storesCache) return _storesCache;
   try {
     const stores = await api("/stores");
-    if (stores && stores.length > 0) return stores;
+    if (stores && stores.length > 0) {
+      _storesCache = stores;
+      return stores;
+    }
   } catch (e) {
     // 取得できなければ初期値で代用
   }
