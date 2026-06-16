@@ -11,8 +11,11 @@ export async function render(container, params) {
   showLoading(container);
   let template, stores;
   try {
-    template = await getTemplate(params.templateId);
-    stores = await getStores();
+    // テンプレートと店舗一覧を同時に取得（待ち時間を短縮）
+    [template, stores] = await Promise.all([
+      getTemplate(params.templateId),
+      getStores(),
+    ]);
   } catch (e) {
     showError(container, e);
     return;

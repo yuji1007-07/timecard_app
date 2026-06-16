@@ -7,7 +7,7 @@
 // 成功してから各画面を表示します。
 // ============================================================
 
-import { checkAuth, seedIfEmpty } from "./storage.js";
+import { checkAuth, seedIfEmpty, startKeepAlive } from "./storage.js";
 
 // 各画面（views フォルダの中の部品）を読み込む
 import * as login from "./views/login.js";
@@ -68,6 +68,7 @@ function showLogin() {
   login.render(appEl, {
     onSuccess: () => {
       authed = true;
+      startKeepAlive();
       location.hash = "/";
       router();
     },
@@ -76,9 +77,16 @@ function showLogin() {
 
 // 起動処理：記憶済みの合言葉でログインできるか確認
 async function boot() {
-  appEl.innerHTML = `<div class="loading-box">⏳ 接続中…</div>`;
+  appEl.innerHTML = `
+    <div class="loading-box">
+      ⏳ 接続中…<br>
+      <span style="font-size:14px;color:#8a93a3">
+        （しばらく使っていなかった場合、最初の接続に最大1分ほどかかります）
+      </span>
+    </div>`;
   authed = await checkAuth();
   if (authed) {
+    startKeepAlive();       // 開いている間サーバーを起こし続ける
     await seedIfEmpty();
   }
   router();
