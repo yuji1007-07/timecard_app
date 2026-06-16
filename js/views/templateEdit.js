@@ -54,6 +54,11 @@ export async function render(container, params) {
       f.type = val(`#ft_${f.id}`);
       f.required = container.querySelector(`#fr_${f.id}`).checked;
       f.placeholder = val(`#fp_${f.id}`);
+      // 選択肢タイプは「選択肢」欄（改行区切り）を配列に変換して保持
+      if (f.type === "select" || f.type === "checkboxes") {
+        const raw = val(`#fo_${f.id}`);
+        f.options = raw.split("\n").map((s) => s.trim()).filter((s) => s);
+      }
     });
     model.checks.forEach((c) => {
       c.label = val(`#cl_${c.id}`);
@@ -151,10 +156,15 @@ export async function render(container, params) {
           <option value="tel" ${f.type === "tel" ? "selected" : ""}>電話</option>
           <option value="date" ${f.type === "date" ? "selected" : ""}>日付</option>
           <option value="textarea" ${f.type === "textarea" ? "selected" : ""}>複数行</option>
+          <option value="select" ${f.type === "select" ? "selected" : ""}>選択肢</option>
+          <option value="checkboxes" ${f.type === "checkboxes" ? "selected" : ""}>複数選択</option>
         </select>
         <input id="fp_${f.id}" class="field__input edit-row__ph" type="text" value="${esc(f.placeholder || "")}" placeholder="入力例" />
         <label class="edit-row__req"><input id="fr_${f.id}" type="checkbox" ${f.required ? "checked" : ""}/> 必須</label>
         <button class="icon-btn icon-btn--danger" data-delfield="${f.id}">✕</button>
+        ${(f.type === "select" || f.type === "checkboxes")
+          ? `<textarea id="fo_${f.id}" class="field__input edit-row__options" rows="3" placeholder="選択肢を1行に1つ書いてください">${esc((f.options || []).join("\n"))}</textarea>`
+          : ""}
       </div>`
       )
       .join("");

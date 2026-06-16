@@ -393,6 +393,20 @@ a { color: inherit; text-decoration: none; }
 .login-advanced { margin: 8px 0 4px; }
 .login-advanced summary { cursor: pointer; color: var(--blue); font-size: 14px; }
 
+/* ---------- 複数選択（チェックボックス群） ---------- */
+.checkbox-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 16px;
+  padding: 6px 2px;
+}
+.cbx {
+  display: flex; align-items: flex-start; gap: 8px;
+  font-size: 16px; cursor: pointer; line-height: 1.5;
+}
+.cbx input { width: 22px; height: 22px; margin-top: 2px; flex-shrink: 0; accent-color: var(--navy); }
+.edit-row__options { flex-basis: 100%; margin-top: 4px; }
+
 /* ---------- 顧客管理（店舗グループ） ---------- */
 .store-group { margin-bottom: 30px; }
 .store-group__title {

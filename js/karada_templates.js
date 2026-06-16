@@ -194,5 +194,48 @@ export function KARADA_TEMPLATES() {
         chk("お支払い方法は現金になります。初回は登録日にお支払いいただき、2ヶ月目以降は更新日ごとにお支払いください。お支払い後の返金は応じられません。"),
       ],
     }),
+
+    // ⑦ 退会届（停止届）— プレミアム会員／HV定額 共通
+    tpl({
+      name: "退会届（停止届）",
+      category: "退会・停止",
+      body: "本届出をもって、からだラボ整骨院プレミアム会員 又は HV1ヶ月定額制を退会します。",
+      plans: [],
+      fields: [
+        { id: newId(), label: "カルテ番号", type: "text", required: false, placeholder: "例: 12345" },
+        { id: newId(), label: "お客様氏名", type: "text", required: true, placeholder: "山田 太郎" },
+        { id: newId(), label: "フリガナ", type: "text", required: false, placeholder: "ヤマダ タロウ" },
+        {
+          id: newId(),
+          label: "退会区分",
+          type: "select",
+          required: true,
+          options: ["プレミアム会員コース退会", "HV1ヶ月定額制退会"],
+        },
+        {
+          id: newId(),
+          label: "退会理由（複数選択可）",
+          type: "checkboxes",
+          required: false,
+          options: [
+            "症状が改善した", "引っ越し", "金銭面",
+            "通院頻度を下げたい", "受付の対応が悪い", "衛生面に不満",
+            "先生の対応が悪い", "治療が合わない", "先生が合わない",
+            "仕事が忙しい", "症状が治らない", "症状が悪化した",
+            "施術内容が納得できないため", "別の治療院に行くため",
+            "根本治療を求めていない", "電気が痛い・合わない",
+            "マッサージが合わない", "先生の引継ぎが出来ていない",
+            "違う治療がしたくなった",
+          ],
+        },
+        { id: newId(), label: "その他ご意見・お気づきの点", type: "textarea", required: false, placeholder: "" },
+        { id: newId(), label: "最終決済日", type: "text", required: false, placeholder: "例: 6月10日" },
+        { id: newId(), label: "有効期限", type: "text", required: false, placeholder: "例: 7月10日" },
+      ],
+      checks: [
+        chk("本日をもって、からだラボ整骨院プレミアム会員 又は HV1ヶ月定額制を退会することに同意いたします。"),
+        chk("※プレミアム会員コースの場合は、6ヶ月以内の退会で入会金6,000円(税込)が遡って発生いたします。"),
+      ],
+    }),
   ];
 }
