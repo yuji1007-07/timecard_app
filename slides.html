@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>からだラボ 申込書アプリ｜今回やったこと まとめスライド</title>
+<style>
+  :root{
+    --navy:#1f3a5f; --navy2:#2c5282; --accent:#e07a3f;
+    --bg:#f4f1ea; --paper:#ffffff; --ink:#243244; --muted:#6b7785;
+    --line:#e2ddd2;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;
+    background:var(--navy); color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+  }
+  /* スライド本体 */
+  .deck{ width:100vw; height:100vh; position:relative; }
+  .slide{
+    position:absolute; inset:0;
+    display:none; flex-direction:column;
+    padding:6vh 7vw 12vh;
+    background:var(--bg);
+    animation:fade .35s ease;
+  }
+  .slide.active{ display:flex; }
+  @keyframes fade{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+
+  /* 見出し帯 */
+  .kicker{ color:var(--accent); font-weight:800; letter-spacing:.08em; font-size:clamp(13px,1.6vw,18px); margin-bottom:10px;}
+  h1.title{ font-size:clamp(28px,5vw,60px); color:var(--navy); line-height:1.25; }
+  h2{ font-size:clamp(22px,3.4vw,40px); color:var(--navy); line-height:1.3; margin-bottom:18px; border-bottom:4px solid var(--accent); padding-bottom:10px; display:inline-block;}
+  p.lead{ font-size:clamp(16px,2.1vw,24px); color:var(--ink); line-height:1.7; max-width:60ch;}
+  .muted{ color:var(--muted); }
+
+  ul.points{ list-style:none; margin-top:8px; display:flex; flex-direction:column; gap:14px; }
+  ul.points li{ font-size:clamp(15px,2vw,23px); line-height:1.55; padding-left:42px; position:relative; }
+  ul.points li::before{
+    content:"✓"; position:absolute; left:0; top:0;
+    width:30px; height:30px; border-radius:50%;
+    background:var(--navy); color:#fff; font-size:16px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  ul.points li b{ color:var(--navy2); }
+
+  /* カードのグリッド */
+  .grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:18px; margin-top:6px;}
+  .card{ background:var(--paper); border:1px solid var(--line); border-radius:16px; padding:22px; box-shadow:0 6px 18px rgba(0,0,0,.06);}
+  .card .num{ display:inline-flex; width:38px; height:38px; border-radius:10px; background:var(--accent); color:#fff; font-weight:800; align-items:center; justify-content:center; font-size:20px; margin-bottom:12px;}
+  .card h3{ font-size:clamp(17px,2vw,22px); color:var(--navy); margin-bottom:8px;}
+  .card p{ font-size:clamp(14px,1.6vw,17px); color:var(--ink); line-height:1.6;}
+
+  /* 流れ図 */
+  .flow{ display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:18px;}
+  .flow .step{ background:var(--paper); border:2px solid var(--navy); color:var(--navy); font-weight:700;
+    border-radius:12px; padding:14px 18px; font-size:clamp(14px,1.8vw,20px);}
+  .flow .arrow{ color:var(--accent); font-size:clamp(18px,2.4vw,28px); font-weight:800;}
+
+  /* コード風ボックス */
+  .code{ background:#1b2330; color:#e8eef7; border-radius:12px; padding:18px 20px; font-family:"SF Mono",Consolas,Menlo,monospace;
+    font-size:clamp(12px,1.5vw,16px); line-height:1.7; margin-top:14px; overflow:auto; max-height:46vh;}
+  .code .c{ color:#7f9cc0;} .code .k{ color:#e07a3f;} .code .s{ color:#9ed29e;}
+
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:28px; align-items:start;}
+  @media(max-width:780px){ .two{ grid-template-columns:1fr; } }
+
+  .tag{ display:inline-block; background:#e8edf4; color:var(--navy2); border-radius:999px; padding:4px 12px; font-size:13px; font-weight:700; margin:0 6px 6px 0;}
+
+  /* タイトルスライド */
+  .cover{ background:linear-gradient(135deg,var(--navy),var(--navy2)); color:#fff; justify-content:center;}
+  .cover .kicker{ color:#ffd9b8;}
+  .cover h1{ color:#fff; }
+  .cover .sub{ font-size:clamp(15px,2vw,22px); color:#cdd9ea; margin-top:18px;}
+  .cover .meta{ margin-top:34px; color:#9fb2cc; font-size:14px;}
+
+  /* フッター操作バー */
+  .bar{ position:fixed; bottom:0; left:0; right:0; height:8vh; min-height:54px;
+    background:rgba(31,58,95,.96); color:#fff; display:flex; align-items:center; justify-content:space-between;
+    padding:0 18px; z-index:10;}
+  .bar .nav{ display:flex; gap:10px; align-items:center;}
+  .bar button{ background:#fff; color:var(--navy); border:none; border-radius:10px; padding:10px 16px; font-size:16px; font-weight:700; cursor:pointer;}
+  .bar button:disabled{ opacity:.4; cursor:default;}
+  .bar .count{ font-size:14px; color:#cdd9ea;}
+  .bar .title-min{ font-size:14px; color:#cdd9ea; max-width:50vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .progress{ position:fixed; top:0; left:0; height:5px; background:var(--accent); z-index:11; transition:width .3s;}
+  .hint{ position:fixed; bottom:9vh; right:14px; font-size:12px; color:var(--muted); z-index:9;}
+</style>
+</head>
+<body>
+<div class="progress" id="progress"></div>
+<div class="deck" id="deck">
+
+  <!-- 1 表紙 -->
+  <section class="slide cover active">
+    <div class="kicker">からだラボ整骨院／狛江駅前整骨院</div>
+    <h1 class="title">申込書アプリ<br>今回やったこと まとめ</h1>
+    <div class="sub">紙の契約書を iPad で「入力 → 確認 → サイン → PDF」にする仕組み<br>― 初心者向け解説 ＆ 次回のための手順書 ―</div>
+    <div class="meta">2026/06/16 作成 ｜ → キー（または画面下のボタン）でめくれます</div>
+  </section>
+
+  <!-- 2 このアプリは何 -->
+  <section class="slide">
+    <div class="kicker">まずは全体像</div>
+    <h2>このアプリは何をするもの？</h2>
+    <p class="lead">受付で使っていた<b>紙の会員申込書・退会届</b>を、iPad 1枚で完結させるアプリです。
+    手書き・印刷・保管の手間を減らし、内容も金額もミスなく揃えられます。</p>
+    <div class="grid">
+      <div class="card"><div class="num">📝</div><h3>入力</h3><p>お客様情報・プラン・金額を画面で入力</p></div>
+      <div class="card"><div class="num">✓</div><h3>確認</h3><p>契約条項に1つずつチェック（全部チェックで次へ）</p></div>
+      <div class="card"><div class="num">✍</div><h3>サイン</h3><p>指でその場に署名</p></div>
+      <div class="card"><div class="num">🖨</div><h3>PDF</h3><p>A4の紙の形で保存・印刷（AirPrint対応）</p></div>
+    </div>
+  </section>
+
+  <!-- 3 画面の流れ -->
+  <section class="slide">
+    <div class="kicker">操作の流れ</div>
+    <h2>受付での使い方（5ステップ）</h2>
+    <div class="flow">
+      <div class="step">① ログイン<br><span class="muted">合言葉</span></div><div class="arrow">→</div>
+      <div class="step">② 契約書を選ぶ</div><div class="arrow">→</div>
+      <div class="step">③ 入力</div><div class="arrow">→</div>
+      <div class="step">④ 確認＋☑</div><div class="arrow">→</div>
+      <div class="step">⑤ サイン→PDF</div>
+    </div>
+    <ul class="points" style="margin-top:28px;">
+      <li>ログインの<b>合言葉は「magokoro2026」</b></li>
+      <li>作った申込書は<b>「履歴」</b>と<b>「顧客管理」</b>からいつでも見返せます</li>
+    </ul>
+  </section>
+
+  <!-- 4 今回やったこと サマリ -->
+  <section class="slide">
+    <div class="kicker">今回の成果（ハイライト）</div>
+    <h2>今回 追加・改善したこと</h2>
+    <div class="grid">
+      <div class="card"><div class="num">1</div><h3>契約書を7種類 用意</h3><p>クレジット／現金／学割／定額／退会届を、本物のPDFどおりに再現</p></div>
+      <div class="card"><div class="num">2</div><h3>☑チェック＋サイン</h3><p>契約の各条項にチェック→全部チェックで署名→PDFに☑と署名が出る</p></div>
+      <div class="card"><div class="num">3</div><h3>退会届に対応</h3><p>「選択肢」「複数選択」の入力タイプを新規追加</p></div>
+      <div class="card"><div class="num">4</div><h3>最新文に更新</h3><p>「標準を読み込む」で古い契約文も最新に上書き</p></div>
+      <div class="card"><div class="num">5</div><h3>顧客管理</h3><p>店舗別・カルテ番号順で一覧表示</p></div>
+    </div>
+  </section>
+
+  <!-- 5 テンプレート -->
+  <section class="slide">
+    <div class="kicker">成果 ①</div>
+    <h2>契約書テンプレートを7種類</h2>
+    <p class="lead">「テンプレート」＝契約書のひな形です。種類ごとに<b>条項の文章・金額・チェック項目</b>を持っています。</p>
+    <div style="margin-top:16px;">
+      <span class="tag">会員（クレジット）</span><span class="tag">会員（クレジット・学割）</span>
+      <span class="tag">HV定額（クレジット）</span><span class="tag">会員（現金）</span>
+      <span class="tag">会員（現金・入会日あり）</span><span class="tag">HV定額（現金）</span>
+      <span class="tag">退会届（停止届）</span>
+    </div>
+    <ul class="points" style="margin-top:24px;">
+      <li>お預かりした<b>本物のPDFの文言・金額のまま</b>作成</li>
+      <li>受付では選んで使うだけ。<b>「テンプレート管理」から文章修正も可能</b></li>
+    </ul>
+  </section>
+
+  <!-- 6 チェック＋サインの仕組み -->
+  <section class="slide">
+    <div class="kicker">成果 ②（一番大事な所）</div>
+    <h2>「☑チェック＋サイン」の仕組み</h2>
+    <div class="two">
+      <div>
+        <h3 style="color:var(--navy2); margin-bottom:10px;">確認画面（お客様に見せる）</h3>
+        <ul class="points">
+          <li>契約の条項を<b>1つずつ☑チェック</b></li>
+          <li><b>全部チェックしないと先へ進めない</b></li>
+          <li>そのままサイン画面へ</li>
+        </ul>
+      </div>
+      <div>
+        <h3 style="color:var(--navy2); margin-bottom:10px;">PDF（保存・印刷）</h3>
+        <ul class="points">
+          <li>「ご確認事項」に<b>☑＋条項の全文</b></li>
+          <li>最後に<b>ご署名（手書き画像）</b></li>
+          <li>紙の契約書と同じ見た目</li>
+        </ul>
+      </div>
+    </div>
+    <p class="lead muted" style="margin-top:20px;">＝ クレジット契約の6条項（申込・特典・6ヶ月退会・決済・天災・同意）も、この形で全部入っています。</p>
+  </section>
+
+  <!-- 7 退会届と新項目タイプ -->
+  <section class="slide">
+    <div class="kicker">成果 ③</div>
+    <h2>退会届＋新しい入力タイプ</h2>
+    <p class="lead">退会届は「<b>理由を複数チェックで選ぶ</b>」など、これまでと違う形でした。そこで入力タイプを2つ増やしました。</p>
+    <div class="grid" style="margin-top:18px;">
+      <div class="card"><div class="num">▼</div><h3>選択肢（プルダウン）</h3><p>1つだけ選ぶ。例：退会区分（会員／定額）</p></div>
+      <div class="card"><div class="num">☑</div><h3>複数選択（チェック）</h3><p>当てはまるものを全部。例：退会理由19項目</p></div>
+    </div>
+    <ul class="points" style="margin-top:18px;">
+      <li>従来の <b>文字／電話／日付／複数行</b> に加わりました</li>
+    </ul>
+  </section>
+
+  <!-- 8 最新文に更新 -->
+  <section class="slide">
+    <div class="kicker">成果 ④（つまずきポイント）</div>
+    <h2>「読み込む」が最新文に更新</h2>
+    <div class="two">
+      <div>
+        <h3 style="color:#b3402a; margin-bottom:10px;">＜直す前＞</h3>
+        <p class="lead">同じ名前のテンプレートは<b>追加しないだけ</b>。
+        →昔読み込んだ<b>古い契約文がそのまま残る</b>問題が発生。</p>
+      </div>
+      <div>
+        <h3 style="color:#1f7a4d; margin-bottom:10px;">＜直した後＞</h3>
+        <p class="lead">「標準を読み込む」を押すと、<b>既存の標準も最新の正式文に上書き更新</b>。
+        「○件を追加／○件を更新しました」と表示。</p>
+      </div>
+    </div>
+    <ul class="points" style="margin-top:18px;">
+      <li>文章を直したら、もう一度<b>「＋ からだラボ標準を読み込む」</b>を押せば全端末に反映</li>
+    </ul>
+  </section>
+
+  <!-- 9 顧客管理 -->
+  <section class="slide">
+    <div class="kicker">成果 ⑤</div>
+    <h2>顧客管理ページ</h2>
+    <p class="lead">作った申込書から、<b>お客様の一覧</b>を自動でまとめます。</p>
+    <ul class="points" style="margin-top:16px;">
+      <li><b>店舗ごと</b>にグループ分け</li>
+      <li><b>カルテ番号順</b>に並ぶので探しやすい</li>
+      <li>クリックすれば、その人の申込書（PDF）をすぐ表示</li>
+    </ul>
+  </section>
+
+  <!-- 10 仕組みのキホン -->
+  <section class="slide">
+    <div class="kicker">中身を少しだけ（初心者向け）</div>
+    <h2>このアプリの作り（用語）</h2>
+    <div class="grid">
+      <div class="card"><h3>HTML / CSS / JavaScript</h3><p>特別な道具なしで動く、Webの基本3点セットで作っています</p></div>
+      <div class="card"><h3>テンプレート</h3><p>契約書のひな形データ。<span class="muted">karada_templates.js</span> に書いてあります</p></div>
+      <div class="card"><h3>ビュー（画面）</h3><p>ログイン・入力・確認・サイン・PDF など、画面ごとに <span class="muted">js/views/</span> にファイル</p></div>
+      <div class="card"><h3>GitHub Pages</h3><p>作ったファイルをネットに公開する場所。URLで誰でも開けます</p></div>
+    </div>
+  </section>
+
+  <!-- 11 次回:テンプレ追加 -->
+  <section class="slide">
+    <div class="kicker">次にやるとき ①</div>
+    <h2>契約書を増やす・直す手順</h2>
+    <p class="lead">ファイル <b>js/karada_templates.js</b> に、ひな形を1つ書き足すだけ。</p>
+    <div class="code">
+<span class="c">// 新しい契約書テンプレートの例</span>
+<span class="k">tpl</span>({
+  name: <span class="s">"会員申込書（新プラン）"</span>,   <span class="c">// 画面に出る名前</span>
+  category: <span class="s">"会員・クレジット"</span>,        <span class="c">// 分類</span>
+  body: BODY_KAIIN,                     <span class="c">// 冒頭の説明文</span>
+  plans: <span class="k">planKaiin</span>(),                  <span class="c">// プランと金額</span>
+  checks: [                             <span class="c">// ←これが☑チェック条項</span>
+    <span class="k">chk</span>(<span class="s">"プレミアム会員 5,500円（税込）を申し込みます。"</span>),
+    <span class="k">chk</span>(<span class="s">"特典：通常6,270円→2,970円 …"</span>),
+    <span class="k">chk</span>(DOUI),                          <span class="c">// 同意文</span>
+  ],
+}),
+    </div>
+    <p class="lead muted" style="margin-top:12px;">書いたら →「テンプレート管理 → ＋ からだラボ標準を読み込む」で反映。</p>
+  </section>
+
+  <!-- 12 次回:公開 -->
+  <section class="slide">
+    <div class="kicker">次にやるとき ②</div>
+    <h2>公開（みんなが使える状態に）</h2>
+    <ul class="points">
+      <li>変更したファイルを <b>保存（コミット）</b>して、作業用の枝（ブランチ）に <b>push</b></li>
+      <li><b>gh-pages</b> という公開用の場所にコピーして push すると、URLに反映</li>
+      <li>反映まで <b>1〜2分</b>。iPadは<b>再読み込み</b>すれば最新に</li>
+    </ul>
+    <div class="code">
+<span class="c"># ざっくりの流れ（やっている作業）</span>
+git add .                       <span class="c"># 変更をまとめる</span>
+git commit -m <span class="s">"説明を書く"</span>      <span class="c"># 保存</span>
+git push origin 作業ブランチ        <span class="c"># 自分の枝へ送る</span>
+<span class="c"># → 公開用(gh-pages)へコピーして push すると本番反映</span>
+    </div>
+  </section>
+
+  <!-- 13 困ったとき -->
+  <section class="slide">
+    <div class="kicker">よくある質問</div>
+    <h2>困ったときは</h2>
+    <div class="two">
+      <div>
+        <ul class="points">
+          <li><b>文章を直したのに変わらない</b><br><span class="muted">→「標準を読み込む」を再度押す＋画面を再読み込み</span></li>
+          <li><b>チェックして進めない</b><br><span class="muted">→ 条項を全部チェックすると進めます（仕様）</span></li>
+        </ul>
+      </div>
+      <div>
+        <ul class="points">
+          <li><b>金額や文言が原本と違う</b><br><span class="muted">→ テンプレート管理 → 編集 で直せます</span></li>
+          <li><b>PDFが欲しい</b><br><span class="muted">→ 印刷 →「PDFとして保存」を選択</span></li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- 14 まとめ -->
+  <section class="slide cover">
+    <div class="kicker">まとめ</div>
+    <h1 class="title">紙の契約を、<br>iPadで正確・かんたんに。</h1>
+    <div class="sub">
+      ・契約書7種を本物どおりに再現　・☑チェック＋サイン＋PDF<br>
+      ・退会届と新入力タイプ　・最新文へ更新　・顧客管理<br><br>
+      次回は「karada_templates.js に書く → 読み込む → 公開」の3ステップ。
+    </div>
+    <div class="meta">おつかれさまでした 🎉</div>
+  </section>
+
+</div>
+
+<div class="hint">← → / スペース でめくる</div>
+<div class="bar">
+  <div class="title-min" id="titleMin"></div>
+  <div class="nav">
+    <span class="count" id="count"></span>
+    <button id="prev">← 戻る</button>
+    <button id="next">次へ →</button>
+  </div>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  let i = 0;
+  const titles = ["表紙","アプリとは","使い方の流れ","今回の成果","①テンプレート7種","②チェック＋サイン","③退会届と新タイプ","④最新文に更新","⑤顧客管理","作りの基本","次回:テンプレ追加","次回:公開","困ったとき","まとめ"];
+  function show(n){
+    i = Math.max(0, Math.min(slides.length-1, n));
+    slides.forEach((s,idx)=>s.classList.toggle('active', idx===i));
+    document.getElementById('count').textContent = (i+1)+" / "+slides.length;
+    document.getElementById('titleMin').textContent = titles[i] || "";
+    document.getElementById('prev').disabled = (i===0);
+    document.getElementById('next').disabled = (i===slides.length-1);
+    document.getElementById('progress').style.width = ((i)/(slides.length-1)*100)+"%";
+  }
+  document.getElementById('next').onclick = ()=>show(i+1);
+  document.getElementById('prev').onclick = ()=>show(i-1);
+  document.addEventListener('keydown', e=>{
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown') show(i+1);
+    if(e.key==='ArrowLeft'||e.key==='PageUp') show(i-1);
+    if(e.key==='Home') show(0);
+    if(e.key==='End') show(slides.length-1);
+  });
+  // スワイプ（iPad対応）
+  let sx=null;
+  document.addEventListener('touchstart', e=>{ sx=e.touches[0].clientX; }, {passive:true});
+  document.addEventListener('touchend', e=>{
+    if(sx===null) return;
+    const dx = e.changedTouches[0].clientX - sx;
+    if(dx < -50) show(i+1);
+    if(dx > 50) show(i-1);
+    sx=null;
+  }, {passive:true});
+  show(0);
+</script>
+</body>
+</html>
