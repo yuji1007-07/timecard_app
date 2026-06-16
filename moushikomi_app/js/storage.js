@@ -20,7 +20,7 @@ const KEY_DRAFT = "moushikomi_draft_v1";      // 入力途中の下書き
 
 // サーバーURLの初期値（会社の勤怠アプリのURL + /api/moushikomi）。
 // 違う場合はログイン画面で変更できます。
-const DEFAULT_API_BASE = "https://magokoro-attendance.onrender.com/api/moushikomi";
+const DEFAULT_API_BASE = "https://timecard-app-1.onrender.com/api/moushikomi";
 
 // ------- ID生成 -------
 export function newId() {
