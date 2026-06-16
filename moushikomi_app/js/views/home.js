@@ -41,6 +41,12 @@ export async function render(container) {
         <div class="home-card__desc">作成済み ${apps} 件 / 検索・PDF確認</div>
       </a>
 
+      <a href="#/customers" class="home-card">
+        <div class="home-card__icon">👥</div>
+        <div class="home-card__title">顧客管理</div>
+        <div class="home-card__desc">店舗別・カルテ番号順で一覧管理</div>
+      </a>
+
       <a href="#/templates" class="home-card">
         <div class="home-card__icon">⚙️</div>
         <div class="home-card__title">テンプレート管理</div>

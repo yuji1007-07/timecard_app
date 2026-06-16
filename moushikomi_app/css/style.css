@@ -393,6 +393,18 @@ a { color: inherit; text-decoration: none; }
 .login-advanced { margin: 8px 0 4px; }
 .login-advanced summary { cursor: pointer; color: var(--blue); font-size: 14px; }
 
+/* ---------- 顧客管理（店舗グループ） ---------- */
+.store-group { margin-bottom: 30px; }
+.store-group__title {
+  font-size: 19px; color: var(--navy); margin: 0 0 12px;
+  padding-bottom: 8px; border-bottom: 2px solid var(--blue-light);
+  display: flex; align-items: center; gap: 10px;
+}
+.store-group__count {
+  font-size: 14px; color: var(--blue); background: var(--blue-light);
+  padding: 2px 12px; border-radius: 999px; font-weight: 700;
+}
+
 /* ---------- 読み込み中の表示 ---------- */
 .loading-box {
   text-align: center; color: var(--gray-text); padding: 50px 20px; font-size: 18px;
