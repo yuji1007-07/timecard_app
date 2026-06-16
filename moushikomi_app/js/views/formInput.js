@@ -67,12 +67,32 @@ export async function render(container, params) {
   // テンプレートで定義された患者情報の入力項目を組み立てる
   const fieldInputs = template.fields
     .map((f) => {
-      const val = prev && prev.fieldValues ? esc(prev.fieldValues[f.id] || "") : "";
+      const rawVal = prev && prev.fieldValues ? (prev.fieldValues[f.id] || "") : "";
+      const val = esc(rawVal);
       const req = f.required ? '<span class="field__req">必須</span>' : "";
-      const input =
-        f.type === "textarea"
-          ? `<textarea id="f_${f.id}" class="field__input" rows="3" placeholder="${esc(f.placeholder || "")}">${val}</textarea>`
-          : `<input id="f_${f.id}" class="field__input" type="${f.type === "date" || f.type === "tel" ? f.type : "text"}" value="${val}" placeholder="${esc(f.placeholder || "")}" />`;
+      let input;
+      if (f.type === "textarea") {
+        input = `<textarea id="f_${f.id}" class="field__input" rows="3" placeholder="${esc(f.placeholder || "")}">${val}</textarea>`;
+      } else if (f.type === "select") {
+        // プルダウン（1つ選ぶ）
+        input = `<select id="f_${f.id}" class="field__input" data-type="select">
+            <option value="">― 選択 ―</option>
+            ${(f.options || []).map((o) => `<option ${rawVal === o ? "selected" : ""}>${esc(o)}</option>`).join("")}
+          </select>`;
+      } else if (f.type === "checkboxes") {
+        // 複数選択（任意・該当するものに全部チェック）
+        const selected = rawVal ? rawVal.split(" / ") : [];
+        input = `<div id="f_${f.id}" class="checkbox-group" data-type="checkboxes">
+            ${(f.options || [])
+              .map(
+                (o) =>
+                  `<label class="cbx"><input type="checkbox" value="${esc(o)}" ${selected.includes(o) ? "checked" : ""}/> ${esc(o)}</label>`
+              )
+              .join("")}
+          </div>`;
+      } else {
+        input = `<input id="f_${f.id}" class="field__input" type="${f.type === "date" || f.type === "tel" ? f.type : "text"}" value="${val}" placeholder="${esc(f.placeholder || "")}" />`;
+      }
       return `
         <div class="field">
           <label class="field__label" for="f_${f.id}">${esc(f.label)} ${req}</label>
@@ -151,7 +171,14 @@ export async function render(container, params) {
     }
     const fieldValues = {};
     for (const f of template.fields) {
-      const v = container.querySelector(`#f_${f.id}`).value.trim();
+      let v;
+      if (f.type === "checkboxes") {
+        // チェックされた選択肢を「 / 」でつないで保存
+        const boxes = container.querySelectorAll(`#f_${f.id} input[type=checkbox]:checked`);
+        v = Array.from(boxes).map((b) => b.value).join(" / ");
+      } else {
+        v = container.querySelector(`#f_${f.id}`).value.trim();
+      }
       fieldValues[f.id] = v;
       if (f.required && !v) {
         errorEl.textContent = `「${f.label}」は必須項目です。`;
