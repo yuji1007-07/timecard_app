@@ -18,6 +18,7 @@ import * as patientConfirm from "./views/patientConfirm.js";
 import * as signature from "./views/signature.js";
 import * as pdfPreview from "./views/pdfPreview.js";
 import * as history from "./views/history.js";
+import * as customerManage from "./views/customerManage.js";
 import * as templateList from "./views/templateList.js";
 import * as templateEdit from "./views/templateEdit.js";
 
@@ -34,6 +35,7 @@ const routes = [
   { pattern: /^\/preview$/, view: pdfPreview },
   { pattern: /^\/print\/(.+)$/, view: pdfPreview, keys: ["appId"] },
   { pattern: /^\/history$/, view: history },
+  { pattern: /^\/customers$/, view: customerManage },
   { pattern: /^\/templates$/, view: templateList },
   { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"] },
 ];
