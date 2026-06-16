@@ -4,10 +4,17 @@
 // ============================================================
 
 import { getTemplates } from "../storage.js";
-import { esc } from "../util.js";
+import { esc, showLoading, showError } from "../util.js";
 
-export function render(container) {
-  const templates = getTemplates();
+export async function render(container) {
+  showLoading(container);
+  let templates;
+  try {
+    templates = await getTemplates();
+  } catch (e) {
+    showError(container, e);
+    return;
+  }
 
   if (templates.length === 0) {
     container.innerHTML = `
@@ -19,7 +26,6 @@ export function render(container) {
     return;
   }
 
-  // テンプレートをカードで一覧表示
   const cards = templates
     .map(
       (t) => `

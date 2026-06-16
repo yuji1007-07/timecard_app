@@ -4,11 +4,18 @@
 // ============================================================
 
 import { getTemplates, duplicateTemplate, deleteTemplate } from "../storage.js";
-import { esc, formatDateTime } from "../util.js";
+import { esc, formatDateTime, showLoading, showError } from "../util.js";
 
 export function render(container) {
-  function draw() {
-    const templates = getTemplates();
+  async function draw() {
+    showLoading(container);
+    let templates;
+    try {
+      templates = await getTemplates();
+    } catch (e) {
+      showError(container, e);
+      return;
+    }
 
     const rows = templates
       .map(
@@ -48,17 +55,25 @@ export function render(container) {
 
     // 複製
     container.querySelectorAll("[data-dup]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        duplicateTemplate(btn.dataset.dup);
-        draw();
+      btn.addEventListener("click", async () => {
+        try {
+          await duplicateTemplate(btn.dataset.dup);
+          draw();
+        } catch (e) {
+          alert("複製に失敗しました。通信状態を確認してください。");
+        }
       });
     });
     // 削除
     container.querySelectorAll("[data-del]").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      btn.addEventListener("click", async () => {
         if (confirm("このテンプレートを削除しますか？")) {
-          deleteTemplate(btn.dataset.del);
-          draw();
+          try {
+            await deleteTemplate(btn.dataset.del);
+            draw();
+          } catch (e) {
+            alert("削除に失敗しました。通信状態を確認してください。");
+          }
         }
       });
     });

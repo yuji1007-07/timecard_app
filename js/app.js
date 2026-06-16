@@ -1,12 +1,16 @@
 // ============================================================
 // app.js
-// アプリの入り口。URLのハッシュ(#/...)を見て、
-// 対応する画面(view)を呼び出す「ルーター」です。
+// アプリの入り口。URLのハッシュ(#/...)を見て、対応する画面(view)を
+// 呼び出す「ルーター」です。
+//
+// クラウド保存版では、最初にログイン（合言葉の確認）を行い、
+// 成功してから各画面を表示します。
 // ============================================================
 
-import { seedIfEmpty } from "./storage.js";
+import { checkAuth, seedIfEmpty } from "./storage.js";
 
 // 各画面（views フォルダの中の部品）を読み込む
+import * as login from "./views/login.js";
 import * as home from "./views/home.js";
 import * as templateSelect from "./views/templateSelect.js";
 import * as formInput from "./views/formInput.js";
@@ -17,13 +21,10 @@ import * as history from "./views/history.js";
 import * as templateList from "./views/templateList.js";
 import * as templateEdit from "./views/templateEdit.js";
 
-// 初回起動時に初期データ（テンプレ・店舗）を入れる
-seedIfEmpty();
-
 const appEl = document.getElementById("app");
+let authed = false; // ログイン済みかどうか
 
-// ルート定義: 「#/パス」と「呼び出す画面」の対応表
-// :id のような部分は後で取り出してパラメータとして渡します
+// ルート定義
 const routes = [
   { pattern: /^\/?$/, view: home },
   { pattern: /^\/select$/, view: templateSelect },
@@ -37,28 +38,51 @@ const routes = [
   { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"] },
 ];
 
-// 現在のURLハッシュを見て、対応する画面を描画する
 function router() {
+  // 未ログインならログイン画面（または明示的に #/login）
   const hash = location.hash.replace(/^#/, "") || "/";
+  if (!authed || hash === "/login") {
+    showLogin();
+    return;
+  }
+
   for (const route of routes) {
     const match = hash.match(route.pattern);
     if (match) {
-      // URLから取り出したパラメータ（例: templateId）をまとめる
       const params = {};
       (route.keys || []).forEach((key, i) => {
         params[key] = decodeURIComponent(match[i + 1]);
       });
-      appEl.innerHTML = "";       // いったん画面を空にする
-      window.scrollTo(0, 0);      // 上にスクロールを戻す
-      route.view.render(appEl, params); // 画面を描画
+      appEl.innerHTML = "";
+      window.scrollTo(0, 0);
+      route.view.render(appEl, params); // 画面を描画（中で必要に応じて非同期通信）
       return;
     }
   }
-  // どれにも当てはまらなければホームへ
   location.hash = "/";
 }
 
-// ハッシュが変わるたびに描画し直す
+// ログイン画面を表示し、成功したら初期化してホームへ
+function showLogin() {
+  appEl.innerHTML = "";
+  login.render(appEl, {
+    onSuccess: () => {
+      authed = true;
+      location.hash = "/";
+      router();
+    },
+  });
+}
+
+// 起動処理：記憶済みの合言葉でログインできるか確認
+async function boot() {
+  appEl.innerHTML = `<div class="loading-box">⏳ 接続中…</div>`;
+  authed = await checkAuth();
+  if (authed) {
+    await seedIfEmpty();
+  }
+  router();
+}
+
 window.addEventListener("hashchange", router);
-window.addEventListener("load", router);
-router();
+boot();

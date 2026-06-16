@@ -1,154 +1,186 @@
 // ============================================================
 // storage.js
 // データの保存・読み込みをすべてここに集約します。
-// 今は localStorage（ブラウザ内保存）を使っています。
-// 将来クラウド保存に変える時は、このファイルの中身だけを
-// サーバーAPI呼び出しに書き換えれば、画面側は触らずに済みます。
+//
+// 【クラウド保存版】
+// 申込内容・テンプレート・申込履歴は、会社のサーバー（勤怠アプリと同じ
+// Render上のAPI）に保存します。これにより全iPad・PCでデータを共有できます。
+//
+// ・サーバーURLと合言葉(パスワード)は、最初のログイン画面で設定し、
+//   このiPadのブラウザに記憶します（次回から自動でログイン）。
+// ・入力途中の「下書き(draft)」だけは、画面遷移用にこのiPad内に一時保存します。
 // ============================================================
 
-// localStorage に保存するときのキー名（保存場所の名前）
-const KEY_TEMPLATES = "moushikomi_templates_v1";    // 申込書テンプレート一覧
-const KEY_APPLICATIONS = "moushikomi_applications_v1"; // 作成済み申込書（履歴）
-const KEY_STORES = "moushikomi_stores_v1";          // 店舗一覧
-const KEY_DRAFT = "moushikomi_draft_v1";            // 入力途中の下書き（画面遷移用）
+import { DEFAULT_TEMPLATES, DEFAULT_STORES } from "./seed.js";
 
-// ------- 小さな共通関数 -------
+// ---- 接続設定（ログイン画面で設定し、ブラウザに記憶） ----
+const KEY_API_BASE = "moushikomi_api_base";   // サーバーのURL
+const KEY_PASSWORD = "moushikomi_password";   // スタッフ共通の合言葉
+const KEY_DRAFT = "moushikomi_draft_v1";      // 入力途中の下書き
 
-// ランダムなID（重複しにくい簡易ID）を作る
+// サーバーURLの初期値（会社の勤怠アプリのURL + /api/moushikomi）。
+// 違う場合はログイン画面で変更できます。
+const DEFAULT_API_BASE = "https://timecard-app-1.onrender.com/api/moushikomi";
+
+// ------- ID生成 -------
 export function newId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-// localStorage から JSON を読み込む（無ければ初期値を返す）
-function read(key, fallback) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
-  } catch (e) {
-    console.error("読み込みエラー:", e);
-    return fallback;
-  }
+// ------- 接続情報の読み書き -------
+export function getApiBase() {
+  return localStorage.getItem(KEY_API_BASE) || DEFAULT_API_BASE;
+}
+export function getPassword() {
+  return localStorage.getItem(KEY_PASSWORD) || "";
+}
+export function setCredentials(apiBase, password) {
+  localStorage.setItem(KEY_API_BASE, apiBase.replace(/\/+$/, "")); // 末尾スラッシュ除去
+  localStorage.setItem(KEY_PASSWORD, password);
+}
+export function clearCredentials() {
+  localStorage.removeItem(KEY_PASSWORD);
 }
 
-// localStorage に JSON を保存する
-function write(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+// ------- サーバー通信の共通処理 -------
+async function api(path, options = {}) {
+  const res = await fetch(getApiBase() + path, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Password": getPassword(),
+      ...(options.headers || {}),
+    },
+  });
+  if (res.status === 401) {
+    const err = new Error("認証エラー（合言葉が違います）");
+    err.code = 401;
+    throw err;
+  }
+  if (!res.ok) {
+    throw new Error("サーバーエラー（" + res.status + "）");
+  }
+  // 中身が無い場合に備える
+  const text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
+
+// ログイン確認（合言葉が正しいかサーバーに問い合わせ）
+export async function checkAuth() {
+  if (!getPassword()) return false;
+  try {
+    await api("/ping");
+    return true;
+  } catch (e) {
+    return false;
+  }
 }
 
 // ============================================================
 // テンプレート（申込書のひな形）
 // ============================================================
-
-export function getTemplates() {
-  return read(KEY_TEMPLATES, []);
+export async function getTemplates() {
+  return await api("/templates");
 }
 
-export function getTemplate(id) {
-  return getTemplates().find((t) => t.id === id) || null;
+export async function getTemplate(id) {
+  const list = await getTemplates();
+  return list.find((t) => t.id === id) || null;
 }
 
-export function saveTemplate(template) {
-  const list = getTemplates();
-  const index = list.findIndex((t) => t.id === template.id);
+export async function saveTemplate(template) {
+  if (!template.id) template.id = newId();
   template.updatedAt = new Date().toISOString();
-  if (index >= 0) {
-    list[index] = template; // 既存を上書き
-  } else {
-    template.createdAt = new Date().toISOString();
-    list.push(template); // 新規追加
-  }
-  write(KEY_TEMPLATES, list);
+  if (!template.createdAt) template.createdAt = template.updatedAt;
+  await api("/templates/" + encodeURIComponent(template.id), {
+    method: "PUT",
+    body: JSON.stringify(template),
+  });
   return template;
 }
 
-export function deleteTemplate(id) {
-  write(KEY_TEMPLATES, getTemplates().filter((t) => t.id !== id));
+export async function deleteTemplate(id) {
+  await api("/templates/" + encodeURIComponent(id), { method: "DELETE" });
 }
 
-// テンプレートを複製する（中身をコピーして別IDで保存）
-export function duplicateTemplate(id) {
-  const original = getTemplate(id);
+export async function duplicateTemplate(id) {
+  const original = await getTemplate(id);
   if (!original) return null;
-  const copy = JSON.parse(JSON.stringify(original)); // 完全コピー
+  const copy = JSON.parse(JSON.stringify(original));
   copy.id = newId();
   copy.name = original.name + "（コピー）";
-  // 項目・チェック・プランのIDも振り直す
   (copy.fields || []).forEach((f) => (f.id = newId()));
   (copy.checks || []).forEach((c) => (c.id = newId()));
   (copy.plans || []).forEach((p) => (p.id = newId()));
-  return saveTemplate(copy);
+  return await saveTemplate(copy);
 }
 
 // ============================================================
 // 申込書（作成済みデータ＝履歴）
 // ============================================================
-
-export function getApplications() {
-  // 新しい順で返す
-  return read(KEY_APPLICATIONS, []).sort(
-    (a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")
-  );
+export async function getApplications() {
+  // サーバー側で新しい順に並んで返ってきます
+  return await api("/applications");
 }
 
-export function getApplication(id) {
-  return read(KEY_APPLICATIONS, []).find((a) => a.id === id) || null;
+export async function getApplication(id) {
+  const list = await getApplications();
+  return list.find((a) => a.id === id) || null;
 }
 
-export function saveApplication(application) {
-  const list = read(KEY_APPLICATIONS, []);
-  const index = list.findIndex((a) => a.id === application.id);
-  if (index >= 0) {
-    list[index] = application;
-  } else {
-    application.createdAt = new Date().toISOString();
-    list.push(application);
-  }
-  write(KEY_APPLICATIONS, list);
+export async function saveApplication(application) {
+  if (!application.id) application.id = newId();
+  if (!application.createdAt) application.createdAt = new Date().toISOString();
+  await api("/applications/" + encodeURIComponent(application.id), {
+    method: "PUT",
+    body: JSON.stringify(application),
+  });
   return application;
 }
 
-export function deleteApplication(id) {
-  write(KEY_APPLICATIONS, read(KEY_APPLICATIONS, []).filter((a) => a.id !== id));
+export async function deleteApplication(id) {
+  await api("/applications/" + encodeURIComponent(id), { method: "DELETE" });
 }
 
 // ============================================================
-// 店舗一覧
+// 店舗一覧（勤怠アプリの店舗マスタを利用）
 // ============================================================
-
-export function getStores() {
-  return read(KEY_STORES, []);
+export async function getStores() {
+  try {
+    const stores = await api("/stores");
+    if (stores && stores.length > 0) return stores;
+  } catch (e) {
+    // 取得できなければ初期値で代用
+  }
+  return DEFAULT_STORES;
 }
 
-export function setStores(stores) {
-  write(KEY_STORES, stores);
-}
-
 // ============================================================
-// 下書き（入力→確認→サイン→PDFと画面をまたいでデータを持ち回る）
+// 下書き（入力→確認→サイン→PDFの間だけ、このiPad内に一時保存）
 // ============================================================
-
 export function getDraft() {
-  return read(KEY_DRAFT, null);
+  const raw = localStorage.getItem(KEY_DRAFT);
+  return raw ? JSON.parse(raw) : null;
 }
-
 export function setDraft(draft) {
-  write(KEY_DRAFT, draft);
+  localStorage.setItem(KEY_DRAFT, JSON.stringify(draft));
 }
-
 export function clearDraft() {
   localStorage.removeItem(KEY_DRAFT);
 }
 
 // ============================================================
-// 初期データの投入（初回起動時だけ）
+// 初期テンプレートの投入（サーバーが空のときだけ）
 // ============================================================
-import { DEFAULT_TEMPLATES, DEFAULT_STORES } from "./seed.js";
-
-export function seedIfEmpty() {
-  if (getTemplates().length === 0) {
-    write(KEY_TEMPLATES, DEFAULT_TEMPLATES());
-  }
-  if (getStores().length === 0) {
-    write(KEY_STORES, DEFAULT_STORES);
+export async function seedIfEmpty() {
+  try {
+    const templates = await getTemplates();
+    if (!templates || templates.length === 0) {
+      for (const t of DEFAULT_TEMPLATES()) {
+        await saveTemplate(t);
+      }
+    }
+  } catch (e) {
+    console.error("初期テンプレート投入エラー:", e);
   }
 }
