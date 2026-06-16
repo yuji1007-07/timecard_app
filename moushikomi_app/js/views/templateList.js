@@ -82,25 +82,37 @@ export function render(container) {
       });
     });
 
-    // からだラボ標準テンプレートを読み込む（同名が無いものだけ追加）
+    // からだラボ標準テンプレートを読み込む（新規追加＋既存の標準は最新の正式文に更新）
     const loadBtn = container.querySelector("#loadKarada");
     if (loadBtn) {
       loadBtn.addEventListener("click", async () => {
-        if (!confirm("からだラボ整骨院／狛江駅前整骨院の標準テンプレートを読み込みますか？\n（すでに同じ名前があるものは追加されません）")) {
+        if (!confirm("からだラボ整骨院／狛江駅前整骨院の標準テンプレートを読み込みます。\n（未登録のものは追加し、すでにある標準テンプレートは最新の正式な契約文に更新します）")) {
           return;
         }
         loadBtn.disabled = true;
         loadBtn.textContent = "読み込み中…";
         try {
-          const existingNames = new Set(templates.map((t) => t.name));
+          // 名前で既存テンプレートを引けるようにしておく
+          const existingByName = new Map(templates.map((t) => [t.name, t]));
           let added = 0;
+          let updated = 0;
           for (const t of KARADA_TEMPLATES()) {
-            if (!existingNames.has(t.name)) {
+            const existing = existingByName.get(t.name);
+            if (existing) {
+              // 既存の標準を最新の内容へ上書き（idと作成日は引き継ぐ）
+              t.id = existing.id;
+              t.createdAt = existing.createdAt || t.createdAt;
+              await saveTemplate(t);
+              updated++;
+            } else {
               await saveTemplate(t);
               added++;
             }
           }
-          alert(added > 0 ? `${added}件のテンプレートを追加しました。` : "すでに読み込み済みです。");
+          const msg = [];
+          if (added > 0) msg.push(`${added}件を追加`);
+          if (updated > 0) msg.push(`${updated}件を最新の契約文に更新`);
+          alert(msg.length ? msg.join("／") + "しました。" : "変更はありませんでした。");
           draw();
         } catch (e) {
           loadBtn.disabled = false;
