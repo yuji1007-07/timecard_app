@@ -7,15 +7,20 @@
 
 import { getApplications } from "../storage.js";
 import { esc, formatDateJa, showError } from "../util.js";
+import { exportAppsToZip, downloadBlob } from "../backup.js";
 
 export function render(container) {
   const filter = { keyword: "", store: "" };
   let allApps = [];
+  let currentApps = []; // いま表示中（絞り込み後）の申込書
 
   container.innerHTML = `
-    <div class="page-head">
-      <h1>顧客管理</h1>
-      <p class="page-head__desc">店舗別・カルテ番号順で申込書を一覧管理できます</p>
+    <div class="page-head page-head--row">
+      <div>
+        <h1>顧客管理</h1>
+        <p class="page-head__desc">店舗別・カルテ番号順で申込書を一覧管理できます</p>
+      </div>
+      <button id="cBackup" class="btn btn--primary no-print">📦 PDFをまとめてZIP保存</button>
     </div>
 
     <div class="search-bar no-print">
@@ -24,11 +29,15 @@ export function render(container) {
       <button id="cClear" class="btn btn--ghost">クリア</button>
     </div>
 
+    <p id="cBackupMsg" class="backup-msg no-print"></p>
+
     <div id="customerList"></div>
   `;
 
   const listEl = container.querySelector("#customerList");
   const storeSelect = container.querySelector("#cStore");
+  const backupBtn = container.querySelector("#cBackup");
+  const backupMsg = container.querySelector("#cBackupMsg");
 
   // 申込データから「ラベルに特定の語を含む項目」の値を取り出す
   function fieldVal(app, keyword) {
@@ -50,6 +59,7 @@ export function render(container) {
       }
       return true;
     });
+    currentApps = apps; // バックアップ対象＝いま表示中のもの
 
     if (apps.length === 0) {
       listEl.innerHTML = `<div class="empty-box"><p>該当する申込書はありません。</p></div>`;
@@ -125,6 +135,35 @@ export function render(container) {
     container.querySelector("#cKeyword").value = "";
     storeSelect.value = "";
     draw();
+  });
+
+  // 📦 表示中の申込書を全部PDFにしてZIPでダウンロード
+  backupBtn.addEventListener("click", async () => {
+    if (currentApps.length === 0) {
+      backupMsg.textContent = "保存する申込書がありません。";
+      return;
+    }
+    const label = filter.store ? `「${filter.store}」` : "全店舗";
+    if (!confirm(`${label}の表示中 ${currentApps.length}件 をPDFにまとめてZIPで保存します。\n件数が多いと数十秒かかることがあります。よろしいですか？`)) {
+      return;
+    }
+    backupBtn.disabled = true;
+    const origText = backupBtn.textContent;
+    try {
+      const blob = await exportAppsToZip(currentApps, (done, total) => {
+        backupMsg.textContent = `PDF作成中… ${done} / ${total} 件`;
+        backupBtn.textContent = `作成中… ${done}/${total}`;
+      });
+      const today = new Date().toISOString().slice(0, 10);
+      const storeTag = filter.store ? "_" + filter.store : "";
+      downloadBlob(blob, `申込書バックアップ${storeTag}_${today}.zip`);
+      backupMsg.textContent = `✅ ${currentApps.length}件をZIPで保存しました。（必要ならGoogleドライブへアップロードしてください）`;
+    } catch (e) {
+      backupMsg.textContent = "❌ 保存に失敗しました：" + (e && e.message ? e.message : e);
+    } finally {
+      backupBtn.disabled = false;
+      backupBtn.textContent = origText;
+    }
   });
 
   // サーバーから読み込んで表示

@@ -80,6 +80,12 @@ a { color: inherit; text-decoration: none; }
   flex-wrap: wrap; gap: 12px;
 }
 
+/* バックアップ進捗メッセージ */
+.backup-msg {
+  margin: 4px 0 14px; min-height: 22px;
+  font-size: 15px; font-weight: 700; color: var(--navy, #1f3a5f);
+}
+
 /* ---------- ボタン ---------- */
 .btn {
   display: inline-flex;
