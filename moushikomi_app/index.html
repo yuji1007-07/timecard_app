@@ -24,6 +24,11 @@
   <!-- 各画面はこの中に描画されます（app.js が中身を入れ替えます） -->
   <main id="app" class="app-main"></main>
 
+  <!-- PDFバックアップ(ZIP保存)用ライブラリ。CDNから読み込みます -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+
   <!-- ESモジュールとして読み込み。type="module" でファイル分割が使えます -->
   <script type="module" src="./js/app.js"></script>
 </body>

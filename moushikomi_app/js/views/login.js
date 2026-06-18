@@ -12,11 +12,11 @@ export function render(container, params = {}) {
     <div class="login-wrap">
       <div class="login-card">
         <h1 class="login-title">📋 申込書アプリ</h1>
-        <p class="login-desc">ご利用には、スタッフ共通の合言葉を入力してください。</p>
+        <p class="login-desc">ご利用には、ログインパスワードを入力してください。</p>
 
         <div class="field">
-          <label class="field__label">合言葉（パスワード）</label>
-          <input id="loginPassword" class="field__input" type="password" value="${esc(getPassword())}" placeholder="合言葉を入力" />
+          <label class="field__label">ログインパスワード</label>
+          <input id="loginPassword" class="field__input" type="password" value="${esc(getPassword())}" placeholder="パスワードを入力" />
         </div>
 
         <details class="login-advanced">
@@ -40,7 +40,7 @@ export function render(container, params = {}) {
     const password = container.querySelector("#loginPassword").value.trim();
     const apiBase = container.querySelector("#loginApiBase").value.trim();
     if (!password) {
-      errEl.textContent = "合言葉を入力してください。";
+      errEl.textContent = "ログインパスワードを入力してください。";
       return;
     }
     btn.disabled = true;
@@ -59,7 +59,7 @@ export function render(container, params = {}) {
     } else {
       btn.disabled = false;
       btn.textContent = "ログイン";
-      errEl.textContent = "ログインできませんでした。合言葉またはサーバーURLをご確認ください。";
+      errEl.textContent = "ログインできませんでした。ログインパスワードまたはサーバーURLをご確認ください。";
     }
   });
 
