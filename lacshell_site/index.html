@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>女性専用 ラ・コンシェル整骨院 町田院｜町田駅 徒歩2分・完全個室</title>
+<meta name="description" content="町田駅 徒歩2分。女性専用・完全個室のラ・コンシェル整骨院。国家資格者による本格施術で、肩こり・腰痛・産後の骨盤の歪みを根本から。初回限定キャンペーン実施中。当日予約・WEB予約OK。">
+<meta name="theme-color" content="#faf5ee">
+<link rel="canonical" href="https://yuji1007-07.github.io/timecard_app/lacshell/">
+<!-- OGP / SNS共有（LINE等）。独自ドメイン取得後はこのURLを差し替えてください -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="ラ・コンシェル整骨院">
+<meta property="og:title" content="女性専用 ラ・コンシェル整骨院 町田院">
+<meta property="og:description" content="国家資格者による本格施術を、女性だけの完全個室で。町田駅 徒歩2分。我慢してきた不調を、やさしく、根本から。">
+<meta property="og:image" content="https://yuji1007-07.github.io/timecard_app/lacshell/assets/entrance.jpg">
+<meta property="og:url" content="https://yuji1007-07.github.io/timecard_app/lacshell/">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="assets/logo.png">
+<link rel="apple-touch-icon" href="assets/logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&family=Cormorant+Garamond:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: #efe6d8; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  /* アクセントカラー（ローズ基調）。テラコッタ/ゴールドへ変える場合はこの2値を差し替え */
+  :root { --accent: #bf8295; --accent-deep: #a3697b; }
+  img { max-width: 100%; }
+  a { -webkit-tap-highlight-color: rgba(0,0,0,0); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes drawerIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  .screen { display: none; }
+  .screen.active { display: block; }
+</style>
+</head>
+<body>
+
+<div style="min-height:100vh; display:flex; justify-content:center; background:#efe6d8; font-family:'Noto Sans JP',sans-serif;">
+<div id="app" style="--accent:#bf8295; --accent-deep:#a3697b;">
+<div style="position:relative; width:100vw; max-width:440px; min-height:100vh; background:#faf5ee; box-shadow:0 0 60px rgba(74,61,49,.16); overflow:hidden; padding-bottom:78px;">
+
+  <!-- ===== HEADER ===== -->
+  <header style="position:sticky; top:0; z-index:40; display:flex; align-items:center; justify-content:space-between; padding:11px 18px; background:rgba(250,245,238,.92); backdrop-filter:blur(10px); border-bottom:1px solid #e8dcc8;">
+    <div onclick="go('home')" style="display:flex; align-items:center; gap:9px; cursor:pointer;">
+      <img src="assets/logo.png" alt="ラ・コンシェル整骨院ロゴ" style="width:46px; height:36px; object-fit:contain; flex:none;">
+      <div style="line-height:1.25;">
+        <div style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; letter-spacing:.04em;">ラ・コンシェル整骨院</div>
+        <div style="font-family:'Cormorant Garamond',serif; font-size:9.5px; color:var(--accent-deep); letter-spacing:.32em; margin-top:1px;">LA CONCIER &nbsp;FOR WOMEN</div>
+      </div>
+    </div>
+    <button onclick="toggleNav()" aria-label="メニューを開く" style="width:40px; height:40px; border:none; background:none; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; cursor:pointer;">
+      <span style="display:block; width:22px; height:1.5px; background:#4a3d31;"></span>
+      <span style="display:block; width:22px; height:1.5px; background:#4a3d31;"></span>
+      <span style="display:block; width:22px; height:1.5px; background:#4a3d31;"></span>
+    </button>
+  </header>
+
+  <!-- ===== NAV DRAWER ===== -->
+  <div id="navDrawer" style="display:none; position:absolute; inset:0; z-index:50; background:rgba(74,61,49,.32); animation:fadeIn .2s ease;" onclick="closeNav()">
+    <nav style="position:absolute; top:0; left:0; right:0; background:#faf5ee; padding:18px 22px 26px; border-bottom:1px solid #e8dcc8; animation:drawerIn .26s ease;" onclick="event.stopPropagation()">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent-deep);">MENU</span>
+        <button onclick="closeNav()" aria-label="閉じる" style="border:none; background:none; font-size:24px; line-height:1; color:#4a3d31; cursor:pointer; padding:0 4px;">×</button>
+      </div>
+      <div onclick="go('home')" style="display:flex; align-items:baseline; gap:12px; padding:13px 4px; border-bottom:1px solid #ece2d2; cursor:pointer;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:13px; color:var(--accent); width:24px;">01</span>
+        <span style="font-family:'Shippori Mincho',serif; font-size:16px; color:#4a3d31;">トップ</span>
+        <span style="margin-left:auto; font-size:11px; color:#b3a691; letter-spacing:.12em;">HOME</span>
+      </div>
+      <div onclick="go('menu')" style="display:flex; align-items:baseline; gap:12px; padding:13px 4px; border-bottom:1px solid #ece2d2; cursor:pointer;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:13px; color:var(--accent); width:24px;">02</span>
+        <span style="font-family:'Shippori Mincho',serif; font-size:16px; color:#4a3d31;">施術メニュー・料金</span>
+        <span style="margin-left:auto; font-size:11px; color:#b3a691; letter-spacing:.12em;">MENU</span>
+      </div>
+      <div onclick="go('concept')" style="display:flex; align-items:baseline; gap:12px; padding:13px 4px; border-bottom:1px solid #ece2d2; cursor:pointer;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:13px; color:var(--accent); width:24px;">03</span>
+        <span style="font-family:'Shippori Mincho',serif; font-size:16px; color:#4a3d31;">施術の考え方</span>
+        <span style="margin-left:auto; font-size:11px; color:#b3a691; letter-spacing:.12em;">CONCEPT</span>
+      </div>
+      <div onclick="go('staff')" style="display:flex; align-items:baseline; gap:12px; padding:13px 4px; border-bottom:1px solid #ece2d2; cursor:pointer;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:13px; color:var(--accent); width:24px;">04</span>
+        <span style="font-family:'Shippori Mincho',serif; font-size:16px; color:#4a3d31;">スタッフ紹介</span>
+        <span style="margin-left:auto; font-size:11px; color:#b3a691; letter-spacing:.12em;">STAFF</span>
+      </div>
+      <div onclick="go('access')" style="display:flex; align-items:baseline; gap:12px; padding:13px 4px; border-bottom:1px solid #ece2d2; cursor:pointer;">
+        <span style="font-family:'Cormorant Garamond',serif; font-size:13px; color:var(--accent); width:24px;">05</span>
+        <span style="font-family:'Shippori Mincho',serif; font-size:16px; color:#4a3d31;">アクセス・店舗情報</span>
+        <span style="margin-left:auto; font-size:11px; color:#b3a691; letter-spacing:.12em;">ACCESS</span>
+      </div>
+      <a href="https://beauty.hotpepper.jp/CSP/kr/reserve/?storeId=H000796143" target="_blank" rel="noopener" style="display:block; text-align:center; margin-top:18px; padding:14px; background:var(--accent); color:#fff; text-decoration:none; font-size:14px; letter-spacing:.1em; border-radius:2px;">WEB予約はこちら</a>
+    </nav>
+  </div>
+
+  <!-- ================= HOME ================= -->
+  <main id="s-home" class="screen active" style="animation:fadeIn .4s ease;">
+
+    <!-- HERO -->
+    <section style="position:relative; height:498px; overflow:hidden;">
+      <img src="assets/entrance.jpg" alt="ラ・コンシェル整骨院 院内（プライベート個室の入口）" style="position:absolute; inset:0; width:100%; height:100%; object-fit:cover; object-position:50% 46%;">
+      <div style="position:absolute; inset:0; background:linear-gradient(180deg,rgba(74,61,49,.30) 0%,rgba(74,61,49,.05) 32%,rgba(74,61,49,.18) 66%,rgba(60,49,38,.72) 100%);"></div>
+      <div style="position:absolute; top:18px; left:18px; display:flex; gap:7px;">
+        <span style="background:rgba(250,245,238,.92); color:var(--accent-deep); font-size:11px; letter-spacing:.14em; padding:5px 11px; border-radius:999px;">女性専用</span>
+        <span style="background:rgba(250,245,238,.92); color:var(--accent-deep); font-size:11px; letter-spacing:.14em; padding:5px 11px; border-radius:999px;">完全個室</span>
+      </div>
+      <div style="position:absolute; left:24px; right:24px; bottom:34px; color:#fff;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.36em; opacity:.92; margin-bottom:14px;">WOMEN'S OSTEOPATHIC CARE</div>
+        <h1 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:30px; line-height:1.5; margin:0; letter-spacing:.02em; text-shadow:0 1px 16px rgba(40,30,20,.35);">我慢してきた不調を、<br>やさしく、根本から。</h1>
+        <p style="font-size:13px; line-height:1.95; margin:16px 0 0; opacity:.95; font-weight:400;">国家資格者による本格施術を、<br>女性だけの完全個室で。町田駅 徒歩2分。</p>
+      </div>
+    </section>
+
+    <!-- CAMPAIGN -->
+    <a href="https://beauty.hotpepper.jp/CSP/kr/reserve/?storeId=H000796143" target="_blank" rel="noopener" style="display:block; text-decoration:none; background:#4a3d31; padding:18px 22px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:14px;">
+        <div>
+          <div style="color:var(--accent); font-size:11px; letter-spacing:.2em; font-family:'Cormorant Garamond',serif;">FIRST VISIT</div>
+          <div style="color:#fff; font-family:'Shippori Mincho',serif; font-size:16px; margin-top:3px;">初回限定キャンペーン</div>
+          <div style="color:#d8cdbc; font-size:11.5px; margin-top:5px;">人気No.1 首肩こり改善コース ／ 産後・BMK骨盤矯正</div>
+        </div>
+        <div style="text-align:right; flex:none;">
+          <div style="color:#9a8d7c; font-size:11px; text-decoration:line-through;">¥7,590〜</div>
+          <div style="color:#fff; font-family:'Cormorant Garamond',serif; font-weight:700; font-size:26px; line-height:1;">¥3,980<span style="font-size:12px; font-family:'Noto Sans JP'; font-weight:400;">〜</span></div>
+        </div>
+      </div>
+    </a>
+
+    <!-- 悩み -->
+    <section style="padding:46px 22px 8px;">
+      <div style="text-align:center; margin-bottom:26px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">YOUR TROUBLES</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:9px 0 0; line-height:1.55;">こんなお悩み、<br>ありませんか？</h2>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:11px;">
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">肩こり・首こり</span></div>
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">慢性的な腰痛</span></div>
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">産後の骨盤の歪み</span></div>
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">姿勢・猫背が気になる</span></div>
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">冷え・むくみ</span></div>
+        <div style="display:flex; align-items:center; gap:10px; background:#fff; border:1px solid #ece2d2; border-radius:3px; padding:15px 14px;"><span style="width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none;"></span><span style="font-size:13px; color:#5a4d40; line-height:1.45;">頭痛・自律神経の乱れ</span></div>
+      </div>
+      <p style="text-align:center; font-size:12.5px; color:#8a7c6c; line-height:1.9; margin:24px 6px 0;">そのお悩み、女性専用のラ・コンシェル整骨院に<br>おまかせください。原因から丁寧に整えます。</p>
+    </section>
+
+    <!-- コンセプト teaser -->
+    <section style="margin:40px 0 0; padding:48px 24px 50px; background:#f3ebdd; position:relative;">
+      <div style="text-align:center;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">CONCEPT</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:22px; color:#4a3d31; margin:10px 0 0; line-height:1.6;">その場しのぎではなく、<br>「根本」から整える。</h2>
+      </div>
+      <div style="margin:24px 0; height:200px; border-radius:3px; overflow:hidden;">
+        <img src="assets/lounge-a.jpg" alt="待合スペース" style="display:block; width:100%; height:100%; object-fit:cover; object-position:center 55%;">
+      </div>
+      <p style="font-size:13.5px; line-height:2.05; color:#5a4d40; margin:0; text-align:center;">延べ10万人以上の施術実績から生まれた<br>「インナーマッスル × ラボ式マッサージ」。<br>痛みの原因そのものを土台から整え、<br>不調が戻りにくい身体へと導きます。</p>
+      <div style="text-align:center; margin-top:26px;">
+        <button onclick="go('concept')" style="border:1px solid var(--accent); background:none; color:var(--accent-deep); font-size:13px; letter-spacing:.14em; padding:13px 30px; border-radius:999px; cursor:pointer;">施術の考え方を見る →</button>
+      </div>
+    </section>
+
+    <!-- 選ばれる理由 -->
+    <section style="padding:52px 22px 12px;">
+      <div style="text-align:center; margin-bottom:30px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">REASONS</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:9px 0 0;">選ばれる6つの理由</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">01</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">女性専用・完全個室</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">周りの目を気にせずリラックス。メイクルーム・お着替えも完備しています。</p></div></div>
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">02</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">全スタッフ国家資格者</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">柔道整復師・鍼灸師による、身体を知り尽くしたプロの本格施術です。</p></div></div>
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">03</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">根本改善へのこだわり</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">その場しのぎではなく、不調の原因そのものを土台から整えます。</p></div></div>
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">04</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">丁寧なカウンセリング</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">タブレットを使い、身体の仕組みからわかりやすくご説明します。</p></div></div>
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">05</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">無理な勧誘なし・都度払いOK</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">物品販売や強引な勧誘は一切なし。安心して長く通えます。</p></div></div>
+        <div style="display:flex; gap:15px; align-items:flex-start;"><div style="flex:none; width:46px; height:46px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center;"><span style="font-family:'Cormorant Garamond',serif; font-weight:600; font-size:18px; color:var(--accent-deep);">06</span></div><div style="padding-top:1px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 5px;">平日夜21時まで／土日祝も営業</h3><p style="font-size:12.5px; line-height:1.85; color:#776857; margin:0;">お仕事帰りにも。当日予約も歓迎しています。</p></div></div>
+      </div>
+    </section>
+
+    <!-- 人気メニュー -->
+    <section style="padding:50px 22px 14px;">
+      <div style="text-align:center; margin-bottom:26px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">POPULAR MENU</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:9px 0 0;">人気の施術メニュー</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="display:flex; gap:14px; background:#fff; border:1px solid #ece2d2; border-radius:4px; overflow:hidden; padding:14px;"><img src="assets/care-shoulder.jpg" alt="首肩こり・巻き肩改善コース" style="flex:none; width:88px; height:88px; border-radius:3px; object-fit:cover;"><div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;"><span style="font-size:10px; background:var(--accent); color:#fff; padding:2px 7px; border-radius:2px; letter-spacing:.06em;">人気No.1</span></div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0 0 4px; line-height:1.4;">首肩こり・巻き肩改善コース</h3><p style="font-size:11.5px; color:#8a7c6c; line-height:1.65; margin:0 0 7px;">PC疲れ・頭痛・猫背に。根本からほぐします。</p><div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through;">¥7,590</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:20px; color:var(--accent-deep); line-height:1;">¥3,980</span></div></div></div>
+        <div style="display:flex; gap:14px; background:#fff; border:1px solid #ece2d2; border-radius:4px; overflow:hidden; padding:14px;"><img src="assets/care-back.jpg" alt="慢性腰痛 専門施術" style="flex:none; width:88px; height:88px; border-radius:3px; object-fit:cover;"><div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;"></div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0 0 4px; line-height:1.4;">慢性腰痛 専門施術</h3><p style="font-size:11.5px; color:#8a7c6c; line-height:1.65; margin:0 0 7px;">マッサージ × インナーケアで根本施術。</p><div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through;">¥7,590</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:20px; color:var(--accent-deep); line-height:1;">¥3,980</span></div></div></div>
+        <div style="display:flex; gap:14px; background:#fff; border:1px solid #ece2d2; border-radius:4px; overflow:hidden; padding:14px;"><img src="assets/care-bmk.jpg" alt="BMK骨盤矯正" style="flex:none; width:88px; height:88px; border-radius:3px; object-fit:cover;"><div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;"><span style="font-size:10px; background:var(--accent); color:#fff; padding:2px 7px; border-radius:2px; letter-spacing:.06em;">NEW</span></div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0 0 4px; line-height:1.4;">BMK骨盤矯正</h3><p style="font-size:11.5px; color:#8a7c6c; line-height:1.65; margin:0 0 7px;">バキバキしないソフトな骨盤矯正で姿勢改善。</p><div style="display:flex; align-items:baseline; gap:8px;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through;">¥7,960</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:20px; color:var(--accent-deep); line-height:1;">¥4,980</span></div></div></div>
+        <div style="display:flex; gap:14px; background:#fff; border:1px solid #ece2d2; border-radius:4px; overflow:hidden; padding:14px;"><img src="assets/care-highvolt.jpg" alt="ハイボルテージ即効療法" style="flex:none; width:88px; height:88px; border-radius:3px; object-fit:cover;"><div style="flex:1; min-width:0;"><div style="display:flex; align-items:center; gap:7px; margin-bottom:5px;"></div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0 0 4px; line-height:1.4;">ハイボルテージ即効療法</h3><p style="font-size:11.5px; color:#8a7c6c; line-height:1.65; margin:0 0 7px;">深部に届く電気療法でつらい痛みを緩和。</p><div style="display:flex; align-items:baseline; gap:8px;"><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:20px; color:var(--accent-deep); line-height:1;">¥2,200</span></div></div></div>
+      </div>
+      <div style="text-align:center; margin-top:24px;">
+        <button onclick="go('menu')" style="border:1px solid var(--accent); background:none; color:var(--accent-deep); font-size:13px; letter-spacing:.14em; padding:13px 30px; border-radius:999px; cursor:pointer;">料金一覧を見る →</button>
+      </div>
+    </section>
+
+    <!-- 院長 teaser -->
+    <section style="margin-top:46px; padding:46px 24px; background:#4a3d31; color:#fff;">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent); text-align:center;">GREETING</div>
+      <img src="assets/director.jpg" alt="院長 山本" style="margin:22px auto 0; display:block; width:120px; height:120px; border-radius:50%; object-fit:cover; object-position:50% 22%; border:1px solid var(--accent);">
+      <p style="font-family:'Shippori Mincho',serif; font-size:17px; line-height:1.95; text-align:center; margin:24px 0 0; letter-spacing:.02em;">「強い刺激や無理な施術はしません。<br>今のお身体の状態を、<br>丁寧にお伝えします。」</p>
+      <p style="text-align:center; font-size:12.5px; color:#cdc0ae; line-height:1.85; margin:20px 0 0;">院長 山本／柔道整復師・鍼灸師・整体師<br>女性専用という安心できる環境で、<br>お一人おひとりの不調に向き合います。</p>
+      <div style="text-align:center; margin-top:24px;">
+        <button onclick="go('staff')" style="border:1px solid var(--accent); background:none; color:#f0e6d4; font-size:13px; letter-spacing:.14em; padding:12px 28px; border-radius:999px; cursor:pointer;">スタッフ紹介 →</button>
+      </div>
+    </section>
+
+    <!-- お客様の声 -->
+    <section style="padding:52px 22px 14px;">
+      <div style="text-align:center; margin-bottom:26px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">VOICE</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:9px 0 0;">お客様の声</h2>
+        <div style="margin-top:10px; font-family:'Cormorant Garamond',serif; color:var(--accent-deep); font-size:15px; letter-spacing:.1em;">★★★★★ 4.78 <span style="font-size:11px; color:#a8997f;">（23件）</span></div>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:14px;">
+        <div style="background:#fff; border:1px solid #ece2d2; border-radius:4px; padding:18px 18px 16px;"><div style="color:var(--accent); font-size:12px; letter-spacing:.1em; margin-bottom:8px;">★★★★★</div><p style="font-family:'Shippori Mincho',serif; font-size:14px; line-height:1.9; color:#4a3d31; margin:0 0 12px;">丁寧なカウンセリングで、痛みの原因や普段の生活で気をつける点まで教えていただけました。個室なのでゆっくり過ごせます。</p><div style="font-size:11.5px; color:#8a7c6c;">20代 ／ 会社員</div></div>
+        <div style="background:#fff; border:1px solid #ece2d2; border-radius:4px; padding:18px 18px 16px;"><div style="color:var(--accent); font-size:12px; letter-spacing:.1em; margin-bottom:8px;">★★★★★</div><p style="font-family:'Shippori Mincho',serif; font-size:14px; line-height:1.9; color:#4a3d31; margin:0 0 12px;">産後の骨盤の歪みが気になって通い始めました。無理な勧誘もなく、女性専用なので安心して通えています。</p><div style="font-size:11.5px; color:#8a7c6c;">30代 ／ ママ</div></div>
+      </div>
+      <p style="font-size:10.5px; color:#a8997f; margin:16px 4px 0; line-height:1.6;">※お客様個人の感想であり、効果には個人差があります。</p>
+    </section>
+
+    <!-- 店舗情報 -->
+    <section style="margin-top:40px; padding:46px 22px 40px; background:#f3ebdd;">
+      <div style="text-align:center; margin-bottom:24px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">SALON INFO</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:9px 0 0;">店舗情報</h2>
+      </div>
+      <iframe title="地図" src="https://www.google.com/maps?q=%E6%9D%B1%E4%BA%AC%E9%83%BD%E7%94%BA%E7%94%B0%E5%B8%82%E5%8E%9F%E7%94%BA%E7%94%B06-10-3%20%E3%83%AA%E3%83%B3%E3%82%BA%E3%83%91%E3%83%BC%E3%82%AF%E3%83%93%E3%83%AB&output=embed" style="width:100%; height:170px; border:0; border-radius:3px; margin-bottom:20px; display:block;" loading="lazy"></iframe>
+      <div style="display:flex; flex-direction:column; gap:0;">
+        <div style="display:flex; gap:14px; padding:13px 2px; border-bottom:1px solid #e3d7c4;"><div style="flex:none; width:74px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">住所</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.7;">東京都町田市原町田6-10-3 リンズパークビル4F</div></div>
+        <div style="display:flex; gap:14px; padding:13px 2px; border-bottom:1px solid #e3d7c4;"><div style="flex:none; width:74px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">アクセス</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.7;">小田急線 町田駅 西口より徒歩2分／JR横浜線 町田駅 北口より徒歩3分</div></div>
+        <div style="display:flex; gap:14px; padding:13px 2px; border-bottom:1px solid #e3d7c4;"><div style="flex:none; width:74px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">営業時間</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.7;">平日 10:10–21:00／土日祝 10:10–18:30</div></div>
+        <div style="display:flex; gap:14px; padding:13px 2px; border-bottom:1px solid #e3d7c4;"><div style="flex:none; width:74px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">定休日</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.7;">水曜日（土日祝も営業）</div></div>
+      </div>
+      <div style="text-align:center; margin-top:24px;">
+        <button onclick="go('access')" style="border:1px solid var(--accent); background:none; color:var(--accent-deep); font-size:13px; letter-spacing:.14em; padding:13px 30px; border-radius:999px; cursor:pointer;">アクセス詳細を見る →</button>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ================= MENU ================= -->
+  <main id="s-menu" class="screen" style="animation:fadeUp .4s ease;">
+    <div style="padding:34px 24px 28px; background:#f3ebdd; text-align:center;">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">MENU &amp; PRICE</div>
+      <h1 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:24px; color:#4a3d31; margin:10px 0 0;">施術メニュー・料金</h1>
+      <p style="font-size:12.5px; color:#8a7c6c; line-height:1.85; margin:14px 0 0;">表示は税込価格です。都度払いOK・無理な勧誘は<br>一切ございません。安心してお越しください。</p>
+    </div>
+    <section style="padding:30px 22px 10px;">
+      <div style="margin-bottom:34px;">
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 14px; padding-bottom:10px; border-bottom:1.5px solid var(--accent); display:flex; align-items:baseline; gap:10px;"><span style="font-family:'Cormorant Garamond',serif; color:var(--accent); font-size:13px;">01</span>初回限定メニュー</h2>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">首肩こり・巻き肩改善コース（人気No.1）</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through; margin-right:6px;">¥7,590</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥3,980</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">PC疲れ・頭痛・猫背に。</p></div>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">慢性腰痛 専門施術</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through; margin-right:6px;">¥7,590</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥3,980</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">マッサージ × インナーケアで根本施術。</p></div>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">BMK骨盤矯正</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through; margin-right:6px;">¥7,960</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥4,980</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">姿勢改善・歪みの解消に。</p></div>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">産後骨盤矯正</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through; margin-right:6px;">¥7,960</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥4,980</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">産後の骨盤が気になる方へ。</p></div>
+      </div>
+      <div style="margin-bottom:34px;">
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 14px; padding-bottom:10px; border-bottom:1.5px solid var(--accent); display:flex; align-items:baseline; gap:10px;"><span style="font-family:'Cormorant Garamond',serif; color:var(--accent); font-size:13px;">02</span>通常メニュー</h2>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">長時間コース（根本改善 × 骨盤矯正）</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥8,960</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">慢性的なコリと姿勢改善に。</p></div>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">インナーマッスルトレーニング（EMS）</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥5,990</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">体幹力UP。寝たまま深層筋にアプローチ。</p></div>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">ボディケア整体</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥7,590</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">全身のバランスを整えるベーシック施術。</p></div>
+      </div>
+      <div style="margin-bottom:34px;">
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:16px; color:#4a3d31; margin:0 0 14px; padding-bottom:10px; border-bottom:1.5px solid var(--accent); display:flex; align-items:baseline; gap:10px;"><span style="font-family:'Cormorant Garamond',serif; color:var(--accent); font-size:13px;">03</span>お得なコース</h2>
+        <div style="padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="display:flex; justify-content:space-between; align-items:baseline; gap:12px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:14.5px; color:#4a3d31; margin:0; line-height:1.45;">短期集中 3回ケアコース</h3><div style="flex:none; text-align:right; white-space:nowrap;"><span style="font-size:11px; color:#a8997f; text-decoration:line-through; margin-right:6px;">¥18,810</span><span style="font-family:'Cormorant Garamond',serif; font-weight:700; font-size:19px; color:var(--accent-deep);">¥9,900</span></div></div><p style="font-size:11.5px; color:#8a7c6c; line-height:1.7; margin:6px 0 0;">つらい肩こり・腰痛を集中的に改善。</p></div>
+      </div>
+      <div style="background:#f3ebdd; border-radius:4px; padding:18px 20px; margin-top:6px;">
+        <p style="font-size:12px; color:#776857; line-height:1.9; margin:0;"><span style="font-family:'Cormorant Garamond',serif; letter-spacing:.18em; color:var(--accent-deep);">INFORMATION</span><br>・各種クレジットカード／電子マネー対応<br>・都度払いメニュー／回数券をご用意<br>・併設の痩身エステ・美容鍼灸との併用割引あり</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= CONCEPT ================= -->
+  <main id="s-concept" class="screen" style="animation:fadeUp .4s ease;">
+    <div style="padding:34px 24px 28px; background:#f3ebdd; text-align:center;">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">OUR CONCEPT</div>
+      <h1 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:24px; color:#4a3d31; margin:10px 0 0; line-height:1.5;">施術の考え方</h1>
+      <p style="font-size:12.5px; color:#8a7c6c; line-height:1.95; margin:14px 0 0;">「からだラボ整骨院」グループが磨き上げてきた<br>根本改善の考え方を、女性専用院に。</p>
+    </div>
+
+    <section style="padding:44px 24px 6px;">
+      <div style="text-align:center;">
+        <span style="font-family:'Shippori Mincho',serif; font-size:14px; color:var(--accent-deep); letter-spacing:.18em;">─ 根本治療 ─</span>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:21px; color:#4a3d31; margin:14px 0 0; line-height:1.6;">不調の「原因」を<br>土台から整える。</h2>
+      </div>
+      <p style="font-size:13.5px; line-height:2.1; color:#5a4d40; margin:22px 0 0; text-align:center;">マッサージや痛み止めでその場をしのいでも、原因が残っていれば不調は繰り返します。ラ・コンシェル整骨院では、痛みの根本にアプローチし、<b style="color:#4a3d31;">不調が戻りにくい身体づくり</b>を目指します。</p>
+    </section>
+
+    <section style="padding:34px 22px 6px;">
+      <div style="background:#fff; border:1px solid #ece2d2; border-radius:5px; overflow:hidden; margin-bottom:18px;">
+        <img src="assets/care-lower-back.jpg" alt="院内" style="display:block; width:100%; height:172px; object-fit:cover; object-position:center 48%;">
+        <div style="padding:20px;"><div style="font-family:'Cormorant Garamond',serif; font-size:11px; letter-spacing:.2em; color:var(--accent);">ORIGINAL METHOD</div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:17px; color:#4a3d31; margin:6px 0 10px; line-height:1.45;">インナーマッスル × ラボ式マッサージ</h3><p style="font-size:12.5px; line-height:1.95; color:#776857; margin:0;">延べ10万人以上の施術実績から生まれたグループオリジナルの施術法。身体の中から健康へ導き、施術前後の血流・体温の変化はサーモグラフィーで視覚的にも確認できます。</p></div>
+      </div>
+      <div style="background:#fff; border:1px solid #ece2d2; border-radius:5px; overflow:hidden; margin-bottom:18px;">
+        <img src="assets/care-bmk.jpg" alt="骨盤矯正" style="display:block; width:100%; height:172px; object-fit:cover; object-position:center 48%;">
+        <div style="padding:20px;"><div style="font-family:'Cormorant Garamond',serif; font-size:11px; letter-spacing:.2em; color:var(--accent);">BMK PELVIC CARE</div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:17px; color:#4a3d31; margin:6px 0 10px; line-height:1.45;">BMK骨盤矯正</h3><p style="font-size:12.5px; line-height:1.95; color:#776857; margin:0;">「Body Make Keep」＝理想のスタイルに整え、維持する骨盤矯正。痛みや不調の原因となる歪みを整え、再発しにくい身体をつくります。バキバキしないソフトな施術です。</p></div>
+      </div>
+      <div style="background:#fff; border:1px solid #ece2d2; border-radius:5px; overflow:hidden; margin-bottom:18px;">
+        <img src="assets/lounge-b.jpg" alt="カウンセリング" style="display:block; width:100%; height:172px; object-fit:cover; object-position:center 48%;">
+        <div style="padding:20px;"><div style="font-family:'Cormorant Garamond',serif; font-size:11px; letter-spacing:.2em; color:var(--accent);">COUNSELING</div><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:17px; color:#4a3d31; margin:6px 0 10px; line-height:1.45;">丁寧なカウンセリング・検査</h3><p style="font-size:12.5px; line-height:1.95; color:#776857; margin:0;">お話をしっかり伺い、タブレットを使って筋肉など身体の仕組みからご説明。お一人おひとりに合った施術プランをご提案します。</p></div>
+      </div>
+    </section>
+
+    <section style="margin-top:24px; padding:44px 24px; background:#4a3d31;">
+      <div style="text-align:center; margin-bottom:26px;">
+        <div style="font-family:'Cormorant Garamond',serif; font-size:11px; letter-spacing:.3em; color:var(--accent);">FLOW</div>
+        <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:20px; color:#fff; margin:9px 0 0;">ご来院の流れ</h2>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:0;">
+        <div style="display:flex; gap:16px;"><div style="flex:none; display:flex; flex-direction:column; align-items:center;"><div style="width:38px; height:38px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; color:var(--accent);">1</div><div style="width:1px; flex:1; background:#6a5b48; margin:4px 0;"></div></div><div style="padding-bottom:22px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#fff; margin:6px 0 5px;">ご予約</h3><p style="font-size:12px; line-height:1.85; color:#cdc0ae; margin:0;">WEB・電話・LINEから。当日予約も歓迎です。</p></div></div>
+        <div style="display:flex; gap:16px;"><div style="flex:none; display:flex; flex-direction:column; align-items:center;"><div style="width:38px; height:38px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; color:var(--accent);">2</div><div style="width:1px; flex:1; background:#6a5b48; margin:4px 0;"></div></div><div style="padding-bottom:22px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#fff; margin:6px 0 5px;">カウンセリング</h3><p style="font-size:12px; line-height:1.85; color:#cdc0ae; margin:0;">お悩みやお身体の状態を丁寧にお伺いします。</p></div></div>
+        <div style="display:flex; gap:16px;"><div style="flex:none; display:flex; flex-direction:column; align-items:center;"><div style="width:38px; height:38px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; color:var(--accent);">3</div><div style="width:1px; flex:1; background:#6a5b48; margin:4px 0;"></div></div><div style="padding-bottom:22px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#fff; margin:6px 0 5px;">検査・ご説明</h3><p style="font-size:12px; line-height:1.85; color:#cdc0ae; margin:0;">原因を見極め、施術プランをわかりやすくご説明。</p></div></div>
+        <div style="display:flex; gap:16px;"><div style="flex:none; display:flex; flex-direction:column; align-items:center;"><div style="width:38px; height:38px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; color:var(--accent);">4</div><div style="width:1px; flex:1; background:#6a5b48; margin:4px 0;"></div></div><div style="padding-bottom:22px;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#fff; margin:6px 0 5px;">施術</h3><p style="font-size:12px; line-height:1.85; color:#cdc0ae; margin:0;">国家資格者が完全個室で本格施術を行います。</p></div></div>
+        <div style="display:flex; gap:16px;"><div style="flex:none; display:flex; flex-direction:column; align-items:center;"><div style="width:38px; height:38px; border-radius:50%; border:1px solid var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif; font-weight:600; font-size:15px; color:var(--accent);">5</div></div><div style="padding-bottom:0;"><h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#fff; margin:6px 0 5px;">セルフケア提案</h3><p style="font-size:12px; line-height:1.85; color:#cdc0ae; margin:0;">ご自宅でできるケアやアドバイスもお伝えします。</p></div></div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= STAFF ================= -->
+  <main id="s-staff" class="screen" style="animation:fadeUp .4s ease;">
+    <div style="padding:34px 24px 28px; background:#f3ebdd; text-align:center;">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">STAFF</div>
+      <h1 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:24px; color:#4a3d31; margin:10px 0 0;">スタッフ紹介</h1>
+      <p style="font-size:12.5px; color:#8a7c6c; line-height:1.9; margin:14px 0 0;">国家資格を持つ女性院長が、<br>すべての施術を担当いたします。</p>
+    </div>
+
+    <section style="padding:36px 22px 6px;">
+      <div style="background:#fff; border:1px solid #ece2d2; border-radius:5px; overflow:hidden; margin-bottom:22px;">
+        <img src="assets/director.jpg" alt="院長 山本" style="display:block; width:100%; height:260px; object-fit:cover; object-position:50% 22%;">
+        <div style="padding:22px;">
+          <div style="display:flex; align-items:baseline; gap:10px;">
+            <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:20px; color:#4a3d31; margin:0;">山本</h2>
+            <span style="font-size:11.5px; color:var(--accent-deep);">院長</span>
+          </div>
+          <div style="font-size:11.5px; color:#8a7c6c; margin:6px 0 14px; letter-spacing:.04em;">柔道整復師 ／ 鍼灸師 ／ 整体師</div>
+          <p style="font-size:13px; line-height:2.05; color:#5a4d40; margin:0;">初めまして、院長の山本です。女性専用という安心できる環境で、肩こり・腰痛・骨盤のお悩みと日々向き合っています。強い刺激や無理な施術は行わず、今のお身体の状態を丁寧にお伝えすることを大切にしています。少しでも不安があれば、遠慮なくお聞きください。一緒に改善の道筋を考えていきましょう。</p>
+        </div>
+      </div>
+      <div style="background:#f3ebdd; border-radius:4px; padding:18px 20px; margin-top:6px;">
+        <p style="font-size:12px; color:#776857; line-height:1.95; margin:0; text-align:center;">延べ施術実績 <b style="font-family:'Cormorant Garamond',serif; font-size:16px; color:var(--accent-deep);">100,000</b> 人以上。<br>メディア掲載・医師推薦多数の本格整体院です。</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- ================= ACCESS ================= -->
+  <main id="s-access" class="screen" style="animation:fadeUp .4s ease;">
+    <div style="padding:34px 24px 28px; background:#f3ebdd; text-align:center;">
+      <div style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.3em; color:var(--accent);">ACCESS</div>
+      <h1 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:24px; color:#4a3d31; margin:10px 0 0;">アクセス・店舗情報</h1>
+    </div>
+    <iframe title="アクセスマップ" src="https://www.google.com/maps?q=%E6%9D%B1%E4%BA%AC%E9%83%BD%E7%94%BA%E7%94%B0%E5%B8%82%E5%8E%9F%E7%94%BA%E7%94%B06-10-3%20%E3%83%AA%E3%83%B3%E3%82%BA%E3%83%91%E3%83%BC%E3%82%AF%E3%83%93%E3%83%AB&output=embed" style="width:100%; height:230px; border:0; display:block;" loading="lazy"></iframe>
+    <section style="padding:30px 22px 10px;">
+      <h2 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:18px; color:#4a3d31; margin:0 0 4px;">女性専用 ラ・コンシェル整骨院 町田院</h2>
+      <div style="font-size:11.5px; color:#8a7c6c; margin-bottom:18px; letter-spacing:.04em;">運営：株式会社まごころグループ</div>
+      <div style="display:flex; flex-direction:column;">
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">住所</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">〒194-0013 東京都町田市原町田6-10-3 リンズパークビル4F</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">アクセス</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">小田急線 町田駅 西口より徒歩2分／JR横浜線 町田駅 北口より徒歩3分</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">電話</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;"><a href="tel:042-860-7700" style="color:var(--accent-deep); text-decoration:none;">042-860-7700</a>（予約優先制）</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">営業時間</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">平日 10:10–21:00／土日祝 10:10–18:30</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">定休日</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">水曜日</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">お支払い</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">各種クレジットカード・電子マネー対応／都度払いOK</div></div>
+        <div style="display:flex; gap:14px; padding:14px 2px; border-bottom:1px solid #ece2d2;"><div style="flex:none; width:78px; font-size:12px; color:var(--accent-deep); font-family:'Shippori Mincho',serif;">こだわり</div><div style="flex:1; font-size:12.5px; color:#5a4d40; line-height:1.8;">女性専用・完全個室・女性スタッフ在籍・メイクルーム・お着替え完備</div></div>
+      </div>
+
+      <h3 style="font-family:'Shippori Mincho',serif; font-weight:600; font-size:15px; color:#4a3d31; margin:30px 0 12px;">受付時間</h3>
+      <div style="border:1px solid #e3d7c4; border-radius:4px; overflow:hidden;">
+        <div style="display:grid; grid-template-columns:1.4fr repeat(7,1fr); background:#f3ebdd; font-size:11px; color:#776857;">
+          <div style="padding:9px 6px;"></div>
+          <div style="padding:9px 0; text-align:center;">月</div><div style="padding:9px 0; text-align:center;">火</div><div style="padding:9px 0; text-align:center;">水</div><div style="padding:9px 0; text-align:center;">木</div><div style="padding:9px 0; text-align:center;">金</div><div style="padding:9px 0; text-align:center;">土</div><div style="padding:9px 0; text-align:center;">日</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1.4fr repeat(7,1fr); font-size:11px; color:#5a4d40; align-items:center; background:#fff;">
+          <div style="padding:11px 8px; font-size:10.5px;">10:10–21:00</div>
+          <div style="padding:11px 0; text-align:center; color:var(--accent-deep);">●</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">●</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">●</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">●</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">△</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">△</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1.4fr repeat(7,1fr); font-size:11px; color:#5a4d40; align-items:center; background:#faf5ee; border-top:1px solid #ece2d2;">
+          <div style="padding:11px 8px; font-size:10.5px;">土日祝 –18:30</div>
+          <div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">—</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">△</div><div style="padding:11px 0; text-align:center; color:var(--accent-deep);">△</div>
+        </div>
+      </div>
+      <p style="font-size:11px; color:#8a7c6c; margin:12px 2px 0; line-height:1.7;">●受付　△土日祝 10:10–18:30　【定休日】水曜日<br>★当日予約可能・予約優先制</p>
+    </section>
+  </main>
+
+  <!-- ===== FOOTER ===== -->
+  <footer style="background:#3f342a; padding:34px 24px 30px; color:#cabca8;">
+    <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+      <img src="assets/logo.png" alt="ラ・コンシェル整骨院ロゴ" style="width:46px; height:36px; object-fit:contain; flex:none;">
+      <div style="font-family:'Shippori Mincho',serif; font-size:15px; color:#f0e6d4;">ラ・コンシェル整骨院</div>
+    </div>
+    <div style="display:flex; flex-wrap:wrap; gap:14px 20px; margin-bottom:22px;">
+      <span onclick="go('home')" style="font-size:12.5px; color:#cabca8; cursor:pointer; letter-spacing:.04em;">トップ</span>
+      <span onclick="go('menu')" style="font-size:12.5px; color:#cabca8; cursor:pointer; letter-spacing:.04em;">施術メニュー・料金</span>
+      <span onclick="go('concept')" style="font-size:12.5px; color:#cabca8; cursor:pointer; letter-spacing:.04em;">施術の考え方</span>
+      <span onclick="go('staff')" style="font-size:12.5px; color:#cabca8; cursor:pointer; letter-spacing:.04em;">スタッフ紹介</span>
+      <span onclick="go('access')" style="font-size:12.5px; color:#cabca8; cursor:pointer; letter-spacing:.04em;">アクセス・店舗情報</span>
+    </div>
+    <p style="font-size:11px; line-height:1.85; color:#9a8d7c; margin:0;">東京都町田市原町田6-10-3 リンズパークビル4F<br>小田急線・JR横浜線 町田駅 徒歩2分</p>
+    <div style="margin-top:22px; padding-top:16px; border-top:1px solid #55483a; font-family:'Cormorant Garamond',serif; font-size:10px; letter-spacing:.16em; color:#7d7062;">© LA CONCIER SEIKOTSUIN ─ MAGOKORO GROUP</div>
+  </footer>
+
+  <!-- ===== FIXED BOTTOM BAR ===== -->
+  <div style="position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100vw; max-width:440px; z-index:60; display:grid; grid-template-columns:1fr 1.3fr 1fr; background:#faf5ee; border-top:1px solid #e3d7c4; box-shadow:0 -4px 20px rgba(74,61,49,.08);">
+    <a href="tel:042-860-7700" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:11px 4px; text-decoration:none; color:#4a3d31;">
+      <span style="width:18px; height:18px; border:1.5px solid var(--accent-deep); border-radius:50%; display:block;"></span>
+      <span style="font-size:10px; letter-spacing:.06em;">電話予約</span>
+    </a>
+    <a href="https://beauty.hotpepper.jp/CSP/kr/reserve/?storeId=H000796143" target="_blank" rel="noopener" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:11px 4px; text-decoration:none; background:var(--accent); color:#fff;">
+      <span style="font-family:'Cormorant Garamond',serif; font-size:12px; letter-spacing:.18em; opacity:.85;">WEB</span>
+      <span style="font-size:12px; letter-spacing:.08em; font-weight:500;">24時間ネット予約</span>
+    </a>
+    <a href="https://lin.ee/sxRcefW" target="_blank" rel="noopener" style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:11px 4px; text-decoration:none; color:#4a3d31;">
+      <span style="width:18px; height:18px; border:1.5px solid var(--accent-deep); border-radius:5px; display:block;"></span>
+      <span style="font-size:10px; letter-spacing:.06em;">LINE相談</span>
+    </a>
+  </div>
+
+</div>
+</div>
+</div>
+
+<script>
+  // ===== 画面切替（SPA）=====
+  var SCREENS = ['home', 'menu', 'concept', 'staff', 'access'];
+  function go(name) {
+    if (SCREENS.indexOf(name) === -1) name = 'home';
+    SCREENS.forEach(function (s) {
+      var el = document.getElementById('s-' + s);
+      if (el) el.classList.toggle('active', s === name);
+    });
+    closeNav();
+    if (location.hash !== '#' + name) {
+      history.replaceState(null, '', '#' + name);
+    }
+    window.scrollTo({ top: 0, behavior: 'auto' });
+  }
+  function toggleNav() {
+    var d = document.getElementById('navDrawer');
+    d.style.display = (d.style.display === 'block') ? 'none' : 'block';
+  }
+  function closeNav() {
+    document.getElementById('navDrawer').style.display = 'none';
+  }
+  // ハッシュで初期画面を復元（例 .../lacshell/#menu）
+  (function () {
+    var h = (location.hash || '').replace('#', '');
+    if (SCREENS.indexOf(h) !== -1) go(h);
+  })();
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').replace('#', '');
+    if (SCREENS.indexOf(h) !== -1) go(h);
+  });
+</script>
+</body>
+</html>

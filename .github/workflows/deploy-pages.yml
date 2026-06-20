@@ -1,0 +1,79 @@
+# ============================================================
+# GitHub Pages 統合公開ワークフロー
+#
+# 1つのリポジトリで GitHub Pages は「1サイト」しか持てないため、
+# 既存の社内ツールと新しい公開サイトを “別フォルダ（別URL）” に同居させて
+# 互いに干渉しないように1回でまとめて公開します。
+#
+#   公開されるURL構成（…github.io/timecard_app/ 以下）
+#   ├── /              … 既存：会員入会申込書アプリ（社内用・従来どおり）
+#   └── /lacshell/     … 新規：ラ・コンシェル整骨院 公開サイト（今回追加）
+#
+# ・既存アプリのファイルは一切変更せず、URLも従来のまま保持します。
+# ・整骨院サイトは lacshell_site/ フォルダだけで完結する静的サイトです。
+# ・勤怠アプリ（Flask/Render）には一切影響しません。
+# ============================================================
+
+name: Deploy site (申込書アプリ + ラ・コンシェル整骨院LP)
+
+on:
+  push:
+    branches: ["claude/nifty-cori-ydc9mm"]
+    paths:
+      - "lacshell_site/**"
+      - "moushikomi_app/**"
+      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Pages への公開は常に1つずつ実行（同時実行による取りこぼしを防止）
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: ソースコードを取得
+        uses: actions/checkout@v4
+
+      - name: 公開フォルダ（_site）を組み立て
+        run: |
+          set -e
+          rm -rf _site
+          mkdir -p _site
+          # 既存：申込書アプリをルート（/）にそのまま配置（URL据え置き）
+          if [ -d moushikomi_app ]; then
+            cp -r moushikomi_app/. _site/
+          fi
+          # 新規：整骨院サイトを /lacshell/ サブパスに配置（完全分離）
+          mkdir -p _site/lacshell
+          cp -r lacshell_site/. _site/lacshell/
+          # ビルド成果物・開発用ツールは公開物に含めない
+          rm -rf _site/lacshell/tools
+          # Jekyll を無効化（静的ファイルをそのまま配信）
+          touch _site/.nojekyll
+          echo "----- 公開ファイル一覧 -----"
+          find _site -maxdepth 2 -type d | sort
+
+      - name: GitHub Pages の設定を読み込み（未有効なら有効化）
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 公開用フォルダをアップロード
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: "./_site"
+
+      - name: GitHub Pages へ公開
+        id: deployment
+        uses: actions/deploy-pages@v4
