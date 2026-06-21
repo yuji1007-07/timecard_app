@@ -18,7 +18,7 @@ name: Deploy site (申込書アプリ + ラ・コンシェル整骨院LP)
 
 on:
   push:
-    branches: ["claude/nifty-cori-ydc9mm"]
+    branches: ["main", "claude/nifty-cori-ydc9mm"]
     paths:
       - "lacshell_site/**"
       - "moushikomi_app/**"
