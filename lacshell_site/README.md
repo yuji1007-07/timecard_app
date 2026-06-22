@@ -6,13 +6,14 @@ Claude Design で作成したデザイン（`ラコンシェル整骨院.dc.html
 
 ## 公開URL
 
-GitHub Pages で、既存の社内アプリとは**別フォルダ・別URL**に分離して公開しています。
+本番（公開用）は **Netlify** で配信しています。
 
 ```
-https://yuji1007-07.github.io/timecard_app/lacshell/
+https://laconcier-machida.netlify.app/
 ```
 
-- 公開は `.github/workflows/deploy-pages.yml`（リポジトリ直下）が自動で行います。
+- GitHub の `main` に push すると、Netlify が自動で再公開します（`lacshell_site/netlify.toml` の設定で本フォルダのみ配信）。
+- 予備として GitHub Pages 版もあります：`https://yuji1007-07.github.io/timecard_app/lacshell/`
 - このサイトは `lacshell_site/` だけで完結し、勤怠アプリ・申込書アプリには干渉しません。
 
 ## 画面構成（5ページ・1ファイル内でJS切替）
