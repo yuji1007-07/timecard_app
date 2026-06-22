@@ -1,0 +1,15 @@
+# ラ・コンシェル整骨院LP 専用の Netlify 設定
+#
+# この設定は、Netlify の「Base directory」を lacshell_site にしたときだけ読まれます。
+# そうするとルートにある勤怠アプリ用の requirements.txt / runtime.txt を見に行かないため、
+# 不要な依存インストール（Install dependencies）が走らず、エラーを回避できます。
+#
+# ・ビルド不要の静的サイト（このフォルダの中身をそのまま配信）
+# ・他のアプリ・他のNetlifyサイトには影響しません
+
+[build]
+  command = ""
+  publish = "."
+
+[build.processing]
+  skip_processing = true
