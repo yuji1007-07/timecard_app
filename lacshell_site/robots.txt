@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://laconcier-machida.netlify.app/sitemap.xml
