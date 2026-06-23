@@ -235,9 +235,6 @@ def get_db():
             conn = sqlite3.connect(SQLITE_DATABASE)
             conn.row_factory = sqlite3.Row
             g.db = DBWrapper(conn, "sqlite")
-        if DATABASE_URL:
-            postgres_create_schema(g.db)
-        else:
             ensure_runtime_schema(g.db)
     return g.db
 
@@ -323,7 +320,13 @@ def detect_brand_and_store(display_name: str) -> tuple[str, str]:
 
 
 
+_DB_READY = False
+
+
 def database_ready() -> bool:
+    global _DB_READY
+    if _DB_READY:
+        return True
     try:
         if DATABASE_URL:
             conn = psycopg2.connect(DATABASE_URL)
@@ -337,7 +340,8 @@ def database_ready() -> bool:
                 """
             ).fetchone()
             db.close()
-            return row is not None and int(row["cnt"]) >= 3
+            _DB_READY = row is not None and int(row["cnt"]) >= 3
+            return _DB_READY
         if not os.path.exists(SQLITE_DATABASE):
             return False
         conn = sqlite3.connect(SQLITE_DATABASE)
@@ -345,7 +349,8 @@ def database_ready() -> bool:
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('stores', 'users', 'attendance')"
         ).fetchone()
         conn.close()
-        return row is not None and int(row[0]) == 3
+        _DB_READY = row is not None and int(row[0]) == 3
+        return _DB_READY
     except Exception:
         return False
 
@@ -633,9 +638,13 @@ def get_allowed_store_filter(requested_store_id: str | None):
 
 def get_permission_display_map() -> dict[int, str]:
     db = get_db()
+    if DATABASE_URL:
+        agg = "STRING_AGG(s.display_name, ' / ')"
+    else:
+        agg = "GROUP_CONCAT(s.display_name, ' / ')"
     rows = db.execute(
-        """
-        SELECT usp.user_id, STRING_AGG(s.display_name, ' / ') AS managed_names
+        f"""
+        SELECT usp.user_id, {agg} AS managed_names
         FROM user_store_permissions usp
         JOIN stores s ON usp.store_id = s.id
         GROUP BY usp.user_id
