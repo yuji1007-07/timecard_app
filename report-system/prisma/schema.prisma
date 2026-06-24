@@ -143,6 +143,9 @@ model Report {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  // 報告原本（LINE等で届いた文章をそのまま保存）
+  originalText String?
+
   // 先週振り返り（週次）
   goodPoints     String?
   badPoints      String?

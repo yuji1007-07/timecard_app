@@ -12,6 +12,7 @@ export type ReportPayload = {
   reportType: "WEEKLY" | "MONTHLY";
   targetWeek: string | null;
   targetMonth: string | null;
+  originalText?: string;
   review: {
     goodPoints?: string;
     badPoints?: string;
@@ -87,6 +88,7 @@ export async function submitReport(payload: ReportPayload) {
       targetWeek: payload.targetWeek,
       targetMonth: payload.targetMonth,
       status: "SUBMITTED",
+      originalText: payload.originalText || null,
       goodPoints: payload.review.goodPoints || null,
       badPoints: payload.review.badPoints || null,
       dataIssues: payload.review.dataIssues || null,

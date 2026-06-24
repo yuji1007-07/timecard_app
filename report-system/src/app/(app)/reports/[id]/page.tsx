@@ -43,6 +43,18 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         }
       />
 
+      {/* 報告原本（原文） */}
+      {report.originalText && (
+        <Card className="mb-6 border-navy/30">
+          <CardHeader>
+            <CardTitle>報告原本（原文）</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="whitespace-pre-wrap break-words rounded-md bg-muted/40 p-4 font-sans text-sm leading-relaxed">{report.originalText}</pre>
+          </CardContent>
+        </Card>
+      )}
+
       {/* KPI差分比較 */}
       <Card className="mb-6">
         <CardHeader>

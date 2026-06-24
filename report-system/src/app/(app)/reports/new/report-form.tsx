@@ -68,6 +68,7 @@ export function ReportForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
+  const [originalText, setOriginalText] = useState("");
   const [kpi, setKpi] = useState<KpiState>(() =>
     Object.fromEntries(kpiItems.map((k) => [k.id, { target: "", current: "", forecast: "", comment: "" }]))
   );
@@ -120,6 +121,7 @@ export function ReportForm({
       reportType,
       targetWeek: reportType === "WEEKLY" ? period : null,
       targetMonth: reportType === "MONTHLY" ? period : null,
+      originalText,
       review,
       monthly: reportType === "MONTHLY" ? monthly : null,
       kpis: kpiItems.map((k) => ({
@@ -149,6 +151,25 @@ export function ReportForm({
 
   return (
     <div className="space-y-6">
+      {/* 報告原本（LINEで届いた原文をそのまま保存） */}
+      <Card>
+        <CardHeader>
+          <CardTitle>⓪ 報告原本（原文）</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            LINEなどで届いた報告文をそのまま貼り付けてください。原文は加工せず保存され、報告詳細でいつでも閲覧できます。
+          </p>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            rows={8}
+            value={originalText}
+            onChange={(e) => setOriginalText(e.target.value)}
+            placeholder="ここにLINEの報告文をそのまま貼り付け（任意）。下のKPI欄は数値集計用に別途入力します。"
+            className="whitespace-pre-wrap"
+          />
+        </CardContent>
+      </Card>
+
       {/* 前回KDI進捗チェック（最重要） */}
       {previousActions.length > 0 && (
         <Card className="border-navy/30">
