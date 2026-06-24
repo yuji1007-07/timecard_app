@@ -1,0 +1,319 @@
+// 整骨院・鍼灸・エステ対応 週次/月次報告管理システム
+// Prisma schema (SQLite)。SQLite は enum 非対応のため、列挙値は String + コメントで表現。
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ===== ユーザー / 権限 =====
+// role: AREA_MANAGER(エリアマネージャー) | STORE_MANAGER(院長・店舗責任者) | DEPARTMENT_MANAGER(部門責任者)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("STORE_MANAGER")
+  storeId      String?
+  departmentId String?
+  lineUserId   String? // LINE 通知先
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store      Store?      @relation(fields: [storeId], references: [id])
+  department Department? @relation(fields: [departmentId], references: [id])
+  reports    Report[]
+}
+
+// ===== 店舗 =====
+// businessType: SEIKOTSU(整骨院) | SHINKYU(鍼灸) | ESTHE(エステ) | COMPLEX(複合店舗)
+// status: ACTIVE(稼働中) | SUSPENDED(休止中) | CLOSED(閉院)
+model Store {
+  id           String   @id @default(cuid())
+  name         String
+  businessType String   @default("SEIKOTSU")
+  area         String? // 所属エリア
+  directorName String? // 院長名
+  managerName  String? // 責任者名
+  openDate     DateTime?
+  status       String   @default("ACTIVE")
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  departments     Department[]
+  users           User[]
+  kpiItems        KpiItem[]
+  kdiItems        KdiItem[]
+  reports         Report[]
+  alertConditions AlertCondition[]
+  successActions  SuccessAction[]
+}
+
+// ===== 部門（複合店舗用） =====
+// businessType: SEIKOTSU | SHINKYU | ESTHE
+model Department {
+  id           String   @id @default(cuid())
+  storeId      String
+  name         String
+  businessType String
+  managerName  String?
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  users           User[]
+  kpiItems        KpiItem[]
+  kdiItems        KdiItem[]
+  reports         Report[]
+  alertConditions AlertCondition[]
+  successActions  SuccessAction[]
+}
+
+// ===== KPI テンプレート（業態別 / 店舗別 / 部門別） =====
+// スコープ: businessType のみ設定 = 業態テンプレート / storeId 設定 = 店舗上書き / departmentId 設定 = 部門上書き
+// unit: 円 | 人 | 枚 | 回 | % | 件
+// inputType: NUMBER(数値) | PERCENT(パーセント) | TEXT(テキスト)
+// goodDirection: UP(増えると良い) | DOWN(減ると良い)
+model KpiItem {
+  id            String  @id @default(cuid())
+  name          String
+  businessType  String? // 業態テンプレートのとき設定
+  storeId       String? // 店舗上書きのとき設定
+  departmentId  String? // 部門上書きのとき設定
+  unit          String  @default("円")
+  inputType     String  @default("NUMBER")
+  goodDirection String  @default("UP")
+  hasTarget     Boolean @default(true) // 目標入力の有無
+  hasCurrent    Boolean @default(true) // 現状入力の有無
+  hasForecast   Boolean @default(true) // 着地予測入力の有無
+  hasComparison Boolean @default(true) // 前回比較の有無
+  showGraph     Boolean @default(true) // グラフ表示の有無
+  showDashboard Boolean @default(false) // ダッシュボード表示の有無
+  required      Boolean @default(false) // 必須入力
+  sortOrder     Int     @default(0)
+  createdAt     DateTime @default(now())
+
+  store        Store?           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department   Department?      @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  reportValues ReportKpiValue[]
+}
+
+// ===== KDI テンプレート（業態別 / 店舗別 / 部門別） =====
+// recommendedFrequency: DAILY(毎日) | WEEKLY1(週1) | WEEKLY2(週2) | MONTHLY1(月1) | ANY(任意)
+model KdiItem {
+  id                  String  @id @default(cuid())
+  name                String
+  category            String? // 成約率関連 / 離反率関連 など
+  businessType        String?
+  storeId             String?
+  departmentId        String?
+  relatedKpiName      String? // 関連KPI名（テンプレートはKPI名で緩く紐づけ）
+  recommendedFrequency String @default("WEEKLY1")
+  hasAssignee         Boolean @default(true) // 担当者入力の有無
+  hasDeadline         Boolean @default(true) // 期限入力の有無
+  hasCount            Boolean @default(true) // 実施回数入力の有無
+  hasTargetPerson     Boolean @default(false) // 対象者入力の有無
+  hasStatus           Boolean @default(true) // 進捗ステータス入力の有無
+  note                String?
+  sortOrder           Int     @default(0)
+  createdAt           DateTime @default(now())
+
+  store      Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+// ===== 報告（週次 / 月次） =====
+// reportType: WEEKLY(週次) | MONTHLY(月次)
+// status: DRAFT(下書き) | SUBMITTED(提出済)
+model Report {
+  id           String   @id @default(cuid())
+  storeId      String
+  departmentId String?
+  reporterId   String
+  reportType   String   @default("WEEKLY")
+  targetWeek   String? // 例: 2026-W26
+  targetMonth  String? // 例: 2026-06
+  status       String   @default("SUBMITTED")
+  submittedAt  DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // 先週振り返り（週次）
+  goodPoints     String?
+  badPoints      String?
+  dataIssues     String?
+  doneThings     String?
+  notDoneThings  String?
+
+  // 月次追加項目
+  monthlySummary    String?
+  successCases      String?
+  missFactors       String?
+  nextMonthFocusKpi String?
+  nextMonthKdi      String?
+  nextMonthAction   String?
+  hrIssues          String?
+  marketingIssues   String?
+  educationIssues   String?
+  operationIssues   String?
+
+  store      Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department?      @relation(fields: [departmentId], references: [id])
+  reporter   User             @relation(fields: [reporterId], references: [id])
+  kpiValues  ReportKpiValue[]
+  inflows    ReportInflow[]
+  kdis       ReportKdi[]
+  actions    ReportAction[]
+  progresses ActionProgress[]
+  feedback   Feedback?
+}
+
+// ===== 報告ごとの KPI 値 =====
+model ReportKpiValue {
+  id        String  @id @default(cuid())
+  reportId  String
+  kpiItemId String
+  kpiName   String // スナップショット（テンプレ変更に影響されないよう保存）
+  unit      String?
+  target    Float?
+  current   Float?
+  forecast  Float?
+  comment   String?
+
+  report  Report  @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  kpiItem KpiItem @relation(fields: [kpiItemId], references: [id])
+
+  @@index([reportId])
+}
+
+// ===== 流入経路 =====
+model ReportInflow {
+  id       String @id @default(cuid())
+  reportId String
+  channel  String // ホットペッパー / Google / Yahoo / 看板 / 紹介 / チラシ / その他 / 事故
+  count    Int    @default(0)
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+// ===== 今回 KDI 入力 =====
+// status: COMPLETED(完了) | PARTIAL(一部完了) | NOT_DONE(未実施) | ONGOING(継続中) | CANCELLED(中止)
+model ReportKdi {
+  id             String  @id @default(cuid())
+  reportId       String
+  kdiItemId      String? // テンプレ由来。自由入力なら null
+  name           String
+  relatedKpiName String?
+  assignee       String?
+  deadline       String?
+  frequency      String?
+  count          Int?
+  targetPerson   String?
+  status         String  @default("ONGOING")
+  comment        String?
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+// ===== 来週 Action 入力 =====
+model ReportAction {
+  id              String  @id @default(cuid())
+  reportId        String
+  content         String
+  relatedKpiName  String?
+  assignee        String?
+  deadline        String?
+  frequency       String?
+  expectedEffect  String?
+  successCondition String?
+
+  report     Report           @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  progresses ActionProgress[] @relation("ActionToProgress")
+}
+
+// ===== 前回 Action 進捗（今回報告時に入力） =====
+// status: COMPLETED | PARTIAL | NOT_DONE | ONGOING | CANCELLED
+model ActionProgress {
+  id               String  @id @default(cuid())
+  reportId         String // 今回の報告
+  previousActionId String // 前回の ReportAction
+  status           String  @default("ONGOING")
+  comment          String?
+  prevKpiValue     Float?
+  currentKpiValue  Float?
+  diff             Float?
+
+  report         Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  previousAction ReportAction @relation("ActionToProgress", fields: [previousActionId], references: [id], onDelete: Cascade)
+}
+
+// ===== 要注意条件（管理者が自由設定） =====
+// targetType: ALL | SEIKOTSU | SHINKYU | ESTHE | STORE | DEPARTMENT
+// operator: GTE(以上) | LTE(以下) | LT(未満) | GT(超過) | INCREASED(前回より増加) | DECREASED(前回より低下)
+//         | BELOW_TARGET(目標未達) | NOT_SUBMITTED(未提出) | ACTION_NOT_DONE(Action未実施)
+// color: RED | YELLOW | BLUE   priority: HIGH | MID | LOW
+model AlertCondition {
+  id           String  @id @default(cuid())
+  name         String
+  targetType   String  @default("ALL")
+  storeId      String?
+  departmentId String?
+  targetKpi    String? // 対象KPI名
+  operator     String  @default("GTE")
+  threshold    Float?
+  color        String  @default("RED")
+  priority     String  @default("MID")
+  notify       Boolean @default(false)
+  enabled      Boolean @default(true)
+  sortOrder    Int     @default(0)
+  createdAt    DateTime @default(now())
+
+  store      Store?      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+// ===== フィードバック =====
+// sendStatus: UNSENT(未送信) | SENT(送信済)
+model Feedback {
+  id            String   @id @default(cuid())
+  reportId      String   @unique
+  aiContent     String? // AI生成文
+  editedContent String? // 管理者編集後
+  sendStatus    String   @default("UNSENT")
+  sentAt        DateTime?
+  sentTo        String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+// ===== 成功 Action 履歴 =====
+model SuccessAction {
+  id            String  @id @default(cuid())
+  storeId       String
+  departmentId  String?
+  businessType  String?
+  content       String
+  relatedKpi    String?
+  beforeValue   Float?
+  afterValue    Float?
+  diff          Float?
+  reasonComment String?
+  createdAt     DateTime @default(now())
+
+  store      Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+}
+
+// ===== 設定（通知・連携・締切）: key-value 単一テーブル =====
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
