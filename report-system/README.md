@@ -19,7 +19,7 @@ cd report-system
 npm install            # 依存をインストール（postinstall で prisma generate）
 cp .env.example .env   # 必要に応じて値を編集
 npm run db:reset       # SQLite作成 + ダミーデータ投入
-npm run dev            # http://localhost:3000
+npm run dev            # http://localhost:3001
 ```
 
 > 補足: ネットワーク制限環境で `prisma generate` のエンジンDLが失敗する場合は、
