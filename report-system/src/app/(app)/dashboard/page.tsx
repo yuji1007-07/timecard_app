@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ALERT_COLOR_CLASS, PRIORITIES, label, BUSINESS_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
+import { NotifyButton } from "./notify-button";
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -36,7 +37,11 @@ async function AdminDashboard({ week }: { week: string }) {
 
   return (
     <div>
-      <PageHeader title="管理者ダッシュボード" description={`対象週: ${week} ／ 全店舗の状況を一覧で確認できます。`} />
+      <PageHeader
+        title="管理者ダッシュボード"
+        description={`対象週: ${week} ／ 全店舗の状況を一覧で確認できます。`}
+        action={<NotifyButton week={week} />}
+      />
 
       {/* サマリーカード */}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
