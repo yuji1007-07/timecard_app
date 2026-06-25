@@ -223,12 +223,14 @@ model ReportKdi {
   report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
 }
 
-// ===== 来週 Action 入力 =====
+// ===== 来週 Action / 来週の見込みKPI 入力 =====
 model ReportAction {
   id              String  @id @default(cuid())
   reportId        String
   content         String
   relatedKpiName  String?
+  baseValue       Float? // 今回の着地（基準値）
+  targetValue     Float? // 来週の予想値
   assignee        String?
   deadline        String?
   frequency       String?

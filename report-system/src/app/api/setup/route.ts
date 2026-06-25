@@ -57,6 +57,21 @@ export async function GET(req: Request) {
       steps.push(`schema: ${statements.length}件作成`);
     }
 
+    // 1.5) 追加カラムのマイグレーション（既存DBにも非破壊で適用。データは消えない）
+    const migrations = [
+      `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "baseValue" DOUBLE PRECISION`,
+      `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "targetValue" DOUBLE PRECISION`,
+      `ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "originalText" TEXT`,
+    ];
+    for (const m of migrations) {
+      try {
+        await prisma.$executeRawUnsafe(m);
+      } catch {
+        // 既に適用済みなどは無視
+      }
+    }
+    steps.push("migrations: 適用");
+
     // 事故防止: 既にデータがある場合は、明示的な force=1 が無ければ初期化しない
     const force = url.searchParams.get("force") === "1";
     if (tablesExist && !force) {

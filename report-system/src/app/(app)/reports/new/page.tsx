@@ -123,6 +123,26 @@ async function ResolvedForm({
     prevKpiValue: a.relatedKpiName ? prevKpiByName.get(a.relatedKpiName) ?? null : null,
   }));
 
+  // 前回報告のKPI値（着地の変化色付け用）
+  const kpiPrev: Record<string, { target: number | null; current: number | null; forecast: number | null }> = {};
+  for (const v of prevReport?.kpiValues ?? []) {
+    kpiPrev[v.kpiName] = { target: v.target, current: v.current, forecast: v.forecast };
+  }
+
+  // 当月の最初の報告（月初の目標・着地を反映ボタン用）
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const monthStartReport = await prisma.report.findFirst({
+    where: { storeId, departmentId: departmentId ?? null, status: "SUBMITTED", submittedAt: { gte: monthStart, lt: monthEnd } },
+    orderBy: { submittedAt: "asc" },
+    include: { kpiValues: true },
+  });
+  const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
+  for (const v of monthStartReport?.kpiValues ?? []) {
+    kpiMonthStart[v.kpiName] = { target: v.target, forecast: v.forecast };
+  }
+
   const dept = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
   const unitLabel = `${storeName}${dept ? ` ${dept.name}` : ""}・${label(BUSINESS_TYPES, dept?.businessType ?? businessType)}`;
 
@@ -164,6 +184,8 @@ async function ResolvedForm({
         kdiTemplates={kdiItems.map((k) => ({ id: k.id, name: k.name, category: k.category, relatedKpiName: k.relatedKpiName, recommendedFrequency: k.recommendedFrequency }))}
         previousActions={previousActions}
         channels={[...INFLOW_CHANNELS]}
+        kpiPrev={kpiPrev}
+        kpiMonthStart={kpiMonthStart}
       />
     </div>
   );

@@ -226,23 +226,33 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
         <Card>
           <CardHeader>
-            <CardTitle>{report.reportType === "WEEKLY" ? "来週" : "来月"}のAction</CardTitle>
+            <CardTitle>{report.reportType === "WEEKLY" ? "来週" : "来月"}の見込みKPI（着地 → 予想）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {report.actions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Actionの入力はありません。</p>
+              <p className="text-sm text-muted-foreground">入力はありません。</p>
             ) : (
-              report.actions.map((a) => (
-                <div key={a.id} className="rounded-md border px-3 py-2 text-sm">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{a.content}</span>
-                    {a.relatedKpiName && <Badge variant="outline">{a.relatedKpiName}</Badge>}
+              report.actions.map((a) => {
+                const diff = a.baseValue != null && a.targetValue != null ? Math.round((a.targetValue - a.baseValue) * 100) / 100 : null;
+                return (
+                  <div key={a.id} className="rounded-md border px-3 py-2 text-sm">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {a.relatedKpiName && <Badge variant="outline">{a.relatedKpiName}</Badge>}
+                      {a.targetValue != null ? (
+                        <span className="font-medium tabular-nums">
+                          着地 {fmt(a.baseValue)} → {fmt(a.targetValue)} 予想
+                          {diff != null && <span className={diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : ""}>（{diff > 0 ? "+" : ""}{diff}）</span>}
+                        </span>
+                      ) : (
+                        <span className="font-medium">{a.content}</span>
+                      )}
+                    </div>
+                    {a.content && a.targetValue != null && !a.content.includes("→") && (
+                      <div className="mt-0.5 text-xs text-muted-foreground">{a.content}</div>
+                    )}
                   </div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    {[a.assignee && `担当: ${a.assignee}`, a.deadline && `期限: ${a.deadline}`, a.expectedEffect && `効果: ${a.expectedEffect}`].filter(Boolean).join(" / ")}
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </CardContent>
         </Card>

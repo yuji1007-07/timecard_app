@@ -49,6 +49,8 @@ export type ReportPayload = {
   actions: {
     content: string;
     relatedKpiName: string | null;
+    baseValue: number | null;
+    targetValue: number | null;
     assignee: string;
     deadline: string;
     frequency: string;
@@ -134,10 +136,12 @@ export async function submitReport(payload: ReportPayload) {
       },
       actions: {
         create: payload.actions
-          .filter((a) => a.content.trim())
+          .filter((a) => a.content.trim() || (a.relatedKpiName && a.relatedKpiName.trim()))
           .map((a) => ({
-            content: a.content,
+            content: a.content || (a.relatedKpiName ?? "Action"),
             relatedKpiName: a.relatedKpiName || null,
+            baseValue: a.baseValue,
+            targetValue: a.targetValue,
             assignee: a.assignee || null,
             deadline: a.deadline || null,
             frequency: a.frequency || null,
