@@ -121,8 +121,10 @@ const SHINKYU_KDI: KdiDef[] = [
 /**
  * データベースを初期データで投入する（冪等：実行のたびに全消去して入れ直す）。
  * seed スクリプトと /api/setup の両方から利用する。
+ * @param opts.withSampleReports false にするとサンプル報告（デモ報告）を作らない。
  */
-export async function seedDatabase(prisma: PrismaClient) {
+export async function seedDatabase(prisma: PrismaClient, opts: { withSampleReports?: boolean } = {}) {
+  const withSampleReports = opts.withSampleReports ?? true;
   // 依存関係の逆順で削除
   await prisma.actionProgress.deleteMany();
   await prisma.reportAction.deleteMany();
@@ -237,7 +239,8 @@ export async function seedDatabase(prisma: PrismaClient) {
     ],
   });
 
-  // ===== サンプル報告（溝の口本院: 前週 + 今週） =====
+  // ===== サンプル報告（溝の口本院: 前週 + 今週）。クリーン初期化では作成しない =====
+  if (withSampleReports) {
   const honinKpis = await prisma.kpiItem.findMany({ where: { businessType: "SEIKOTSU" }, orderBy: { sortOrder: "asc" } });
 
   const prevVals: Record<string, { target?: number; current?: number; forecast?: number }> = {
@@ -445,6 +448,7 @@ export async function seedDatabase(prisma: PrismaClient) {
   }
   await deptReport(machidaEsthe.id, "ESTHE", { 売上: 1200000, 新規数: 14, 契約数: 9, 離反率: 16, 成約率: 62, 平均窓口単価: 12000 });
   await deptReport(machidaSeikotsu.id, "SEIKOTSU", { 売上: 1400000, 初診数: 18, 会員数: 160, 離反率: 19, 成約率: 55 });
+  } // end withSampleReports
 
   const counts = {
     stores: await prisma.store.count(),

@@ -2,10 +2,9 @@ import { requireAreaManager } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { UserForm } from "./user-form";
+import { UserForm, EditUserToggle } from "./user-form";
 import { deleteUser } from "./actions";
 import { ROLES, label } from "@/lib/constants";
 
@@ -20,47 +19,54 @@ export default async function UsersPage() {
 
   return (
     <div>
-      <PageHeader title="ユーザー管理" description="エリアマネージャー・院長・部門責任者のアカウントを管理します。" action={<UserForm stores={storeOpts} />} />
+      <PageHeader
+        title="ユーザー管理"
+        description="アカウントの追加・編集・削除ができます。担当者が変わったら「編集」で氏名・メール・担当店舗・パスワードを変更できます。"
+        action={<UserForm stores={storeOpts} />}
+      />
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>氏名</TableHead>
-                <TableHead>メール</TableHead>
-                <TableHead>権限</TableHead>
-                <TableHead>担当</TableHead>
-                <TableHead>LINE</TableHead>
-                <TableHead></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell>
+      <div className="space-y-2">
+        {users.map((u) => (
+          <Card key={u.id}>
+            <CardContent className="space-y-3 pt-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{u.name}</span>
                     <Badge variant={u.role === "AREA_MANAGER" ? "default" : "secondary"}>{label(ROLES, u.role)}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {u.store ? `${u.store.name}${u.department ? ` / ${u.department.name}` : ""}` : "全店舗"}
-                  </TableCell>
-                  <TableCell>{u.lineUserId ? <Badge variant="good">設定済</Badge> : <Badge variant="muted">未</Badge>}</TableCell>
-                  <TableCell>
-                    {u.id !== me.id && (
-                      <form action={deleteUser}>
-                        <input type="hidden" name="id" value={u.id} />
-                        <Button type="submit" size="sm" variant="ghost" className="text-destructive hover:text-destructive">削除</Button>
-                      </form>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                    {u.lineUserId ? <Badge variant="good">LINE設定済</Badge> : <Badge variant="muted">LINE未</Badge>}
+                  </div>
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {u.email}
+                    <span className="mx-2">/</span>
+                    担当: {u.store ? `${u.store.name}${u.department ? ` ${u.department.name}` : ""}` : "全店舗"}
+                  </div>
+                </div>
+                {u.id !== me.id && (
+                  <form action={deleteUser}>
+                    <input type="hidden" name="id" value={u.id} />
+                    <Button type="submit" size="sm" variant="ghost" className="text-destructive hover:text-destructive">
+                      削除
+                    </Button>
+                  </form>
+                )}
+              </div>
+              <EditUserToggle
+                stores={storeOpts}
+                user={{
+                  id: u.id,
+                  name: u.name,
+                  email: u.email,
+                  role: u.role,
+                  storeId: u.storeId,
+                  departmentId: u.departmentId,
+                  lineUserId: u.lineUserId,
+                }}
+              />
+            </CardContent>
+          </Card>
+        ))}
+      </div>
     </div>
   );
 }

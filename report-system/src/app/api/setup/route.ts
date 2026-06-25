@@ -85,9 +85,10 @@ export async function GET(req: Request) {
       // テーブル未作成などは無視
     }
 
-    // 3) 初期データ投入
-    const counts = await seedDatabase(prisma);
-    steps.push("seed: 完了");
+    // 3) 初期データ投入（clean=1 でサンプル報告を作らない）
+    const clean = url.searchParams.get("clean") === "1";
+    const counts = await seedDatabase(prisma, { withSampleReports: !clean });
+    steps.push(clean ? "seed: 完了（サンプル報告なし）" : "seed: 完了");
 
     return NextResponse.json({
       ok: true,
