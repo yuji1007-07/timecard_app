@@ -34,28 +34,40 @@ export async function GET(req: Request) {
 
   const steps: string[] = [];
   try {
-    // 1) スキーマ作成（テーブルが無ければ作成。既存ならスキップ）
-    const cleaned = SCHEMA_SQL.replace(/^\s*--.*$/gm, ""); // コメント行を除去
-    const statements = cleaned
-      .split(";")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    let created = 0;
-    let skipped = 0;
-    for (const stmt of statements) {
-      try {
-        await prisma.$executeRawUnsafe(stmt);
-        created++;
-      } catch (e) {
-        const msg = (e as Error).message || "";
-        if (/already exists|duplicate/i.test(msg)) skipped++;
-        else throw e;
-      }
+    // 1) テーブルが無ければスキーマ作成（既存ならスキップ）
+    let tablesExist = false;
+    try {
+      await prisma.$queryRawUnsafe('SELECT 1 FROM "User" LIMIT 1');
+      tablesExist = true;
+    } catch {
+      tablesExist = false;
     }
-    steps.push(`schema: ${created}件作成 / ${skipped}件は既存のためスキップ`);
 
-    // 2) 初期データ投入
+    if (tablesExist) {
+      steps.push("schema: 既存のためスキップ");
+    } else {
+      const cleaned = SCHEMA_SQL.replace(/^\s*--.*$/gm, ""); // コメント行を除去
+      const statements = cleaned
+        .split(";")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      for (const stmt of statements) {
+        await prisma.$executeRawUnsafe(stmt);
+      }
+      steps.push(`schema: ${statements.length}件作成`);
+    }
+
+    // 2) 既存データを一括クリア（部分実行・再実行の残骸も確実に消す）
+    try {
+      await prisma.$executeRawUnsafe(
+        `TRUNCATE TABLE "User","Store","Department","KpiItem","KdiItem","Report","ReportKpiValue","ReportInflow","ReportKdi","ReportAction","ActionProgress","AlertCondition","Feedback","SuccessAction","Setting" RESTART IDENTITY CASCADE`
+      );
+      steps.push("既存データをクリア");
+    } catch {
+      // テーブル未作成などは無視
+    }
+
+    // 3) 初期データ投入
     const counts = await seedDatabase(prisma);
     steps.push("seed: 完了");
 
