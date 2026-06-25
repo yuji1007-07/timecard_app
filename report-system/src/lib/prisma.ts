@@ -5,18 +5,19 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
- * DATABASE_URL に誤って引用符（' や "）や前後の空白・改行が混入していても
- * 動作するように正規化する。Vercel等の環境変数貼り付けミスを吸収するための保険。
+ * DATABASE_URL に余計な文字（引用符、`export DATABASE_URL=` などの接頭辞、
+ * 前後の空白・改行）が混入していても動作するように、文字列中から
+ * postgresql:// または postgres:// で始まる接続URLを抽出する。
+ * 環境変数の貼り付けミスを吸収するための保険。
  */
 function cleanDatabaseUrl(): string | undefined {
   const raw = process.env.DATABASE_URL;
   if (!raw) return undefined;
-  const cleaned = raw
-    .trim()
-    .replace(/^['"`]+/, "") // 先頭の引用符を除去
-    .replace(/['"`]+$/, "") // 末尾の引用符を除去
-    .trim();
-  return cleaned;
+  // 値の中から実際のURL部分（空白・引用符が現れる手前まで）を抜き出す
+  const match = raw.match(/postgres(?:ql)?:\/\/[^\s'"`]+/i);
+  if (match) return match[0];
+  // 見つからなければ、引用符・空白だけ取り除いて返す
+  return raw.trim().replace(/^['"`]+/, "").replace(/['"`]+$/, "").trim();
 }
 
 const databaseUrl = cleanDatabaseUrl();
