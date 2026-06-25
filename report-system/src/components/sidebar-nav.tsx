@@ -12,6 +12,7 @@ import {
   AlertTriangle,
   Users,
   Settings,
+  KeyRound,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +26,7 @@ const ICONS = {
   alert: AlertTriangle,
   users: Users,
   settings: Settings,
+  account: KeyRound,
 } as const;
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };

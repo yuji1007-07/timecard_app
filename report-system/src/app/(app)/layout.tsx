@@ -13,12 +13,14 @@ const AREA_NAV: NavItem[] = [
   { href: "/alerts", label: "要注意条件", icon: "alert" },
   { href: "/users", label: "ユーザー管理", icon: "users" },
   { href: "/settings", label: "通知・連携設定", icon: "settings" },
+  { href: "/account", label: "アカウント設定", icon: "account" },
 ];
 
 const MANAGER_NAV: NavItem[] = [
   { href: "/dashboard", label: "ダッシュボード", icon: "dashboard" },
   { href: "/reports/new", label: "報告を作成", icon: "reportNew" },
   { href: "/reports", label: "過去報告", icon: "report" },
+  { href: "/account", label: "アカウント設定", icon: "account" },
 ];
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

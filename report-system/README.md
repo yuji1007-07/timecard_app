@@ -7,24 +7,25 @@ KPI進捗・KDI実行状況・前回との差分・フィードバックを一�
 
 - Next.js 15 (App Router) / TypeScript
 - Tailwind CSS / shadcn/ui ベースのUIコンポーネント
-- Prisma + SQLite（将来 PostgreSQL/Supabase へ移行しやすい構成）
+- Prisma + PostgreSQL（本番は Neon / Supabase。ローカルもPostgresを使用）
 - Auth.js (NextAuth v5) — メール/パスワード認証
 - Recharts（KPI推移グラフ）／ Zod ／ React Hook Form 互換のフォーム
 - OpenAI API / Google Sheets API / LINE Messaging API 連携（キー設定で有効化）
 
-## セットアップ
+## セットアップ（ローカル開発）
+
+PostgreSQLが必要です。クラウドの無料DB（[Neon](https://neon.tech)）の接続文字列をそのまま使えます。
 
 ```bash
 cd report-system
-npm install            # 依存をインストール（postinstall で prisma generate）
-cp .env.example .env   # 必要に応じて値を編集
-npm run db:reset       # SQLite作成 + ダミーデータ投入
-npm run dev            # http://localhost:3001
+npm install                       # 依存をインストール
+cp .env.example .env              # DATABASE_URL に Postgres の接続文字列を設定
+npm run db:reset                  # テーブル作成 + ダミーデータ投入
+npm run dev                       # http://localhost:3001
 ```
 
-> 補足: ネットワーク制限環境で `prisma generate` のエンジンDLが失敗する場合は、
-> `binaries.prisma.sh` から該当エンジンを手動取得し `node_modules/@prisma/engines/` に配置するか、
-> `PRISMA_QUERY_ENGINE_LIBRARY` / `PRISMA_SCHEMA_ENGINE_BINARY` を設定してください。
+> `.env` の `DATABASE_URL` には `postgresql://...` 形式の接続文字列を設定してください。
+> 本番公開（スタッフへURL共有）の手順は **[DEPLOY.md](./DEPLOY.md)** を参照してください。
 
 ## デモアカウント（パスワード: `password123`）
 
