@@ -16,14 +16,6 @@ export default function LoginPage() {
           </CardHeader>
           <CardContent>
             <LoginForm />
-            <div className="mt-6 rounded-md bg-muted p-3 text-xs text-muted-foreground">
-              <p className="font-medium text-foreground">デモアカウント（パスワード: password123）</p>
-              <ul className="mt-1 space-y-0.5">
-                <li>管理者: admin@example.com</li>
-                <li>院長(溝の口本院): honin@example.com</li>
-                <li>部門責任者(町田エステ): machida-esthe@example.com</li>
-              </ul>
-            </div>
           </CardContent>
         </Card>
       </div>

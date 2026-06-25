@@ -57,6 +57,24 @@ export async function GET(req: Request) {
       steps.push(`schema: ${statements.length}件作成`);
     }
 
+    // 事故防止: 既にデータがある場合は、明示的な force=1 が無ければ初期化しない
+    const force = url.searchParams.get("force") === "1";
+    if (tablesExist && !force) {
+      const [userCount, reportCount] = await Promise.all([
+        prisma.user.count().catch(() => 0),
+        prisma.report.count().catch(() => 0),
+      ]);
+      if (userCount > 0 || reportCount > 0) {
+        return NextResponse.json({
+          ok: true,
+          alreadyInitialized: true,
+          message:
+            "既にデータが入っています。誤ってデータを消さないよう、初期化はスキップしました。本当に全データを消して初期化し直したい場合のみ、URLの末尾に &force=1 を付けてください。",
+          counts: { users: userCount, reports: reportCount },
+        });
+      }
+    }
+
     // 2) 既存データを一括クリア（部分実行・再実行の残骸も確実に消す）
     try {
       await prisma.$executeRawUnsafe(
