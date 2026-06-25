@@ -1,9 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createKpiItem, updateKpiItem } from "./actions";
+import { createKpiItem, updateKpiItem, bulkCreateKpiItems } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { UNITS, INPUT_TYPES, GOOD_DIRECTIONS } from "@/lib/constants";
 
@@ -148,5 +149,49 @@ export function EditKpiToggle({ level, scopeKey, item }: { level: string; scopeK
     <div className="md:col-span-full">
       <KpiItemForm level={level} scopeKey={scopeKey} item={item} onDone={() => setOpen(false)} />
     </div>
+  );
+}
+
+export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: string }) {
+  const [open, setOpen] = useState(false);
+  const [state, action, pending] = useActionState(bulkCreateKpiItems, null);
+  if (state?.success && open) setOpen(false);
+
+  if (!open)
+    return (
+      <Button size="sm" variant="outline" onClick={() => setOpen(true)}>
+        ＋ まとめて一括追加
+      </Button>
+    );
+
+  return (
+    <form action={action} className="w-full space-y-3 rounded-md border bg-muted/30 p-4">
+      <input type="hidden" name="level" value={level} />
+      <input type="hidden" name="scopeKey" value={scopeKey} />
+      <div className="space-y-1.5">
+        <Label>KPI名（1行に1つ）</Label>
+        <Textarea name="names" rows={6} placeholder={"売上\n初診数\n会員数\nカルテ枚数"} />
+        <p className="text-xs text-muted-foreground">改行で区切って入力すると、まとめて追加されます。単位や良化方向は追加後に各項目の「編集」で変更できます。</p>
+      </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label>初期の単位</Label>
+          <select name="unit" className={selectClass + " w-28"} defaultValue="円">
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+        </div>
+        <Button type="submit" size="sm" disabled={pending}>
+          {pending ? "追加中..." : "一括で追加する"}
+        </Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setOpen(false)}>
+          閉じる
+        </Button>
+        {state?.error && <span className="text-sm text-destructive">{state.error}</span>}
+      </div>
+    </form>
   );
 }

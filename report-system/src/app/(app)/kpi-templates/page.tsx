@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScopeSelector, type ScopeOption } from "@/components/scope-selector";
-import { AddKpiToggle, EditKpiToggle } from "./kpi-item-form";
+import { AddKpiToggle, EditKpiToggle, BulkAddKpi } from "./kpi-item-form";
 import { deleteKpiItem, moveKpiItem, copyKpiTemplate } from "./actions";
 import { BUSINESS_TYPES, INPUT_TYPES, GOOD_DIRECTIONS, label } from "@/lib/constants";
 
@@ -53,9 +53,10 @@ export default async function KpiTemplatesPage({
       />
 
       <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-4 pt-5">
+        <CardContent className="flex flex-wrap items-end gap-3 pt-5">
           <ScopeSelector basePath="/kpi-templates" options={options} current={`${level}:${key}`} />
           <AddKpiToggle level={level} scopeKey={key} />
+          <BulkAddKpi level={level} scopeKey={key} />
         </CardContent>
       </Card>
 
@@ -86,18 +87,32 @@ export default async function KpiTemplatesPage({
               <div key={item.id} className="grid grid-cols-1 gap-2 rounded-md border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
                 <div className="flex items-center gap-1">
                   <span className="w-6 text-center text-xs text-muted-foreground tabular-nums">{idx + 1}</span>
-                  <div className="flex flex-col">
+                  <div className="grid grid-cols-2 gap-x-1">
+                    <form action={moveKpiItem}>
+                      <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="dir" value="top" />
+                      <button title="最上部へ" className="px-1 text-xs text-muted-foreground hover:text-navy disabled:opacity-30" disabled={idx === 0}>
+                        ⤒
+                      </button>
+                    </form>
                     <form action={moveKpiItem}>
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="dir" value="up" />
-                      <button className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30" disabled={idx === 0}>
+                      <button title="1つ上へ" className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30" disabled={idx === 0}>
                         ▲
                       </button>
                     </form>
                     <form action={moveKpiItem}>
                       <input type="hidden" name="id" value={item.id} />
+                      <input type="hidden" name="dir" value="bottom" />
+                      <button title="最下部へ" className="px-1 text-xs text-muted-foreground hover:text-navy disabled:opacity-30" disabled={idx === items.length - 1}>
+                        ⤓
+                      </button>
+                    </form>
+                    <form action={moveKpiItem}>
+                      <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="dir" value="down" />
-                      <button className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30" disabled={idx === items.length - 1}>
+                      <button title="1つ下へ" className="px-1 text-xs text-muted-foreground hover:text-foreground disabled:opacity-30" disabled={idx === items.length - 1}>
                         ▼
                       </button>
                     </form>

@@ -79,20 +79,55 @@ export async function deleteKpiItem(formData: FormData) {
 export async function moveKpiItem(formData: FormData) {
   await requireAreaManager();
   const id = String(formData.get("id"));
-  const dir = String(formData.get("dir")); // up | down
+  const dir = String(formData.get("dir")); // up | down | top | bottom
   const item = await prisma.kpiItem.findUnique({ where: { id } });
   if (!item) return;
   const scope = { businessType: item.businessType, storeId: item.storeId, departmentId: item.departmentId };
   const siblings = await prisma.kpiItem.findMany({ where: scope, orderBy: { sortOrder: "asc" } });
   const idx = siblings.findIndex((s) => s.id === id);
-  const swapIdx = dir === "up" ? idx - 1 : idx + 1;
-  if (swapIdx < 0 || swapIdx >= siblings.length) return;
-  const other = siblings[swapIdx];
-  await prisma.$transaction([
-    prisma.kpiItem.update({ where: { id: item.id }, data: { sortOrder: other.sortOrder } }),
-    prisma.kpiItem.update({ where: { id: other.id }, data: { sortOrder: item.sortOrder } }),
-  ]);
+  if (idx < 0) return;
+
+  const arr = siblings.filter((s) => s.id !== id);
+  let newIdx = idx;
+  if (dir === "up") newIdx = Math.max(0, idx - 1);
+  else if (dir === "down") newIdx = Math.min(arr.length, idx + 1);
+  else if (dir === "top") newIdx = 0;
+  else if (dir === "bottom") newIdx = arr.length;
+  arr.splice(newIdx, 0, item);
+
+  await prisma.$transaction(arr.map((s, i) => prisma.kpiItem.update({ where: { id: s.id }, data: { sortOrder: i } })));
   revalidatePath("/kpi-templates");
+}
+
+/** KPI名を複数行まとめて一括追加する。 */
+export async function bulkCreateKpiItems(_prev: unknown, formData: FormData) {
+  await requireAreaManager();
+  const scope = scopeFromForm(formData);
+  const unit = String(formData.get("unit") || "円");
+  const namesRaw = String(formData.get("names") || "");
+  const names = Array.from(
+    new Set(
+      namesRaw
+        .split(/\r?\n/)
+        .map((s) => s.trim())
+        .filter(Boolean)
+    )
+  );
+  if (names.length === 0) return { error: "KPI名を1行に1つずつ入力してください。" };
+
+  const count = await prisma.kpiItem.count({ where: scope });
+  await prisma.kpiItem.createMany({
+    data: names.map((name, i) => ({
+      name,
+      unit,
+      inputType: unit === "%" ? "PERCENT" : "NUMBER",
+      goodDirection: "UP",
+      ...scope,
+      sortOrder: count + i,
+    })),
+  });
+  revalidatePath("/kpi-templates");
+  return { success: true, added: names.length };
 }
 
 /** 業態テンプレートを店舗/部門スコープにコピーして上書きの土台を作る。 */
