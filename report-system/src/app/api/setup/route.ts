@@ -15,8 +15,12 @@ export const maxDuration = 60;
  */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const key = url.searchParams.get("key");
-  const expected = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  // URLのクエリでは '+' が空白に変換されるため元に戻す。前後の引用符・空白も吸収。
+  const key = (url.searchParams.get("key") || "").replace(/ /g, "+").trim();
+  const expected = (process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "")
+    .trim()
+    .replace(/^['"`]+/, "")
+    .replace(/['"`]+$/, "");
 
   if (!expected) {
     return NextResponse.json({ ok: false, error: "AUTH_SECRET が未設定です。" }, { status: 500 });
