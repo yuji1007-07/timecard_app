@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { ensureMigrations } from "@/lib/ensure-migrations";
 
 export type SessionUser = {
   id: string;
@@ -19,6 +20,8 @@ export async function getCurrentUser(): Promise<SessionUser | null> {
 export async function requireUser(): Promise<SessionUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
+  // 初回アクセス時に非破壊マイグレーションを自動適用（データは消さない）
+  await ensureMigrations();
   return user;
 }
 

@@ -74,9 +74,14 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         title={`${report.store.name}${report.department ? ` ${report.department.name}` : ""} の報告`}
         description={`${label(REPORT_TYPES, report.reportType)}／対象: ${report.targetWeek ?? report.targetMonth}／報告者: ${report.reporter.name}／${label(BUSINESS_TYPES, report.department?.businessType ?? report.store.businessType)}`}
         action={
-          <Link href={`/stores/${report.storeId}`}>
-            <Button variant="outline">店舗カルテ</Button>
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/reports/${report.id}/edit`}>
+              <Button variant="outline">修正する</Button>
+            </Link>
+            <Link href={`/stores/${report.storeId}`}>
+              <Button variant="outline">店舗カルテ</Button>
+            </Link>
+          </div>
         }
       />
 

@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { submitReport, type ReportPayload } from "../actions";
+import { submitReport, updateReport, type ReportPayload } from "../actions";
 import { setUnitHiddenKpis } from "../hide-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,6 +60,28 @@ type KpiState = Record<string, { target: string; current: string; forecast: stri
 type KdiRow = { kdiItemId: string | null; name: string; relatedKpiName: string; assignee: string; deadline: string; frequency: string; count: string; targetPerson: string; status: string; comment: string };
 type ActionRow = { relatedKpiName: string; targetValue: string; content: string };
 
+type ReviewState = { goodPoints: string; badPoints: string; dataIssues: string; doneThings: string; notDoneThings: string };
+type MonthlyState = {
+  monthlySummary: string; successCases: string; missFactors: string; nextMonthFocusKpi: string; nextMonthKdi: string; nextMonthAction: string;
+  hrIssues: string; marketingIssues: string; educationIssues: string; operationIssues: string;
+};
+// 編集モードでフォームに初期値を流し込むためのデータ
+export type ReportInitial = {
+  originalText: string;
+  kpiByName: Record<string, { target: string; current: string; forecast: string; comment: string }>;
+  inflow: Record<string, string>;
+  review: ReviewState;
+  monthly: MonthlyState | null;
+  progressByActionId: Record<string, { status: string; comment: string }>;
+  kdis: KdiRow[];
+  actions: ActionRow[];
+};
+
+const EMPTY_MONTHLY: MonthlyState = {
+  monthlySummary: "", successCases: "", missFactors: "", nextMonthFocusKpi: "", nextMonthKdi: "", nextMonthAction: "",
+  hrIssues: "", marketingIssues: "", educationIssues: "", operationIssues: "",
+};
+
 const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
 const emptyAction = (): ActionRow => ({ relatedKpiName: "", targetValue: "", content: "" });
 
@@ -76,6 +98,9 @@ export function ReportForm({
   kpiPrev,
   kpiMonthStart,
   hiddenKpis,
+  mode = "create",
+  reportId,
+  initial = null,
 }: {
   storeId: string;
   departmentId: string | null;
@@ -89,6 +114,9 @@ export function ReportForm({
   kpiPrev: KpiPrevMap;
   kpiMonthStart: KpiMonthStartMap;
   hiddenKpis: string[];
+  mode?: "create" | "edit";
+  reportId?: string;
+  initial?: ReportInitial | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -97,21 +125,18 @@ export function ReportForm({
   const [savingVis, setSavingVis] = useState(false);
   const hiddenSet = useMemo(() => new Set(hiddenKpis), [hiddenKpis]);
 
-  const [originalText, setOriginalText] = useState("");
+  const [originalText, setOriginalText] = useState(initial?.originalText ?? "");
   const [kpi, setKpi] = useState<KpiState>(() =>
-    Object.fromEntries(kpiItems.map((k) => [k.id, { target: "", current: "", forecast: "", comment: "" }]))
+    Object.fromEntries(kpiItems.map((k) => [k.id, initial?.kpiByName[k.name] ?? { target: "", current: "", forecast: "", comment: "" }]))
   );
-  const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, ""])));
-  const [review, setReview] = useState({ goodPoints: "", badPoints: "", dataIssues: "", doneThings: "", notDoneThings: "" });
-  const [monthly, setMonthly] = useState({
-    monthlySummary: "", successCases: "", missFactors: "", nextMonthFocusKpi: "", nextMonthKdi: "", nextMonthAction: "",
-    hrIssues: "", marketingIssues: "", educationIssues: "", operationIssues: "",
-  });
+  const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
+  const [review, setReview] = useState<ReviewState>(initial?.review ?? { goodPoints: "", badPoints: "", dataIssues: "", doneThings: "", notDoneThings: "" });
+  const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
   const [progress, setProgress] = useState<Record<string, { status: string; comment: string }>>(() =>
-    Object.fromEntries(previousActions.map((a) => [a.id, { status: "ONGOING", comment: "" }]))
+    Object.fromEntries(previousActions.map((a) => [a.id, initial?.progressByActionId[a.id] ?? { status: "ONGOING", comment: "" }]))
   );
-  const [kdis, setKdis] = useState<KdiRow[]>([]);
-  const [actions, setActions] = useState<ActionRow[]>([emptyAction()]);
+  const [kdis, setKdis] = useState<KdiRow[]>(initial?.kdis ?? []);
+  const [actions, setActions] = useState<ActionRow[]>(initial?.actions && initial.actions.length > 0 ? initial.actions : [emptyAction()]);
 
   const kpiNameById = useMemo(() => new Map(kpiItems.map((k) => [k.name, k.id])), [kpiItems]);
 
@@ -236,7 +261,11 @@ export function ReportForm({
 
     startTransition(async () => {
       try {
-        await submitReport(payload);
+        if (mode === "edit" && reportId) {
+          await updateReport(reportId, payload);
+        } else {
+          await submitReport(payload);
+        }
       } catch (e) {
         // redirect() は例外を投げるので、本物のエラーのみ表示
         if ((e as Error).message && !(e as { digest?: string }).digest) setError((e as Error).message);
@@ -622,7 +651,7 @@ export function ReportForm({
       <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t bg-card/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
         {error ? <span className="text-sm text-destructive">{error}</span> : <span className="text-sm text-muted-foreground">対象: {period}</span>}
         <Button onClick={handleSubmit} disabled={pending} size="lg">
-          {pending ? "提出中..." : "報告を提出する"}
+          {pending ? (mode === "edit" ? "更新中..." : "提出中...") : mode === "edit" ? "報告を更新する" : "報告を提出する"}
         </Button>
       </div>
     </div>
