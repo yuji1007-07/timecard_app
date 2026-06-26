@@ -88,27 +88,36 @@ async function ResolvedForm({
   storeName: string;
   businessType: string;
 }) {
-  const [kpiItems, kdiItems] = await Promise.all([
+  // 当月の範囲（月初の目標・着地を反映ボタン用）
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  // 独立したクエリはまとめて並列実行（往復回数を減らして表示を速くする）
+  const [kpiItems, kdiItems, existing, prevReport, monthStartReport, dept, store] = await Promise.all([
     getEffectiveKpiItems({ storeId, departmentId }),
     getEffectiveKdiItems({ storeId, departmentId }),
+    prisma.report.findFirst({
+      where: {
+        storeId,
+        departmentId: departmentId ?? null,
+        reportType: type,
+        ...(type === "WEEKLY" ? { targetWeek: period } : { targetMonth: period }),
+      },
+    }),
+    prisma.report.findFirst({
+      where: { storeId, departmentId: departmentId ?? null, reportType: type, status: "SUBMITTED" },
+      orderBy: { submittedAt: "desc" },
+      include: { kpiValues: true, actions: true },
+    }),
+    prisma.report.findFirst({
+      where: { storeId, departmentId: departmentId ?? null, status: "SUBMITTED", submittedAt: { gte: monthStart, lt: monthEnd } },
+      orderBy: { submittedAt: "asc" },
+      include: { kpiValues: true },
+    }),
+    departmentId ? prisma.department.findUnique({ where: { id: departmentId } }) : Promise.resolve(null),
+    prisma.store.findUnique({ where: { id: storeId } }),
   ]);
-
-  // 既存の同一期間レポートがあるか
-  const existing = await prisma.report.findFirst({
-    where: {
-      storeId,
-      departmentId: departmentId ?? null,
-      reportType: type,
-      ...(type === "WEEKLY" ? { targetWeek: period } : { targetMonth: period }),
-    },
-  });
-
-  // 前回報告（差分・前回Action用）
-  const prevReport = await prisma.report.findFirst({
-    where: { storeId, departmentId: departmentId ?? null, reportType: type, status: "SUBMITTED" },
-    orderBy: { submittedAt: "desc" },
-    include: { kpiValues: true, actions: true },
-  });
 
   const prevKpiByName = new Map((prevReport?.kpiValues ?? []).map((v) => [v.kpiName, v.current]));
   const previousActions = (prevReport?.actions ?? []).map((a) => ({
@@ -130,24 +139,15 @@ async function ResolvedForm({
   }
 
   // 当月の最初の報告（月初の目標・着地を反映ボタン用）
-  const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const monthStartReport = await prisma.report.findFirst({
-    where: { storeId, departmentId: departmentId ?? null, status: "SUBMITTED", submittedAt: { gte: monthStart, lt: monthEnd } },
-    orderBy: { submittedAt: "asc" },
-    include: { kpiValues: true },
-  });
   const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
   for (const v of monthStartReport?.kpiValues ?? []) {
     kpiMonthStart[v.kpiName] = { target: v.target, forecast: v.forecast };
   }
 
-  const dept = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
   const unitLabel = `${storeName}${dept ? ` ${dept.name}` : ""}・${label(BUSINESS_TYPES, dept?.businessType ?? businessType)}`;
 
   // この店舗/部門で「使わない」KPIの非表示リスト
-  const hiddenSource = dept ? dept.hiddenKpis : (await prisma.store.findUnique({ where: { id: storeId } }))?.hiddenKpis;
+  const hiddenSource = dept ? dept.hiddenKpis : store?.hiddenKpis;
   let hiddenKpis: string[] = [];
   try {
     const parsed = hiddenSource ? JSON.parse(hiddenSource) : [];

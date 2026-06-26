@@ -5,9 +5,15 @@ import { KPI_PRESETS } from "./kpi-presets";
  * アプリ起動時（最初のDBアクセス時）に一度だけ実行される非破壊マイグレーション。
  * 重要: データは絶対に消さない。列の追加と、既存KPIのカテゴリ補完のみ。
  * これにより /api/setup を手動で叩かなくても新機能が有効になる。
+ *
+ * 速度対策: 完了フラグ(Setting)を立て、移行済みのDBではチェック1回(SELECT)で即終了する。
+ * さらにプロセス内ではメモ化し、ウォームな関数では一切DBに触れない。
  */
 
 let ran: Promise<void> | null = null;
+
+// マイグレーションのバージョン。新しい列を足したらここを上げる。
+const DONE_FLAG = "schema_migration_v2";
 
 // 追加カラム（既に存在すれば何もしない）
 const COLUMN_MIGRATIONS = [
@@ -19,13 +25,7 @@ const COLUMN_MIGRATIONS = [
   `ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
 ];
 
-// カテゴリ補完を二度実行しないためのフラグ（Settingテーブル）
-const CATEGORIZE_FLAG = "schema_auto_categorized_v1";
-
 async function autoCategorize() {
-  const flag = await prisma.setting.findUnique({ where: { key: CATEGORIZE_FLAG } }).catch(() => null);
-  if (flag) return; // 既に実施済み
-
   // 業態テンプレートのKPI: 業態 × 名前 でカテゴリを補完（カテゴリ未設定のものだけ）
   for (const preset of KPI_PRESETS) {
     const byCat = new Map<string, string[]>();
@@ -59,11 +59,13 @@ async function autoCategorize() {
       .updateMany({ where: { businessType: null, category: null, name: { in: names } }, data: { category: cat } })
       .catch(() => {});
   }
-
-  await prisma.setting.create({ data: { key: CATEGORIZE_FLAG, value: new Date().toISOString() } }).catch(() => {});
 }
 
 async function run() {
+  // 既に移行済みなら SELECT 1回で即終了（ページ表示を遅くしない）
+  const done = await prisma.setting.findUnique({ where: { key: DONE_FLAG } }).catch(() => null);
+  if (done) return;
+
   for (const sql of COLUMN_MIGRATIONS) {
     try {
       await prisma.$executeRawUnsafe(sql);
@@ -76,6 +78,7 @@ async function run() {
   } catch {
     // カテゴリ補完は致命的ではないので失敗しても続行
   }
+  await prisma.setting.create({ data: { key: DONE_FLAG, value: new Date().toISOString() } }).catch(() => {});
 }
 
 export function ensureMigrations(): Promise<void> {
