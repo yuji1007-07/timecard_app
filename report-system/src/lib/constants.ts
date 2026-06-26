@@ -28,7 +28,7 @@ export const STORE_STATUS = {
   CLOSED: "閉院",
 } as const;
 
-export const UNITS = ["円", "人", "枚", "回", "%", "件"] as const;
+export const UNITS = ["円", "人", "枚", "回", "%", "件", "日"] as const;
 
 export const INPUT_TYPES = {
   NUMBER: "数値",
