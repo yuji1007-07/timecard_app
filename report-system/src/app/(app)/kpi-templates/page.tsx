@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScopeSelector, type ScopeOption } from "@/components/scope-selector";
-import { AddKpiToggle, EditKpiToggle, BulkAddKpi } from "./kpi-item-form";
+import { AddKpiToggle, EditKpiToggle, BulkAddKpi, ClearScopeKpiButton } from "./kpi-item-form";
 import { deleteKpiItem, moveKpiItem, copyKpiTemplate } from "./actions";
 import { BUSINESS_TYPES, INPUT_TYPES, GOOD_DIRECTIONS, label } from "@/lib/constants";
 
@@ -57,6 +57,7 @@ export default async function KpiTemplatesPage({
           <ScopeSelector basePath="/kpi-templates" options={options} current={`${level}:${key}`} />
           <AddKpiToggle level={level} scopeKey={key} />
           <BulkAddKpi level={level} scopeKey={key} />
+          <ClearScopeKpiButton level={level} scopeKey={key} count={items.length} />
         </CardContent>
       </Card>
 

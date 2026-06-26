@@ -76,6 +76,14 @@ export async function deleteKpiItem(formData: FormData) {
   revalidatePath("/kpi-templates");
 }
 
+/** 選択中スコープのKPI項目をすべて削除する（入れ替え用）。 */
+export async function deleteAllKpiItems(formData: FormData) {
+  await requireAreaManager();
+  const scope = scopeFromForm(formData);
+  await prisma.kpiItem.deleteMany({ where: scope });
+  revalidatePath("/kpi-templates");
+}
+
 export async function moveKpiItem(formData: FormData) {
   await requireAreaManager();
   const id = String(formData.get("id"));

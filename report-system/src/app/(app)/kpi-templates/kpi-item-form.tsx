@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { createKpiItem, updateKpiItem, bulkCreateKpiItems } from "./actions";
+import { createKpiItem, updateKpiItem, bulkCreateKpiItems, deleteAllKpiItems } from "./actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -149,6 +149,24 @@ export function EditKpiToggle({ level, scopeKey, item }: { level: string; scopeK
     <div className="md:col-span-full">
       <KpiItemForm level={level} scopeKey={scopeKey} item={item} onDone={() => setOpen(false)} />
     </div>
+  );
+}
+
+export function ClearScopeKpiButton({ level, scopeKey, count }: { level: string; scopeKey: string; count: number }) {
+  if (count === 0) return null;
+  return (
+    <form
+      action={deleteAllKpiItems}
+      onSubmit={(e) => {
+        if (!window.confirm(`このスコープのKPI ${count}件をすべて削除します。よろしいですか？（報告の過去データには影響しません）`)) e.preventDefault();
+      }}
+    >
+      <input type="hidden" name="level" value={level} />
+      <input type="hidden" name="scopeKey" value={scopeKey} />
+      <Button type="submit" size="sm" variant="ghost" className="text-destructive hover:text-destructive">
+        全削除（{count}件）
+      </Button>
+    </form>
   );
 }
 
