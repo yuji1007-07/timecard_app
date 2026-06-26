@@ -63,6 +63,9 @@ export async function GET(req: Request) {
       `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "baseValue" DOUBLE PRECISION`,
       `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "targetValue" DOUBLE PRECISION`,
       `ALTER TABLE "Report" ADD COLUMN IF NOT EXISTS "originalText" TEXT`,
+      `ALTER TABLE "KpiItem" ADD COLUMN IF NOT EXISTS "category" TEXT`,
+      `ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
+      `ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
     ];
     for (const m of migrations) {
       try {

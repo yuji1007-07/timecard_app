@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { submitReport, type ReportPayload } from "../actions";
+import { setUnitHiddenKpis } from "../hide-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,6 +18,7 @@ const selectClass =
 export type KpiItemDef = {
   id: string;
   name: string;
+  category: string | null;
   unit: string;
   inputType: string;
   goodDirection: string;
@@ -25,6 +28,18 @@ export type KpiItemDef = {
   hasComparison: boolean;
   required: boolean;
 };
+
+// カテゴリごとの色（見出しバー）
+const CATEGORY_COLORS = [
+  "bg-navy text-white",
+  "bg-blue-100 text-blue-900",
+  "bg-emerald-100 text-emerald-900",
+  "bg-amber-100 text-amber-900",
+  "bg-purple-100 text-purple-900",
+  "bg-rose-100 text-rose-900",
+  "bg-cyan-100 text-cyan-900",
+  "bg-lime-100 text-lime-900",
+];
 export type KdiTemplateDef = { id: string; name: string; category: string | null; relatedKpiName: string | null; recommendedFrequency: string };
 export type PrevActionDef = {
   id: string;
@@ -60,6 +75,7 @@ export function ReportForm({
   channels,
   kpiPrev,
   kpiMonthStart,
+  hiddenKpis,
 }: {
   storeId: string;
   departmentId: string | null;
@@ -72,9 +88,14 @@ export function ReportForm({
   channels: string[];
   kpiPrev: KpiPrevMap;
   kpiMonthStart: KpiMonthStartMap;
+  hiddenKpis: string[];
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [editVisibility, setEditVisibility] = useState(false);
+  const [savingVis, setSavingVis] = useState(false);
+  const hiddenSet = useMemo(() => new Set(hiddenKpis), [hiddenKpis]);
 
   const [originalText, setOriginalText] = useState("");
   const [kpi, setKpi] = useState<KpiState>(() =>
@@ -125,6 +146,33 @@ export function ReportForm({
   }
   const hasMonthStart = kpiItems.some((k) => kpiMonthStart[k.name]);
 
+  const visibleKpis = useMemo(() => kpiItems.filter((k) => !hiddenSet.has(k.name)), [kpiItems, hiddenSet]);
+  const groupedVisible = useMemo(() => groupByCategory(visibleKpis), [visibleKpis]);
+
+  function groupByCategory(items: KpiItemDef[]) {
+    const order: string[] = [];
+    const map = new Map<string, KpiItemDef[]>();
+    for (const k of items) {
+      const c = k.category || "その他";
+      if (!map.has(c)) {
+        map.set(c, []);
+        order.push(c);
+      }
+      map.get(c)!.push(k);
+    }
+    return order.map((c) => ({ category: c, items: map.get(c)! }));
+  }
+
+  function toggleHidden(name: string) {
+    const next = hiddenSet.has(name) ? hiddenKpis.filter((n) => n !== name) : [...hiddenKpis, name];
+    setSavingVis(true);
+    startTransition(async () => {
+      await setUnitHiddenKpis({ storeId, departmentId, hidden: next });
+      router.refresh();
+      setSavingVis(false);
+    });
+  }
+
   function addKdiFromTemplate(id: string) {
     const t = kdiTemplates.find((x) => x.id === id);
     if (!t) return;
@@ -139,8 +187,8 @@ export function ReportForm({
 
   function handleSubmit() {
     setError(null);
-    // 必須KPIチェック
-    for (const k of kpiItems) {
+    // 必須KPIチェック（非表示の項目は対象外）
+    for (const k of visibleKpis) {
       if (k.required && k.hasCurrent && numOrNull(kpi[k.id].current) === null) {
         setError(`必須KPI「${k.name}」の現状値を入力してください。`);
         return;
@@ -156,7 +204,7 @@ export function ReportForm({
       originalText,
       review,
       monthly: reportType === "MONTHLY" ? monthly : null,
-      kpis: kpiItems.map((k) => ({
+      kpis: visibleKpis.map((k) => ({
         kpiItemId: k.id,
         kpiName: k.name,
         unit: k.unit,
@@ -285,55 +333,133 @@ export function ReportForm({
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>② KPI入力（{unitLabel}）</CardTitle>
-            {hasMonthStart && (
-              <Button type="button" variant="outline" size="sm" onClick={reflectMonthStart}>
-                月初の目標・着地を反映
+            <div className="flex flex-wrap items-center gap-2">
+              {hasMonthStart && !editVisibility && (
+                <Button type="button" variant="outline" size="sm" onClick={reflectMonthStart}>
+                  月初の目標・着地を反映
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant={editVisibility ? "default" : "outline"}
+                size="sm"
+                onClick={() => setEditVisibility((v) => !v)}
+              >
+                {editVisibility ? "編集を終わる" : "使わない項目を編集"}
               </Button>
-            )}
+            </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            目標は月内で基本変わらないので「月初の目標・着地を反映」で前回の数値を呼び出せます。着地が先週から変わった項目は<span className="font-medium text-amber-600">黄色</span>で表示されます。
+            {editVisibility ? (
+              <>この店舗で<span className="font-medium">使わないKPI項目のチェックを外す</span>と、入力欄から非表示になります（管理側でもカットできます）。</>
+            ) : (
+              <>
+                目標は月内で基本変わらないので「月初の目標・着地を反映」で前回の数値を呼び出せます。着地が目標に届かない項目（着地未達）は<span className="font-medium text-red-600">赤文字</span>、着地が先週から変わった項目は<span className="font-medium text-amber-600">黄色</span>で表示されます。
+              </>
+            )}
           </p>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]">
-            <div>KPI名</div>
-            <div>目標</div>
-            <div>現状</div>
-            <div>着地予測</div>
-            <div>コメント</div>
-          </div>
-          {kpiItems.map((k) => {
-            const prevForecast = kpiPrev[k.name]?.forecast ?? null;
-            const curForecast = numOrNull(kpi[k.id].forecast);
-            const forecastChanged = prevForecast != null && curForecast != null && curForecast !== prevForecast;
-            return (
-              <div key={k.id} className="grid gap-2 border-b pb-2 md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr] md:items-center md:border-0 md:pb-0">
-                <div className="flex items-center gap-1.5 text-sm font-medium">
-                  {k.name}
-                  <span className="text-xs text-muted-foreground">({k.unit})</span>
-                  {k.required && <Badge variant="bad" className="text-[10px]">必須</Badge>}
-                  <Badge variant={k.goodDirection === "UP" ? "good" : "warn"} className="text-[10px]">{label(GOOD_DIRECTIONS, k.goodDirection)}</Badge>
+        <CardContent className="space-y-3">
+          {editVisibility ? (
+            // 使う / 使わない を編集するモード
+            <div className="space-y-3">
+              {savingVis && <p className="text-xs text-muted-foreground">保存中...</p>}
+              {groupByCategory(kpiItems).map((g, gi) => (
+                <div key={g.category}>
+                  <div className={`rounded-md px-3 py-1.5 text-sm font-semibold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>
+                    {g.category}
+                  </div>
+                  <div className="mt-1 grid gap-1 md:grid-cols-2">
+                    {g.items.map((k) => {
+                      const isHidden = hiddenSet.has(k.name);
+                      return (
+                        <label
+                          key={k.id}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${isHidden ? "bg-muted/40" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4"
+                            checked={!isHidden}
+                            disabled={savingVis}
+                            onChange={() => toggleHidden(k.name)}
+                          />
+                          <span className={isHidden ? "text-muted-foreground line-through" : "font-medium"}>{k.name}</span>
+                          <span className="text-xs text-muted-foreground">({k.unit})</span>
+                          {isHidden && <span className="ml-auto text-[10px] text-muted-foreground">非表示</span>}
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
-                <Input type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? "目標" : "—"} />
-                <Input type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? "現状" : "—"} />
-                <div>
-                  <Input
-                    type="number"
-                    step="any"
-                    inputMode="decimal"
-                    disabled={!k.hasForecast}
-                    value={kpi[k.id].forecast}
-                    onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))}
-                    placeholder={k.hasForecast ? "着地" : "—"}
-                    className={forecastChanged ? "border-amber-400 bg-amber-50" : ""}
-                  />
-                  {forecastChanged && <div className="mt-0.5 text-[10px] text-amber-600">先週: {prevForecast}</div>}
-                </div>
-                <Input value={kpi[k.id].comment} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], comment: e.target.value } }))} placeholder="コメント" />
+              ))}
+            </div>
+          ) : (
+            <>
+              <div className="hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]">
+                <div>KPI名</div>
+                <div>目標</div>
+                <div>現状</div>
+                <div>着地予測</div>
+                <div>コメント</div>
               </div>
-            );
-          })}
+              {visibleKpis.length === 0 && (
+                <p className="text-sm text-muted-foreground">表示するKPIがありません。「使わない項目を編集」で項目を表示に戻せます。</p>
+              )}
+              {groupedVisible.map((g, gi) => (
+                <div key={g.category} className="space-y-2">
+                  <div className={`rounded-md px-3 py-1.5 text-sm font-semibold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>
+                    {g.category}
+                  </div>
+                  {g.items.map((k) => {
+                    const prevForecast = kpiPrev[k.name]?.forecast ?? null;
+                    const target = numOrNull(kpi[k.id].target);
+                    const curForecast = numOrNull(kpi[k.id].forecast);
+                    const forecastChanged = prevForecast != null && curForecast != null && curForecast !== prevForecast;
+                    // 着地未達: 良化方向UPなら着地<目標、DOWNなら着地>目標
+                    const isUnder =
+                      target != null && curForecast != null && (k.goodDirection === "UP" ? curForecast < target : curForecast > target);
+                    return (
+                      <div key={k.id} className="grid gap-2 border-b pb-2 md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr] md:items-center md:border-0 md:pb-0">
+                        <div className="flex items-center gap-1.5 text-sm font-medium">
+                          {k.name}
+                          <span className="text-xs text-muted-foreground">({k.unit})</span>
+                          {k.required && <Badge variant="bad" className="text-[10px]">必須</Badge>}
+                          <Badge variant={k.goodDirection === "UP" ? "good" : "warn"} className="text-[10px]">{label(GOOD_DIRECTIONS, k.goodDirection)}</Badge>
+                        </div>
+                        <Input type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? "目標" : "—"} />
+                        <Input type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? "現状" : "—"} />
+                        <div>
+                          <Input
+                            type="number"
+                            step="any"
+                            inputMode="decimal"
+                            disabled={!k.hasForecast}
+                            value={kpi[k.id].forecast}
+                            onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))}
+                            placeholder={k.hasForecast ? "着地" : "—"}
+                            className={
+                              isUnder
+                                ? "border-red-400 bg-red-50 font-semibold text-red-700"
+                                : forecastChanged
+                                ? "border-amber-400 bg-amber-50"
+                                : ""
+                            }
+                          />
+                          {isUnder ? (
+                            <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（目標 {target}）</div>
+                          ) : forecastChanged ? (
+                            <div className="mt-0.5 text-[10px] text-amber-600">先週: {prevForecast}</div>
+                          ) : null}
+                        </div>
+                        <Input value={kpi[k.id].comment} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], comment: e.target.value } }))} placeholder="コメント" />
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
+            </>
+          )}
         </CardContent>
       </Card>
 
@@ -394,7 +520,7 @@ export function ReportForm({
               <Field label="関連KPI（選択）">
                 <select className={selectClass} value={row.relatedKpiName} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, relatedKpiName: e.target.value } : r)))}>
                   <option value="">選択してください</option>
-                  {kpiItems.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
+                  {visibleKpis.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
                 </select>
               </Field>
               <Field label="実行内容（自由記入）" className="md:col-span-2"><Input value={row.name} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))} placeholder="例: 会員数増加のための問診ロープレを実施" /></Field>
@@ -438,7 +564,7 @@ export function ReportForm({
                 <Field label="KPI（選択）">
                   <select className={selectClass} value={row.relatedKpiName} onChange={(e) => setActions((s) => s.map((r, j) => (j === i ? { ...r, relatedKpiName: e.target.value } : r)))}>
                     <option value="">選択してください</option>
-                    {kpiItems.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
+                    {visibleKpis.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
                   </select>
                 </Field>
                 <Field label="今回の着地（自動）">

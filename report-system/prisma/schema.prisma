@@ -42,6 +42,7 @@ model Store {
   openDate     DateTime?
   status       String   @default("ACTIVE")
   sortOrder    Int      @default(0)
+  hiddenKpis   String? // この店舗で使わないKPI名のリスト（JSON配列）
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -63,6 +64,7 @@ model Department {
   businessType String
   managerName  String?
   sortOrder    Int      @default(0)
+  hiddenKpis   String? // この部門で使わないKPI名のリスト（JSON配列）
   createdAt    DateTime @default(now())
 
   store           Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
@@ -85,6 +87,7 @@ model KpiItem {
   businessType  String? // 業態テンプレートのとき設定
   storeId       String? // 店舗上書きのとき設定
   departmentId  String? // 部門上書きのとき設定
+  category      String? // 大枠カテゴリ（売上 / KPI / 会員 など）
   unit          String  @default("円")
   inputType     String  @default("NUMBER")
   goodDirection String  @default("UP")

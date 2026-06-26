@@ -45,23 +45,33 @@ export async function GET(req: Request) {
           }
         }
       }
-      // 重複除去して投入
-      const names = Array.from(new Set(preset.names.map((n) => n.trim()).filter(Boolean)));
+      // カテゴリ順に展開（重複名は除去）
+      const seen = new Set<string>();
+      const rows: { name: string; category: string }[] = [];
+      for (const g of preset.groups) {
+        for (const raw of g.names) {
+          const name = raw.trim();
+          if (!name || seen.has(name)) continue;
+          seen.add(name);
+          rows.push({ name, category: g.category });
+        }
+      }
       await prisma.kpiItem.createMany({
-        data: names.map((name, i) => {
-          const unit = guessUnit(name);
+        data: rows.map((r, i) => {
+          const unit = guessUnit(r.name);
           return {
-            name,
+            name: r.name,
+            category: r.category,
             unit,
             inputType: unit === "%" ? "PERCENT" : "NUMBER",
-            goodDirection: guessDirection(name),
+            goodDirection: guessDirection(r.name),
             businessType: preset.businessType,
-            showDashboard: /売上|総売上|実績/.test(name),
+            showDashboard: /総売上|^売上|実績|日割り業績/.test(r.name),
             sortOrder: i,
           };
         }),
       });
-      result[preset.businessType] = names.length;
+      result[preset.businessType] = rows.length;
     }
 
     return NextResponse.json({

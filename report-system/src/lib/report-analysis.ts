@@ -6,7 +6,7 @@ export async function getReportAnalysis(reportId: string) {
   const report = await prisma.report.findUnique({
     where: { id: reportId },
     include: {
-      kpiValues: { include: { kpiItem: { select: { goodDirection: true } } } },
+      kpiValues: { include: { kpiItem: { select: { goodDirection: true, category: true } } } },
       kdis: true,
       actions: true,
       progresses: { include: { previousAction: true } },

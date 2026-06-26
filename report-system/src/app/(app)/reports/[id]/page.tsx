@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
@@ -14,6 +15,42 @@ import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/
 
 const KDI_CHECK_LABEL = { OK: "問題なし", WARN: "注意", FIX: "要修正" } as const;
 const KDI_CHECK_VARIANT = { OK: "good", WARN: "warn", FIX: "bad" } as const;
+
+// カテゴリ見出しの色
+const KPI_CATEGORY_COLORS = [
+  "bg-navy text-white",
+  "bg-blue-100 text-blue-900",
+  "bg-emerald-100 text-emerald-900",
+  "bg-amber-100 text-amber-900",
+  "bg-purple-100 text-purple-900",
+  "bg-rose-100 text-rose-900",
+  "bg-cyan-100 text-cyan-900",
+  "bg-lime-100 text-lime-900",
+];
+
+type KpiValueRow = {
+  id: string;
+  kpiName: string;
+  unit: string | null;
+  target: number | null;
+  current: number | null;
+  forecast: number | null;
+  kpiItem: { goodDirection: string; category: string | null } | null;
+};
+
+function groupKpiValuesByCategory(values: KpiValueRow[]) {
+  const order: string[] = [];
+  const map = new Map<string, KpiValueRow[]>();
+  for (const v of values) {
+    const c = v.kpiItem?.category || "その他";
+    if (!map.has(c)) {
+      map.set(c, []);
+      order.push(c);
+    }
+    map.get(c)!.push(v);
+  }
+  return order.map((c) => ({ category: c, items: map.get(c)! }));
+}
 
 export default async function ReportDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -150,6 +187,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         <Card>
           <CardHeader>
             <CardTitle>KPI入力値</CardTitle>
+            <p className="text-xs text-muted-foreground">着地が目標に届かない項目（着地未達）は<span className="font-medium text-red-600">赤文字</span>で表示します。</p>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
@@ -162,13 +200,29 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {report.kpiValues.map((v) => (
-                  <TableRow key={v.id}>
-                    <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(v.current)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(v.forecast)}</TableCell>
-                  </TableRow>
+                {groupKpiValuesByCategory(report.kpiValues).map((g, gi) => (
+                  <Fragment key={g.category}>
+                    <TableRow className="border-0 hover:bg-transparent">
+                      <TableCell colSpan={4} className={`py-1 text-xs font-semibold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                        {g.category}
+                      </TableCell>
+                    </TableRow>
+                    {g.items.map((v) => {
+                      const dir = v.kpiItem?.goodDirection ?? "UP";
+                      const isUnder =
+                        v.target != null && v.forecast != null && (dir === "UP" ? v.forecast < v.target : v.forecast > v.target);
+                      return (
+                        <TableRow key={v.id}>
+                          <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
+                          <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
+                          <TableCell className="text-right tabular-nums">{fmt(v.current)}</TableCell>
+                          <TableCell className={`text-right tabular-nums ${isUnder ? "font-semibold text-red-600" : ""}`}>
+                            {fmt(v.forecast)}{isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </Fragment>
                 ))}
               </TableBody>
             </Table>

@@ -146,6 +146,16 @@ async function ResolvedForm({
   const dept = departmentId ? await prisma.department.findUnique({ where: { id: departmentId } }) : null;
   const unitLabel = `${storeName}${dept ? ` ${dept.name}` : ""}・${label(BUSINESS_TYPES, dept?.businessType ?? businessType)}`;
 
+  // この店舗/部門で「使わない」KPIの非表示リスト
+  const hiddenSource = dept ? dept.hiddenKpis : (await prisma.store.findUnique({ where: { id: storeId } }))?.hiddenKpis;
+  let hiddenKpis: string[] = [];
+  try {
+    const parsed = hiddenSource ? JSON.parse(hiddenSource) : [];
+    if (Array.isArray(parsed)) hiddenKpis = parsed.filter((x): x is string => typeof x === "string");
+  } catch {
+    hiddenKpis = [];
+  }
+
   if (kpiItems.length === 0) {
     return (
       <Card>
@@ -172,6 +182,7 @@ async function ResolvedForm({
         kpiItems={kpiItems.map((k) => ({
           id: k.id,
           name: k.name,
+          category: k.category,
           unit: k.unit,
           inputType: k.inputType,
           goodDirection: k.goodDirection,
@@ -186,6 +197,7 @@ async function ResolvedForm({
         channels={[...INFLOW_CHANNELS]}
         kpiPrev={kpiPrev}
         kpiMonthStart={kpiMonthStart}
+        hiddenKpis={hiddenKpis}
       />
     </div>
   );
