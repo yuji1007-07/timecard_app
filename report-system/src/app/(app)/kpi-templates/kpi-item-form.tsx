@@ -175,11 +175,12 @@ export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: strin
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
-          <Label>初期の単位</Label>
-          <select name="unit" className={selectClass + " w-28"} defaultValue="円">
+          <Label>単位</Label>
+          <select name="unit" className={selectClass + " w-48"} defaultValue="AUTO">
+            <option value="AUTO">自動判定（おすすめ）</option>
             {UNITS.map((u) => (
               <option key={u} value={u}>
-                {u}
+                すべて {u}
               </option>
             ))}
           </select>

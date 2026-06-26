@@ -99,11 +99,27 @@ export async function moveKpiItem(formData: FormData) {
   revalidatePath("/kpi-templates");
 }
 
-/** KPI名を複数行まとめて一括追加する。 */
+/** KPI名から単位を推定する。 */
+function guessUnit(name: string): string {
+  if (/率$/.test(name)) return "%";
+  if (/単価/.test(name)) return "円";
+  if (/頻度|回数/.test(name)) return "回";
+  if (/枚数/.test(name)) return "枚";
+  if (/件$/.test(name)) return "件";
+  if (/数$/.test(name)) return "人";
+  return "円";
+}
+
+/** KPI名から良化方向を推定する（離反・退会・休会・解約系は減ると良い）。 */
+function guessDirection(name: string): "UP" | "DOWN" {
+  return /離反|退会|休会|解約|キャンセル|未達|未提出/.test(name) ? "DOWN" : "UP";
+}
+
+/** KPI名を複数行まとめて一括追加する。unit が "AUTO" のときは名前から自動判定。 */
 export async function bulkCreateKpiItems(_prev: unknown, formData: FormData) {
   await requireAreaManager();
   const scope = scopeFromForm(formData);
-  const unit = String(formData.get("unit") || "円");
+  const unitChoice = String(formData.get("unit") || "AUTO");
   const namesRaw = String(formData.get("names") || "");
   const names = Array.from(
     new Set(
@@ -117,14 +133,17 @@ export async function bulkCreateKpiItems(_prev: unknown, formData: FormData) {
 
   const count = await prisma.kpiItem.count({ where: scope });
   await prisma.kpiItem.createMany({
-    data: names.map((name, i) => ({
-      name,
-      unit,
-      inputType: unit === "%" ? "PERCENT" : "NUMBER",
-      goodDirection: "UP",
-      ...scope,
-      sortOrder: count + i,
-    })),
+    data: names.map((name, i) => {
+      const unit = unitChoice === "AUTO" ? guessUnit(name) : unitChoice;
+      return {
+        name,
+        unit,
+        inputType: unit === "%" ? "PERCENT" : "NUMBER",
+        goodDirection: guessDirection(name),
+        ...scope,
+        sortOrder: count + i,
+      };
+    }),
   });
   revalidatePath("/kpi-templates");
   return { success: true, added: names.length };
