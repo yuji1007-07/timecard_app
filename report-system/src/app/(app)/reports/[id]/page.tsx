@@ -187,8 +187,8 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* KPI値 */}
+      <div className="space-y-6">
+        {/* KPI値（全幅で見やすく） */}
         <Card>
           <CardHeader>
             <CardTitle>KPI入力値</CardTitle>
@@ -202,27 +202,33 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                   <TableHead className="text-right">目標</TableHead>
                   <TableHead className="text-right">現状</TableHead>
                   <TableHead className="text-right">着地</TableHead>
+                  <TableHead className="text-right">達成率</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {groupKpiValuesByCategory(report.kpiValues).map((g, gi) => (
                   <Fragment key={g.category}>
                     <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell colSpan={4} className={`py-1 text-xs font-semibold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                      <TableCell colSpan={5} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
                         {g.category}
                       </TableCell>
                     </TableRow>
-                    {g.items.map((v) => {
+                    {g.items.map((v, ii) => {
                       const dir = v.kpiItem?.goodDirection ?? "UP";
                       const isUnder =
                         v.target != null && v.forecast != null && (dir === "UP" ? v.forecast < v.target : v.forecast > v.target);
+                      const rate =
+                        v.target != null && v.target !== 0 && v.forecast != null ? Math.round((v.forecast / v.target) * 100) : null;
                       return (
-                        <TableRow key={v.id}>
+                        <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
                           <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
                           <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmt(v.current)}</TableCell>
                           <TableCell className={`text-right tabular-nums ${isUnder ? "font-semibold text-red-600" : ""}`}>
                             {fmt(v.forecast)}{isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                          </TableCell>
+                          <TableCell className={`text-right text-xs tabular-nums ${rate == null ? "text-muted-foreground" : isUnder ? "text-red-600" : "text-emerald-600"}`}>
+                            {rate == null ? "—" : `${rate}%`}
                           </TableCell>
                         </TableRow>
                       );

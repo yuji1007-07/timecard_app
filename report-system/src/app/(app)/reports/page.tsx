@@ -92,6 +92,46 @@ export default async function ReportsPage({
         </CardContent>
       </Card>
 
+      {/* PDFバックアップ（印刷→PDF保存） */}
+      <Card className="mb-4 border-navy/20">
+        <CardContent className="pt-5">
+          <div className="mb-2 text-sm font-medium">📄 PDFバックアップ（ローカル保存用）</div>
+          <form className="flex flex-wrap items-end gap-3" action="/print" target="_blank" method="get">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">月で選ぶ</label>
+              <input type="month" name="month" className={selectClass} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">年で選ぶ</label>
+              <input type="number" name="year" placeholder="例: 2026" className={selectClass + " w-28"} />
+            </div>
+            {isAdmin && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium">店舗</label>
+                <select name="storeId" defaultValue="" className={selectClass}>
+                  <option value="">すべて</option>
+                  {stores.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">区分</label>
+              <select name="type" defaultValue="" className={selectClass}>
+                <option value="">すべて</option>
+                <option value="WEEKLY">週次</option>
+                <option value="MONTHLY">月次</option>
+              </select>
+            </div>
+            <Button type="submit">印刷用ページを開く</Button>
+          </form>
+          <p className="mt-2 text-xs text-muted-foreground">
+            月・年を空のままにすると全期間。開いたページで「印刷 / PDFで保存」ボタン（または Cmd/Ctrl+P → 送信先「PDFに保存」）でローカルに保存できます。店舗ごとに保存したい場合は店舗を選んでから開いてください。
+          </p>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardContent className="p-0">
           <Table>
