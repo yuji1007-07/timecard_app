@@ -10,7 +10,8 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts"
+    "db:reset": "prisma db push --force-reset && tsx prisma/seed.ts",
+    "test": "tsx scripts/test-logic.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
