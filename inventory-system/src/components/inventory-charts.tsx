@@ -27,7 +27,7 @@ export function BrandValuePie({
   return (
     <ResponsiveContainer width="100%" height={260}>
       <PieChart>
-        <Pie data={filtered} dataKey="wholesale" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(e) => e.name}>
+        <Pie data={filtered} dataKey="wholesale" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={(e) => e.name} isAnimationActive={false}>
           {filtered.map((d, i) => (
             <Cell key={i} fill={d.color} />
           ))}
@@ -51,7 +51,7 @@ export function StoreValueBar({
         <XAxis type="number" tickFormatter={(v) => "¥" + (v / 1000).toFixed(0) + "k"} fontSize={11} />
         <YAxis type="category" dataKey="storeName" width={110} fontSize={11} />
         <Tooltip formatter={(v: number) => yenFmt(v)} />
-        <Bar dataKey="valueWholesale" fill="#1e3a5f" radius={[0, 4, 4, 0]} />
+        <Bar dataKey="valueWholesale" fill="#1e3a5f" radius={[0, 4, 4, 0]} isAnimationActive={false} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -71,8 +71,8 @@ export function DiffTrendChart({
         <YAxis yAxisId="left" fontSize={11} />
         <YAxis yAxisId="right" orientation="right" tickFormatter={(v) => "¥" + (v / 1000).toFixed(0) + "k"} fontSize={11} />
         <Tooltip formatter={(v: number, n) => (n === "ズレ金額" ? yenFmt(v) : v)} />
-        <Line yAxisId="left" type="monotone" dataKey="diffCount" name="ズレ件数" stroke="#dc2626" strokeWidth={2} />
-        <Line yAxisId="right" type="monotone" dataKey="diffAmount" name="ズレ金額" stroke="#ca8a04" strokeWidth={2} />
+        <Line yAxisId="left" type="monotone" dataKey="diffCount" name="ズレ件数" stroke="#dc2626" strokeWidth={2} isAnimationActive={false} />
+        <Line yAxisId="right" type="monotone" dataKey="diffAmount" name="ズレ金額" stroke="#ca8a04" strokeWidth={2} isAnimationActive={false} />
       </LineChart>
     </ResponsiveContainer>
   );
