@@ -1,23 +1,41 @@
 import { google } from "googleapis";
 import { getSetting } from "@/lib/settings";
 
+/**
+ * 認証情報を取得する。次の2通りに対応:
+ *  A) GOOGLE_SERVICE_ACCOUNT_JSON にサービスアカウントのJSONを丸ごと貼る（推奨・簡単）
+ *  B) GOOGLE_SERVICE_ACCOUNT_EMAIL と GOOGLE_PRIVATE_KEY を個別に設定（従来方式）
+ */
+function getCredentials(): { email: string; key: string } | null {
+  const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (json) {
+    try {
+      const p = JSON.parse(json);
+      if (p.client_email && p.private_key) {
+        return { email: String(p.client_email), key: String(p.private_key).replace(/\\n/g, "\n") };
+      }
+    } catch {
+      // JSONの貼り付けミスは下のフォールバックへ
+    }
+  }
+  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  if (email && key) return { email, key };
+  return null;
+}
+
 export function isSheetsConfigured(): boolean {
-  return !!(
-    process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL &&
-    process.env.GOOGLE_PRIVATE_KEY &&
-    process.env.GOOGLE_SHEETS_SPREADSHEET_ID
-  );
+  return !!(getCredentials() && process.env.GOOGLE_SHEETS_SPREADSHEET_ID);
 }
 
 export type SheetSyncResult = { ok: boolean; message: string };
 
 function getAuth() {
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, "\n");
-  if (!email || !key) return null;
+  const cred = getCredentials();
+  if (!cred) return null;
   return new google.auth.JWT({
-    email,
-    key,
+    email: cred.email,
+    key: cred.key,
     scopes: ["https://www.googleapis.com/auth/spreadsheets"],
   });
 }

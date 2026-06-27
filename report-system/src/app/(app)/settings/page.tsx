@@ -14,7 +14,7 @@ export default async function SettingsPage() {
 
   const integrations = [
     { name: "OpenAI / ChatGPT API", ok: isOpenAIConfigured(), env: "OPENAI_API_KEY", purpose: "AIフィードバック生成" },
-    { name: "Google Sheets API", ok: isSheetsConfigured(), env: "GOOGLE_SERVICE_ACCOUNT_EMAIL / GOOGLE_PRIVATE_KEY / GOOGLE_SHEETS_SPREADSHEET_ID", purpose: "報告データの自動出力" },
+    { name: "Google Sheets API", ok: isSheetsConfigured(), env: "GOOGLE_SERVICE_ACCOUNT_JSON / GOOGLE_SHEETS_SPREADSHEET_ID", purpose: "報告データの自動出力" },
     { name: "LINE Messaging API", ok: isLineConfigured(), env: "LINE_CHANNEL_ACCESS_TOKEN", purpose: "未提出・フィードバック・要注意通知" },
   ];
 
