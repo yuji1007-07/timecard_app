@@ -3,13 +3,26 @@
 `inventory-system` を本番公開するための手順です。DBは PostgreSQL（Supabase または Neon）を使います。
 `report-system` と同じ構成なので、将来は同一基盤に統合できます。
 
+## 0. このアプリは専用スキーマ `inventory` を使う（重要）
+
+このアプリのテーブルはすべて PostgreSQL の **`inventory` スキーマ**に作成されます
+（`prisma/schema.prisma` の `schemas = ["inventory"]`）。
+
+そのため、**既存の Supabase プロジェクト（別アプリが `public` スキーマを使用中でも）をそのまま再利用できます。**
+`prisma db push` / `db:reset` は `inventory` スキーマだけに作用し、`public` の既存テーブルには一切触れません。
+新しいプロジェクトを作らず、無料プランのプロジェクト上限（2個）に引っかからずに同居させられます。
+
 ## 1. PostgreSQL を用意する
 
-### Supabase の場合
-1. https://supabase.com でプロジェクトを作成
+### 既存の Supabase プロジェクトを再利用する場合（おすすめ・媒体もプロジェクトも増やさない）
+1. 使いたい既存プロジェクトを開く（別アプリが入っていてOK。`inventory` スキーマに分離されるので安全）
 2. Project Settings → Database → Connection string から2種類を控える
    - **Transaction pooler**（ポート 6543, `?pgbouncer=true`）→ `DATABASE_URL` 用
    - **Direct connection**（ポート 5432）→ `DIRECT_URL` 用
+
+### 新規 Supabase プロジェクトの場合
+1. https://supabase.com でプロジェクトを作成
+2. 上と同様に Connection string を2種類控える
 
 ### Neon の場合
 1. https://neon.tech でプロジェクトを作成
