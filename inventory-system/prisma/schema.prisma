@@ -1,16 +1,19 @@
 // 整骨院・鍼灸・エステグループ向け 販売品在庫管理システム
-// Prisma schema。初期はローカル動作優先のため SQLite。
-// 将来 Supabase / PostgreSQL へ移行しやすいよう、列挙値は String + コメントで表現し、
-// 週次報告システムと同じ設計思想（履歴積み上げ・key-value 設定・スナップショット保存）を踏襲。
+// Prisma schema。DBは PostgreSQL（Supabase / Neon、report-system と同一構成、Vercelデプロイ対応）。
+// 列挙値は String + コメントで表現し、週次報告システムと同じ設計思想
+// （履歴積み上げ・key-value 設定・スナップショット保存）を踏襲。
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  // 本番移行時は provider = "postgresql" / url = env("DATABASE_URL") に差し替え
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  // 本番は Supabase / Neon などの PostgreSQL。report-system と同一構成。
+  // 本番(Vercel)では Pooled connection を DATABASE_URL に、
+  // マイグレーション(prisma db push/migrate)では Direct connection を DIRECT_URL に設定する。
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 // ===== ユーザー / 権限 =====
