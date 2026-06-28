@@ -4,16 +4,22 @@
 // （履歴積み上げ・key-value 設定・スナップショット保存）を踏襲。
 
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   // 本番は Supabase / Neon などの PostgreSQL。report-system と同一構成。
   // 本番(Vercel)では Pooled connection を DATABASE_URL に、
   // マイグレーション(prisma db push/migrate)では Direct connection を DIRECT_URL に設定する。
+  //
+  // schemas: このアプリのテーブルはすべて専用スキーマ "inventory" に作成する。
+  // 既存アプリ（申込/出席システム等）が public スキーマを使っていても、
+  // 1つの Supabase プロジェクトに安全に同居でき、db push/reset も inventory スキーマだけに作用する。
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["inventory"]
 }
 
 // ===== ユーザー / 権限 =====
@@ -32,6 +38,8 @@ model User {
   store        Store?        @relation(fields: [storeId], references: [id])
   transactions Transaction[]
   stocktakes   Stocktake[]
+
+  @@schema("inventory")
 }
 
 // ===== 店舗 =====
@@ -57,6 +65,8 @@ model Store {
   transferTo     Transaction[] @relation("TransferToStore")
   stocktakes     Stocktake[]
   productStores  ProductStore[]
+
+  @@schema("inventory")
 }
 
 // ===== ブランド =====
@@ -69,6 +79,8 @@ model Brand {
   createdAt DateTime @default(now())
 
   products Product[]
+
+  @@schema("inventory")
 }
 
 // ===== カテゴリ（ウェア / ヘアケア / 美容機器 など。管理者が編集） =====
@@ -77,6 +89,8 @@ model Category {
   name      String   @unique
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+
+  @@schema("inventory")
 }
 
 // ===== 商品マスタ =====
@@ -105,6 +119,8 @@ model Product {
   transactions   Transaction[]
   stocktakeItems StocktakeItem[]
   productStores  ProductStore[]
+
+  @@schema("inventory")
 }
 
 // ===== 取扱店舗（allStores=false のときだけ使用） =====
@@ -117,6 +133,8 @@ model ProductStore {
   store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([productId, storeId])
+
+  @@schema("inventory")
 }
 
 // ===== 取引（在庫の増減はすべてここに記録し、合計で在庫を導出） =====
@@ -148,6 +166,8 @@ model Transaction {
 
   @@index([storeId, productId])
   @@index([transferGroupId])
+
+  @@schema("inventory")
 }
 
 // ===== 棚卸（実数確定） =====
@@ -168,6 +188,8 @@ model Stocktake {
 
   @@unique([storeId, targetMonth])
   @@index([storeId])
+
+  @@schema("inventory")
 }
 
 // ===== 棚卸明細（商品ごとの理論在庫/実在庫/ズレ） =====
@@ -184,6 +206,8 @@ model StocktakeItem {
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
 
   @@index([stocktakeId])
+
+  @@schema("inventory")
 }
 
 // ===== 設定（通知・連携・締切・閾値）: key-value 単一テーブル =====
@@ -191,4 +215,6 @@ model Setting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+
+  @@schema("inventory")
 }
