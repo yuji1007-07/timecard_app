@@ -11,21 +11,25 @@
 ## 技術構成
 
 - Next.js 15（App Router） / TypeScript / Tailwind CSS / shadcn/ui
-- Prisma + SQLite（初期はローカル動作優先。移行時は provider を postgresql に変更）
+- Prisma + PostgreSQL（Supabase / Neon。`report-system` と同一構成、Vercelへデプロイ可能）
 - Auth.js (NextAuth v5) — メール＋パスワード／店舗PIN（軽量モード）
 - Recharts / Zod / React Hook Form
 - Google Sheets API / LINE Messaging API（認証情報を入れれば有効化、未設定でも動作）
 
-## セットアップ
+## セットアップ（ローカル開発）
+
+PostgreSQL（Supabase/Neon の開発用DB、またはローカルPostgres）の接続文字列を用意します。
 
 ```bash
 cd inventory-system
-cp .env.example .env          # 必要なら値を編集（既定はSQLite/ローカル）
+cp .env.example .env          # DATABASE_URL / DIRECT_URL を設定
 npm install
 npx prisma db push            # スキーマをDBへ反映
 npm run db:seed               # 21店舗・ブランド・商品・ダミー取引・棚卸を投入
 npm run dev                   # http://localhost:3002
 ```
+
+> 本番（Vercel）公開の手順は [DEPLOY.md](./DEPLOY.md) を参照してください。
 
 ### ログイン
 
@@ -90,10 +94,12 @@ npm test   # scripts/test-logic.ts を実行
 在庫不足アラートON-OFF / 税込→税抜の丸めルール（四捨五入・切り捨て・切り上げ）/
 ズレ金額の算出基準（卸価格・通常価格）/ LINE・スプレッドシート連携。
 
-## PostgreSQL / Supabase への移行
+## 本番デプロイ（Vercel + PostgreSQL）
 
-1. `prisma/schema.prisma` の `datasource db` の `provider` を `postgresql` に変更
-2. `DATABASE_URL` を接続文字列に変更
-3. `npx prisma db push` → `npm run db:seed`
+[DEPLOY.md](./DEPLOY.md) に手順をまとめています。要点：
 
-列挙値は String + コメントで表現しているため、SQLite/PostgreSQL 双方で同一スキーマが使えます。
+1. Supabase / Neon で PostgreSQL を作成（Pooled→`DATABASE_URL`、Direct→`DIRECT_URL`）
+2. ローカルから本番DBへ `npx prisma db push`（必要なら `npm run db:seed`）
+3. Vercel で Root Directory = `inventory-system`、上記DB接続情報と `AUTH_SECRET` 等を環境変数に設定してデプロイ
+
+`report-system` と同一のDB構成（PostgreSQL）なので、将来は同一基盤・共通DBへ統合できます。
