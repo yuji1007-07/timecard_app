@@ -17,7 +17,29 @@ function cleanDatabaseUrl(): string | undefined {
   return raw.trim().replace(/^['"`]+/, "").replace(/['"`]+$/, "").trim();
 }
 
-const databaseUrl = cleanDatabaseUrl();
+/**
+ * Supabase のトランザクションプーラー(pgbouncer / port 6543)経由では、
+ * Prisma の prepared statements が衝突して PrismaClientUnknownRequestError が
+ * 断続的に発生する。これを避けるため、プーラー宛のURLには必ず
+ * pgbouncer=true（prepared statements 無効化）と connection_limit=1 を付与する。
+ * 環境変数にこれらが無くてもコード側で確実に補う保険。
+ */
+function ensurePoolerParams(url: string | undefined): string | undefined {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    const isPooler = u.hostname.includes("pooler.supabase.com") || u.port === "6543";
+    if (isPooler) {
+      if (!u.searchParams.has("pgbouncer")) u.searchParams.set("pgbouncer", "true");
+      if (!u.searchParams.has("connection_limit")) u.searchParams.set("connection_limit", "1");
+    }
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
+const databaseUrl = ensurePoolerParams(cleanDatabaseUrl());
 
 export const prisma =
   globalForPrisma.prisma ??
