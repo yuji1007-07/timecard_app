@@ -104,8 +104,6 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
 
   const rounding = ((await getSetting("taxRounding")) ?? "ROUND") as Rounding;
   const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  // ヘッダー行をスキップ（「ブランド」を含む場合）
-  const start = /ブランド/.test(lines[0]) ? 1 : 0;
 
   const brands = await prisma.brand.findMany();
   const brandByName = new Map(brands.map((b) => [b.name.trim(), b.id]));
@@ -116,13 +114,20 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
   const errors: string[] = [];
   let order = await prisma.product.count();
 
-  for (let i = start; i < lines.length; i++) {
-    const cols = lines[i].split(",").map((c) => c.trim());
+  for (let i = 0; i < lines.length; i++) {
+    // カンマ区切り・タブ区切り（スプレッドシートからの直接貼り付け）の両方に対応
+    const delim = lines[i].includes("\t") ? "\t" : ",";
+    const cols = lines[i].split(delim).map((c) => c.trim());
     if (cols.length < 2 || !cols[0] || !cols[1]) {
       skipped++;
       continue;
     }
     const [brandName, name, nExcl, nIncl, wExcl, wIncl, tax, category, unit] = cols;
+    // タイトル行・見出し行はどの位置にあってもスキップ
+    if (brandName === "ブランド名" || brandName === "ブランド" || name === "商品名" || name === "商品") {
+      skipped++;
+      continue;
+    }
     let brandId = brandByName.get(brandName);
     if (!brandId) {
       // 未知ブランドは自動作成
