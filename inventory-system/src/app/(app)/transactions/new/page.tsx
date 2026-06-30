@@ -16,6 +16,7 @@ export default async function NewTransactionPage({ searchParams }: { searchParam
 
   const productOpts = products.map((p) => ({
     id: p.id,
+    brandId: p.brandId,
     name: p.name,
     brandName: p.brand.name,
     taxRate: p.taxRate,

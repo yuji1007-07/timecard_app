@@ -12,6 +12,7 @@ import { createTransaction } from "../actions";
 
 type ProductOpt = {
   id: string;
+  brandId: string;
   name: string;
   brandName: string;
   taxRate: number;
@@ -45,11 +46,34 @@ export function TransactionForm({
   const [type, setType] = useState(defaultType ?? "ORDER");
   const [storeId, setStoreId] = useState(fixedStoreId ?? stores[0]?.id ?? "");
   const [productId, setProductId] = useState("");
+  const [brandId, setBrandId] = useState(""); // 大項目（ブランド）で絞り込み
+  const [q, setQ] = useState(""); // 商品名キーワードで絞り込み
   const [price, setPrice] = useState<number | "">("");
   const [result, action] = useActionState(createTransaction, undefined);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const today = new Date().toISOString().slice(0, 10);
+
+  // ブランド一覧（商品から重複なしで導出）
+  const brands = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of products) if (!m.has(p.brandId)) m.set(p.brandId, p.brandName);
+    return Array.from(m, ([id, name]) => ({ id, name }));
+  }, [products]);
+
+  // ブランド × キーワードで絞り込んだ商品
+  const filtered = useMemo(() => {
+    let list = brandId ? products.filter((p) => p.brandId === brandId) : products;
+    const kw = q.trim();
+    if (kw) list = list.filter((p) => p.name.includes(kw));
+    return list;
+  }, [products, brandId, q]);
+
+  function onSelectBrand(bid: string) {
+    setBrandId(bid);
+    setProductId("");
+    setPrice("");
+  }
 
   if (result === "OK") {
     router.push("/transactions");
@@ -129,13 +153,29 @@ export function TransactionForm({
           </div>
         )}
 
-        {/* 商品 */}
+        {/* 商品：ブランド（大項目）で絞り込み → 商品。キーワードでもさらに絞れる */}
+        <div className="space-y-1">
+          <Label>ブランド（大項目）</Label>
+          <select value={brandId} onChange={(e) => onSelectBrand(e.target.value)} className={sel}>
+            <option value="">すべてのブランド</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label>商品名で絞り込み（任意）</Label>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="キーワードを入力" />
+        </div>
         <div className="space-y-1 md:col-span-2">
-          <Label>商品</Label>
+          <Label>商品（{filtered.length}件）</Label>
           <select name="productId" value={productId} onChange={(e) => onSelectProduct(e.target.value)} className={sel} required>
             <option value="">選択してください</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>[{p.brandName}] {p.name}（{p.taxRate}%）</option>
+            {filtered.map((p) => (
+              <option key={p.id} value={p.id}>
+                {brandId ? "" : `[${p.brandName}] `}
+                {p.name}（{p.taxRate}%）
+              </option>
             ))}
           </select>
         </div>
