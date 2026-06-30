@@ -4,6 +4,7 @@ import { computeStoreStocks, getStoreProducts } from "@/lib/stock";
 export type InventoryRow = {
   productId: string;
   name: string;
+  size: string | null;
   brandId: string;
   brandName: string;
   brandColor: string;
@@ -32,6 +33,7 @@ export async function getStoreInventory(storeId: string): Promise<InventoryRow[]
     return {
       productId: p.id,
       name: p.name,
+      size: p.size,
       brandId: p.brandId,
       brandName: p.brand.name,
       brandColor: p.brand.colorHex,

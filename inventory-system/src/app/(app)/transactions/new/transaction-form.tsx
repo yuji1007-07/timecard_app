@@ -15,6 +15,7 @@ type ProductOpt = {
   brandId: string;
   name: string;
   brandName: string;
+  size: string | null;
   taxRate: number;
   unit: string;
   normalIncl: number;
@@ -46,8 +47,10 @@ export function TransactionForm({
   const [type, setType] = useState(defaultType ?? "ORDER");
   const [storeId, setStoreId] = useState(fixedStoreId ?? stores[0]?.id ?? "");
   const [productId, setProductId] = useState("");
-  const [brandId, setBrandId] = useState(""); // 大項目（ブランド）で絞り込み
-  const [q, setQ] = useState(""); // 商品名キーワードで絞り込み
+  const [brandId, setBrandId] = useState(""); // 大項目（ブランド）
+  const [baseName, setBaseName] = useState(""); // 品名（サイズ違いをまとめた共通名）
+  const [size, setSize] = useState(""); // サイズ
+  const [q, setQ] = useState(""); // 品名キーワード
   const [price, setPrice] = useState<number | "">("");
   const [result, action] = useActionState(createTransaction, undefined);
 
@@ -61,32 +64,72 @@ export function TransactionForm({
     return Array.from(m, ([id, name]) => ({ id, name }));
   }, [products]);
 
-  // ブランド × キーワードで絞り込んだ商品
-  const filtered = useMemo(() => {
-    let list = brandId ? products.filter((p) => p.brandId === brandId) : products;
+  // ブランド内の「品名（共通名）」一覧（キーワードで絞り込み）
+  const baseNames = useMemo(() => {
+    if (!brandId) return [];
     const kw = q.trim();
-    if (kw) list = list.filter((p) => p.name.includes(kw));
-    return list;
+    const set = new Set<string>();
+    for (const p of products) {
+      if (p.brandId !== brandId) continue;
+      if (kw && !p.name.includes(kw)) continue;
+      set.add(p.name);
+    }
+    return Array.from(set);
   }, [products, brandId, q]);
+
+  // 選択中の品名のサイズ違い（バリエーション）
+  const variants = useMemo(
+    () => products.filter((p) => p.brandId === brandId && p.name === baseName),
+    [products, brandId, baseName]
+  );
+  const sizes = useMemo(
+    () => variants.map((v) => v.size).filter((s): s is string => !!s),
+    [variants]
+  );
+  const hasSizes = sizes.length > 0;
+
+  // 価格初期値をセット
+  function applyPrice(p: ProductOpt | undefined, t: string) {
+    if (!p) return;
+    if (t === "CONSUME") setPrice(p.normalIncl || "");
+    else if (t === "EMPLOYEE_SALE") setPrice(p.wholesaleIncl || "");
+    else setPrice("");
+  }
 
   function onSelectBrand(bid: string) {
     setBrandId(bid);
+    setBaseName("");
+    setSize("");
     setProductId("");
     setPrice("");
+  }
+
+  function onSelectBaseName(name: string) {
+    setBaseName(name);
+    setSize("");
+    const vs = products.filter((p) => p.brandId === brandId && p.name === name);
+    if (vs.length === 1 && !vs[0].size) {
+      // サイズ違いが無い商品はそのまま確定
+      setProductId(vs[0].id);
+      applyPrice(vs[0], type);
+    } else {
+      setProductId("");
+      setPrice("");
+    }
+  }
+
+  function onSelectSize(sz: string) {
+    setSize(sz);
+    const v = variants.find((x) => x.size === sz);
+    if (v) {
+      setProductId(v.id);
+      applyPrice(v, type);
+    }
   }
 
   if (result === "OK") {
     router.push("/transactions");
     router.refresh();
-  }
-
-  // 商品選択時に価格の初期値をセット
-  function onSelectProduct(pid: string) {
-    setProductId(pid);
-    const p = products.find((x) => x.id === pid);
-    if (!p) return;
-    if (type === "CONSUME") setPrice(p.normalIncl || "");
-    else if (type === "EMPLOYEE_SALE") setPrice(p.wholesaleIncl || "");
   }
 
   function onSelectType(t: string) {
@@ -153,32 +196,46 @@ export function TransactionForm({
           </div>
         )}
 
-        {/* 商品：ブランド（大項目）で絞り込み → 商品。キーワードでもさらに絞れる */}
+        {/* 商品選択：ブランド → 品名 → サイズ の段階選択（サイズが無い商品はサイズ欄が出ない） */}
+        <input type="hidden" name="productId" value={productId} />
         <div className="space-y-1">
-          <Label>ブランド（大項目）</Label>
+          <Label>① ブランド</Label>
           <select value={brandId} onChange={(e) => onSelectBrand(e.target.value)} className={sel}>
-            <option value="">すべてのブランド</option>
+            <option value="">選択してください</option>
             {brands.map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
         </div>
         <div className="space-y-1">
-          <Label>商品名で絞り込み（任意）</Label>
-          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="キーワードを入力" />
+          <Label>品名で絞り込み（任意）</Label>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="キーワードを入力" disabled={!brandId} />
         </div>
-        <div className="space-y-1 md:col-span-2">
-          <Label>商品（{filtered.length}件）</Label>
-          <select name="productId" value={productId} onChange={(e) => onSelectProduct(e.target.value)} className={sel} required>
-            <option value="">選択してください</option>
-            {filtered.map((p) => (
-              <option key={p.id} value={p.id}>
-                {brandId ? "" : `[${p.brandName}] `}
-                {p.name}（{p.taxRate}%）
-              </option>
+        <div className={hasSizes ? "space-y-1" : "space-y-1 md:col-span-2"}>
+          <Label>② 品名{brandId ? `（${baseNames.length}件）` : ""}</Label>
+          <select value={baseName} onChange={(e) => onSelectBaseName(e.target.value)} className={sel} disabled={!brandId}>
+            <option value="">{brandId ? "選択してください" : "先にブランドを選択"}</option>
+            {baseNames.map((n) => (
+              <option key={n} value={n}>{n}</option>
             ))}
           </select>
         </div>
+        {hasSizes && (
+          <div className="space-y-1">
+            <Label>③ サイズ</Label>
+            <select value={size} onChange={(e) => onSelectSize(e.target.value)} className={sel} required>
+              <option value="">選択してください</option>
+              {variants.map((v) => (
+                <option key={v.id} value={v.size!}>{v.size}</option>
+              ))}
+            </select>
+          </div>
+        )}
+        {productId && product && (
+          <div className="md:col-span-2 rounded-md bg-accent/60 px-3 py-2 text-sm text-navy">
+            選択中: <span className="font-medium">{product.name}{product.size ? ` / サイズ ${product.size}` : ""}</span>（{product.taxRate}%）
+          </div>
+        )}
 
         {/* 数量 */}
         <div className="space-y-1">

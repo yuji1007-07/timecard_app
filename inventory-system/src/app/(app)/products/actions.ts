@@ -6,6 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAreaManager } from "@/lib/session";
 import { resolvePrices, type Rounding } from "@/lib/pricing";
 import { getSetting } from "@/lib/settings";
+import { splitSize } from "@/lib/sizes";
 
 const schema = z.object({
   brandId: z.string().min(1),
@@ -20,6 +21,8 @@ const schema = z.object({
   wholesaleIncl: z.coerce.number().default(0),
   unit: z.string().default("個"),
   minStock: z.coerce.number().int().default(0),
+  size: z.string().optional(),
+  color: z.string().optional(),
   allStores: z.boolean().optional(),
   active: z.boolean().optional(),
 });
@@ -38,6 +41,8 @@ async function buildData(formData: FormData) {
     wholesaleIncl: formData.get("wholesaleIncl") || 0,
     unit: formData.get("unit") || "個",
     minStock: formData.get("minStock") || 0,
+    size: formData.get("size") || undefined,
+    color: formData.get("color") || undefined,
     allStores: formData.get("allStores") === "on",
     active: formData.get("active") !== "off",
   });
@@ -57,9 +62,32 @@ async function buildData(formData: FormData) {
     wholesalePriceIncl: wholesale.incl,
     unit: d.unit,
     minStock: d.minStock,
+    size: d.size || null,
+    color: d.color || null,
     allStores: d.allStores ?? true,
     active: d.active ?? true,
   };
+}
+
+/**
+ * 既存商品の「商品名」からサイズ(S/M/L/LL/足サイズ等)を自動で切り出し、size 列にセットする。
+ * 価格や他の情報はそのまま。性別(メンズ/ウィメンズ/ユニセックス)はサイズではないので名前に残す。
+ * 既に size が入っている商品はスキップ（何度押しても安全）。
+ */
+export async function autoSplitSizes(): Promise<string> {
+  await requireAreaManager();
+  const products = await prisma.product.findMany({ where: { size: null } });
+  let updated = 0;
+  for (const p of products) {
+    const { base, size } = splitSize(p.name);
+    if (size && base) {
+      await prisma.product.update({ where: { id: p.id }, data: { name: base, size } });
+      updated++;
+    }
+  }
+  revalidatePath("/products");
+  revalidatePath("/inventory");
+  return `${updated}件の商品からサイズを自動分離しました。${products.length - updated}件はサイズ無しのままです。`;
 }
 
 export async function createProduct(formData: FormData) {
@@ -122,7 +150,7 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
       skipped++;
       continue;
     }
-    const [brandName, name, nExcl, nIncl, wExcl, wIncl, tax, category, unit] = cols;
+    const [brandName, name, nExcl, nIncl, wExcl, wIncl, tax, category, unit, size, color] = cols;
     // タイトル行・見出し行はどの位置にあってもスキップ
     if (brandName === "ブランド名" || brandName === "ブランド" || name === "商品名" || name === "商品") {
       skipped++;
@@ -140,7 +168,7 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
     const wholesale = resolvePrices("BOTH", Number(wExcl) || 0, Number(wIncl) || 0, taxRate, rounding);
 
     try {
-      const existing = await prisma.product.findFirst({ where: { brandId, name } });
+      const existing = await prisma.product.findFirst({ where: { brandId, name, size: size || null } });
       const data = {
         brandId,
         name,
@@ -153,6 +181,8 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
         wholesalePriceExcl: wholesale.excl,
         wholesalePriceIncl: wholesale.incl,
         unit: unit || "個",
+        size: size || null,
+        color: color || null,
       };
       if (existing) {
         await prisma.product.update({ where: { id: existing.id }, data });

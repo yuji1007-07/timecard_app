@@ -10,10 +10,15 @@ import type { InventoryRow } from "@/lib/inventory";
 type Group = { brandId: string; brandName: string; brandColor: string; rows: InventoryRow[] };
 
 export function InventoryAccordion({ rows }: { rows: InventoryRow[] }) {
+  // 在庫0は既定で非表示（在庫不足は0でも表示）。トグルで全表示に切替。
+  const [showZero, setShowZero] = useState(false);
+  const visible = showZero ? rows : rows.filter((r) => r.stock !== 0 || r.low);
+  const hiddenCount = rows.length - visible.length;
+
   // ブランドごとにグルーピング
   const groups: Group[] = [];
   const idx = new Map<string, number>();
-  for (const r of rows) {
+  for (const r of visible) {
     if (!idx.has(r.brandId)) {
       idx.set(r.brandId, groups.length);
       groups.push({ brandId: r.brandId, brandName: r.brandName, brandColor: r.brandColor, rows: [] });
@@ -21,15 +26,19 @@ export function InventoryAccordion({ rows }: { rows: InventoryRow[] }) {
     groups[idx.get(r.brandId)!].rows.push(r);
   }
 
-  if (groups.length === 0) {
-    return <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">該当する商品がありません。</p>;
-  }
-
   return (
     <div className="space-y-3">
-      {groups.map((g) => (
-        <BrandGroup key={g.brandId} group={g} />
-      ))}
+      <label className="flex items-center justify-end gap-2 text-xs text-muted-foreground">
+        <input type="checkbox" checked={showZero} onChange={(e) => setShowZero(e.target.checked)} className="h-3.5 w-3.5" />
+        在庫0の商品も表示{hiddenCount > 0 && !showZero ? `（${hiddenCount}件 非表示中）` : ""}
+      </label>
+      {groups.length === 0 ? (
+        <p className="rounded-lg border bg-card p-6 text-center text-sm text-muted-foreground">
+          表示する在庫がありません{rows.length > 0 ? "（在庫0のみ。上のチェックで表示できます）" : ""}。
+        </p>
+      ) : (
+        groups.map((g) => <BrandGroup key={g.brandId} group={g} />)
+      )}
     </div>
   );
 }
@@ -75,7 +84,10 @@ function BrandGroup({ group }: { group: Group }) {
             <tbody>
               {group.rows.map((r) => (
                 <tr key={r.productId} className={cn("border-b last:border-0", r.low && "bg-red-50")}>
-                  <td className="px-3 py-2 font-medium">{r.name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    {r.name}
+                    {r.size && <span className="ml-1 rounded bg-navy/10 px-1.5 py-0.5 text-xs text-navy">{r.size}</span>}
+                  </td>
                   <td className="px-3 py-2 text-muted-foreground">{r.category ?? "-"}</td>
                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", r.low ? "text-red-600" : "text-navy")}>
                     {r.stock} {r.unit}

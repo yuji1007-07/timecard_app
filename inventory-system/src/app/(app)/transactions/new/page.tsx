@@ -19,6 +19,7 @@ export default async function NewTransactionPage({ searchParams }: { searchParam
     brandId: p.brandId,
     name: p.name,
     brandName: p.brand.name,
+    size: p.size,
     taxRate: p.taxRate,
     unit: p.unit,
     normalIncl: p.normalPriceIncl,

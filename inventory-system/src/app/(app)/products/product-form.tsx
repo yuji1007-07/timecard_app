@@ -15,6 +15,8 @@ type Product = {
   brandId: string;
   name: string;
   category: string | null;
+  size: string | null;
+  color: string | null;
   taxRate: number;
   priceModeNormal: string;
   priceModeWholesale: string;
@@ -130,6 +132,16 @@ export function ProductForm({
       <div className="space-y-1">
         <Label>商品名</Label>
         <Input name="name" defaultValue={product?.name} required />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <Label>サイズ（任意）</Label>
+          <Input name="size" defaultValue={product?.size ?? ""} placeholder="S / M / L など" />
+        </div>
+        <div className="space-y-1">
+          <Label>カラー（任意）</Label>
+          <Input name="color" defaultValue={product?.color ?? ""} />
+        </div>
       </div>
       <div className="space-y-1">
         <Label>カテゴリ</Label>

@@ -7,6 +7,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { yen } from "@/lib/constants";
 import { ProductForm } from "./product-form";
 import { CsvImport } from "./csv-import";
+import { SizeSplitButton } from "./size-split-button";
 import { deleteProduct } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -26,7 +27,8 @@ export default async function ProductsPage() {
         title="商品マスタ"
         description="ブランド・税率・税抜/税込価格を管理。CSVで一括投入できます。"
         action={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <SizeSplitButton />
             <CsvImport />
             <ProductForm brands={brands} categories={catNames} />
           </div>
@@ -38,6 +40,7 @@ export default async function ProductsPage() {
             <tr>
               <th className="px-3 py-2 text-left">ブランド</th>
               <th className="px-3 py-2 text-left">商品名</th>
+              <th className="px-3 py-2 text-left">サイズ</th>
               <th className="px-3 py-2 text-left">カテゴリ</th>
               <th className="px-3 py-2 text-right">税率</th>
               <th className="px-3 py-2 text-right">通常(税抜/税込)</th>
@@ -51,6 +54,7 @@ export default async function ProductsPage() {
               <tr key={p.id} className={`border-t ${p.active ? "" : "opacity-50"}`}>
                 <td className="px-3 py-2"><BrandBadge name={p.brand.name} color={p.brand.colorHex} /></td>
                 <td className="px-3 py-2 font-medium">{p.name}{!p.active && <span className="ml-1 text-xs text-muted-foreground">(無効)</span>}</td>
+                <td className="px-3 py-2">{p.size ? <span className="rounded bg-navy/10 px-1.5 py-0.5 text-xs text-navy">{p.size}</span> : "-"}</td>
                 <td className="px-3 py-2 text-muted-foreground">{p.category ?? "-"}</td>
                 <td className="px-3 py-2 text-right tabular-nums">{p.taxRate}%</td>
                 <td className="px-3 py-2 text-right tabular-nums">{yen(p.normalPriceExcl)} / {yen(p.normalPriceIncl)}</td>

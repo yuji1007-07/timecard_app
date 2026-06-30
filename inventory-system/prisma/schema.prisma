@@ -107,6 +107,8 @@ model Product {
   taxRate            Int      @default(10) // 8 or 10
   priceModeNormal    String   @default("BOTH")
   priceModeWholesale String   @default("BOTH")
+  size               String? // サイズ（S/M/L/LL、足サイズ等。無い商品は null）
+  color              String? // カラー（無い商品は null）
   unit               String   @default("個")
   minStock           Int      @default(0) // 最小在庫数（下回るとアラート）
   allStores          Boolean  @default(true) // 全店共通 or 一部店舗のみ
