@@ -66,6 +66,17 @@ export async function GET(req: Request) {
       `ALTER TABLE "KpiItem" ADD COLUMN IF NOT EXISTS "category" TEXT`,
       `ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
       `ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
+      `CREATE TABLE IF NOT EXISTS "ReportProjection" (
+        "id" TEXT NOT NULL,
+        "reportId" TEXT NOT NULL,
+        "kpiName" TEXT NOT NULL,
+        "targetMonth" TEXT NOT NULL,
+        "budget" DOUBLE PRECISION,
+        "forecast" DOUBLE PRECISION,
+        CONSTRAINT "ReportProjection_pkey" PRIMARY KEY ("id")
+      )`,
+      `CREATE INDEX IF NOT EXISTS "ReportProjection_reportId_idx" ON "ReportProjection"("reportId")`,
+      `ALTER TABLE "ReportProjection" ADD CONSTRAINT "ReportProjection_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
     ];
     for (const m of migrations) {
       try {

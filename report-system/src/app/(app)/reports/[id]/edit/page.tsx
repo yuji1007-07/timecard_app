@@ -6,7 +6,8 @@ import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ReportForm, type ReportInitial } from "../../new/report-form";
+import { ReportForm, type ReportInitial, type ProjMap } from "../../new/report-form";
+import { addMonthStr } from "@/lib/utils";
 import { INFLOW_CHANNELS, BUSINESS_TYPES, label } from "@/lib/constants";
 
 const s = (n: number | null) => (n != null ? String(n) : "");
@@ -23,6 +24,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       kdis: true,
       actions: true,
       progresses: true,
+      projections: true,
       store: true,
       department: true,
     },
@@ -56,7 +58,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       id: { not: report.id },
     },
     orderBy: { submittedAt: "desc" },
-    include: { kpiValues: true, actions: true },
+    include: { kpiValues: true, actions: true, projections: true },
   });
 
   const prevKpiByName = new Map((prevReport?.kpiValues ?? []).map((v) => [v.kpiName, v.current]));
@@ -120,6 +122,25 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
     content: a.content && a.content.includes("着地") && a.content.includes("予想") ? "" : a.content,
   }));
 
+  // 月次：3ヶ月予測（このレポートの保存値）＋前月からの引き継ぎ
+  const forwardMonths = type === "MONTHLY" ? [1, 2, 3].map((n) => addMonthStr(period, n)) : [];
+  const projections: ProjMap = {};
+  for (const p of report.projections) {
+    projections[p.kpiName] = projections[p.kpiName] ?? {};
+    projections[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+  }
+  const kpiCarry: Record<string, { budget: string; forecast: string }> = {};
+  const projCarry: ProjMap = {};
+  if (type === "MONTHLY") {
+    for (const p of prevReport?.projections ?? []) {
+      if (p.targetMonth === period) kpiCarry[p.kpiName] = { budget: s(p.budget), forecast: s(p.forecast) };
+      if (forwardMonths.includes(p.targetMonth)) {
+        projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
+        projCarry[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+      }
+    }
+  }
+
   const initial: ReportInitial = {
     originalText: report.originalText ?? "",
     kpiByName,
@@ -149,6 +170,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
     progressByActionId,
     kdis,
     actions,
+    projections,
   };
 
   const unitLabel = `${report.store.name}${report.department ? ` ${report.department.name}` : ""}・${label(
@@ -203,6 +225,9 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
           kpiPrev={kpiPrev}
           kpiMonthStart={{}}
           hiddenKpis={hiddenKpis}
+          forwardMonths={forwardMonths}
+          kpiCarry={kpiCarry}
+          projCarry={projCarry}
         />
       )}
     </div>

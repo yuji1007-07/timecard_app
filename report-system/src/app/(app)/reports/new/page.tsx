@@ -1,7 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
-import { isoWeek, yearMonth } from "@/lib/utils";
+import { isoWeek, yearMonth, addMonthStr } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportSetup, type StoreOpt } from "./report-setup";
@@ -108,7 +108,7 @@ async function ResolvedForm({
     prisma.report.findFirst({
       where: { storeId, departmentId: departmentId ?? null, reportType: type, status: "SUBMITTED" },
       orderBy: { submittedAt: "desc" },
-      include: { kpiValues: true, actions: true },
+      include: { kpiValues: true, actions: true, projections: true },
     }),
     prisma.report.findFirst({
       where: { storeId, departmentId: departmentId ?? null, status: "SUBMITTED", submittedAt: { gte: monthStart, lt: monthEnd } },
@@ -156,6 +156,24 @@ async function ResolvedForm({
     hiddenKpis = [];
   }
 
+  // 月次：来月以降3ヶ月＋前月予測の引き継ぎ
+  const forwardMonths = type === "MONTHLY" ? [1, 2, 3].map((n) => addMonthStr(period, n)) : [];
+  const kpiCarry: Record<string, { budget: string; forecast: string }> = {};
+  const projCarry: Record<string, Record<string, { budget: string; forecast: string }>> = {};
+  if (type === "MONTHLY") {
+    const sv = (n: number | null) => (n != null ? String(n) : "");
+    for (const p of prevReport?.projections ?? []) {
+      if (p.targetMonth === period) {
+        // 前月が立てた「今月の予測」→ 今月の予算・着地予測
+        kpiCarry[p.kpiName] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+      }
+      if (forwardMonths.includes(p.targetMonth)) {
+        projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
+        projCarry[p.kpiName][p.targetMonth] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+      }
+    }
+  }
+
   if (kpiItems.length === 0) {
     return (
       <Card>
@@ -198,6 +216,9 @@ async function ResolvedForm({
         kpiPrev={kpiPrev}
         kpiMonthStart={kpiMonthStart}
         hiddenKpis={hiddenKpis}
+        forwardMonths={forwardMonths}
+        kpiCarry={kpiCarry}
+        projCarry={projCarry}
       />
     </div>
   );

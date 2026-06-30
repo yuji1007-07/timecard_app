@@ -58,6 +58,8 @@ export type ReportPayload = {
     successCondition: string;
   }[];
   progresses: { previousActionId: string; status: string; comment: string }[];
+  // 月次: 来月以降の予測（ローリング予測）
+  projections?: { kpiName: string; targetMonth: string; budget: number | null; forecast: number | null }[];
 };
 
 export async function submitReport(payload: ReportPayload) {
@@ -148,6 +150,11 @@ export async function submitReport(payload: ReportPayload) {
             expectedEffect: a.expectedEffect || null,
             successCondition: a.successCondition || null,
           })),
+      },
+      projections: {
+        create: (payload.projections ?? [])
+          .filter((p) => p.budget != null || p.forecast != null)
+          .map((p) => ({ kpiName: p.kpiName, targetMonth: p.targetMonth, budget: p.budget, forecast: p.forecast })),
       },
     },
   });
@@ -246,6 +253,7 @@ export async function updateReport(reportId: string, payload: ReportPayload) {
     await tx.reportInflow.deleteMany({ where: { reportId } });
     await tx.reportKdi.deleteMany({ where: { reportId } });
     await tx.reportAction.deleteMany({ where: { reportId } });
+    await tx.reportProjection.deleteMany({ where: { reportId } });
 
     await tx.report.update({
       where: { id: reportId },
@@ -308,6 +316,11 @@ export async function updateReport(reportId: string, payload: ReportPayload) {
               expectedEffect: a.expectedEffect || null,
               successCondition: a.successCondition || null,
             })),
+        },
+        projections: {
+          create: (payload.projections ?? [])
+            .filter((p) => p.budget != null || p.forecast != null)
+            .map((p) => ({ kpiName: p.kpiName, targetMonth: p.targetMonth, budget: p.budget, forecast: p.forecast })),
         },
       },
     });

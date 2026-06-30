@@ -171,12 +171,29 @@ model Report {
   store      Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
   department Department?      @relation(fields: [departmentId], references: [id])
   reporter   User             @relation(fields: [reporterId], references: [id])
-  kpiValues  ReportKpiValue[]
-  inflows    ReportInflow[]
-  kdis       ReportKdi[]
-  actions    ReportAction[]
-  progresses ActionProgress[]
-  feedback   Feedback?
+  kpiValues   ReportKpiValue[]
+  inflows     ReportInflow[]
+  kdis        ReportKdi[]
+  actions     ReportAction[]
+  progresses  ActionProgress[]
+  projections ReportProjection[]
+  feedback    Feedback?
+}
+
+// ===== 月次: 来月以降の予測（ローリング予測） =====
+// 月次報告で「対象月の翌月以降3ヶ月」の予算・着地予想を立てる。
+// targetMonth は予測対象の月（例: 2026-07）。budget=予算 / forecast=着地予想。
+model ReportProjection {
+  id          String  @id @default(cuid())
+  reportId    String
+  kpiName     String
+  targetMonth String // 予測対象の月 例: 2026-07
+  budget      Float? // 予算
+  forecast    Float? // 着地予想
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
 }
 
 // ===== 報告ごとの KPI 値 =====

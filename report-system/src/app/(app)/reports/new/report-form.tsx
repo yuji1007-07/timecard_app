@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KDI_STATUS, FREQUENCIES, GOOD_DIRECTIONS, label } from "@/lib/constants";
+import { monthShort } from "@/lib/utils";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -75,7 +76,11 @@ export type ReportInitial = {
   progressByActionId: Record<string, { status: string; comment: string }>;
   kdis: KdiRow[];
   actions: ActionRow[];
+  projections?: ProjMap;
 };
+
+// 月次の3ヶ月予測： kpiName -> 年月(YYYY-MM) -> { 予算, 着地予想 }（文字列で保持）
+export type ProjMap = Record<string, Record<string, { budget: string; forecast: string }>>;
 
 const EMPTY_MONTHLY: MonthlyState = {
   monthlySummary: "", successCases: "", missFactors: "", nextMonthFocusKpi: "", nextMonthKdi: "", nextMonthAction: "",
@@ -101,6 +106,9 @@ export function ReportForm({
   mode = "create",
   reportId,
   initial = null,
+  forwardMonths = [],
+  kpiCarry = {},
+  projCarry = {},
 }: {
   storeId: string;
   departmentId: string | null;
@@ -117,7 +125,12 @@ export function ReportForm({
   mode?: "create" | "edit";
   reportId?: string;
   initial?: ReportInitial | null;
+  forwardMonths?: string[];
+  kpiCarry?: Record<string, { budget: string; forecast: string }>;
+  projCarry?: ProjMap;
 }) {
+  const isMonthly = reportType === "MONTHLY";
+  const baseYear = Number((period.match(/^(\d{4})/) || [])[1]) || new Date().getFullYear();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -127,8 +140,53 @@ export function ReportForm({
 
   const [originalText, setOriginalText] = useState(initial?.originalText ?? "");
   const [kpi, setKpi] = useState<KpiState>(() =>
-    Object.fromEntries(kpiItems.map((k) => [k.id, initial?.kpiByName[k.name] ?? { target: "", current: "", forecast: "", comment: "" }]))
+    Object.fromEntries(
+      kpiItems.map((k) => {
+        if (initial?.kpiByName[k.name]) return [k.id, initial.kpiByName[k.name]];
+        // 新規・月次：前月が立てた「今月の予測」を 予算(target)・着地予測(forecast) に引き継ぐ（実績は空）
+        const carry = kpiCarry[k.name];
+        if (carry) return [k.id, { target: carry.budget, current: "", forecast: carry.forecast, comment: "" }];
+        return [k.id, { target: "", current: "", forecast: "", comment: "" }];
+      })
+    )
   );
+  // 月次：来月以降3ヶ月の予測 state（kpiName -> 月 -> {budget,forecast}）
+  const [proj, setProj] = useState<ProjMap>(() => {
+    const src: ProjMap = initial?.projections ?? projCarry;
+    const out: ProjMap = {};
+    for (const k of kpiItems) {
+      out[k.name] = {};
+      for (const mo of forwardMonths) {
+        const v = src[k.name]?.[mo];
+        out[k.name][mo] = { budget: v?.budget ?? "", forecast: v?.forecast ?? "" };
+      }
+    }
+    return out;
+  });
+  // 「前月から取り込む」：前月が立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
+  function applyCarry() {
+    setKpi((prev) => {
+      const next = { ...prev };
+      for (const k of kpiItems) {
+        const c = kpiCarry[k.name];
+        if (!c) continue;
+        next[k.id] = { ...next[k.id], target: c.budget || next[k.id].target, forecast: c.forecast || next[k.id].forecast };
+      }
+      return next;
+    });
+    setProj((prev) => {
+      const next: ProjMap = { ...prev };
+      for (const k of kpiItems) {
+        next[k.name] = { ...(next[k.name] ?? {}) };
+        for (const mo of forwardMonths) {
+          const v = projCarry[k.name]?.[mo];
+          if (v && (v.budget || v.forecast)) next[k.name][mo] = { budget: v.budget, forecast: v.forecast };
+        }
+      }
+      return next;
+    });
+  }
+  const hasCarry = Object.keys(kpiCarry).length > 0 || Object.keys(projCarry).length > 0;
   const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
   const [review, setReview] = useState<ReviewState>(initial?.review ?? { goodPoints: "", badPoints: "", dataIssues: "", doneThings: "", notDoneThings: "" });
   const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
@@ -257,6 +315,16 @@ export function ReportForm({
         };
       }),
       progresses: previousActions.map((a) => ({ previousActionId: a.id, status: progress[a.id].status, comment: progress[a.id].comment })),
+      projections: isMonthly
+        ? visibleKpis.flatMap((k) =>
+            forwardMonths.map((m) => ({
+              kpiName: k.name,
+              targetMonth: m,
+              budget: numOrNull(proj[k.name]?.[m]?.budget ?? ""),
+              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? ""),
+            }))
+          )
+        : [],
     };
 
     startTransition(async () => {
@@ -363,6 +431,11 @@ export function ReportForm({
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle>② KPI入力（{unitLabel}）</CardTitle>
             <div className="flex flex-wrap items-center gap-2">
+              {isMonthly && hasCarry && !editVisibility && (
+                <Button type="button" variant="outline" size="sm" onClick={applyCarry}>
+                  前月から取り込む
+                </Button>
+              )}
               {hasMonthStart && !editVisibility && (
                 <Button type="button" variant="outline" size="sm" onClick={reflectMonthStart}>
                   月初の目標・着地を反映
@@ -381,6 +454,10 @@ export function ReportForm({
           <p className="text-sm text-muted-foreground">
             {editVisibility ? (
               <>この店舗で<span className="font-medium">使わないKPI項目のチェックを外す</span>と、入力欄から非表示になります（管理側でもカットできます）。</>
+            ) : isMonthly ? (
+              <>
+                月次は<span className="font-medium">予算 / 着地予測 / 実績</span>を入力します。着地予測は前月に立てた予測（月内は基本変えない）。「前月から取り込む」で先月立てた予測を自動反映できます。着地が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>です。
+              </>
             ) : (
               <>
                 目標は月内で基本変わらないので「月初の目標・着地を反映」で前回の数値を呼び出せます。着地が目標に届かない項目（着地未達）は<span className="font-medium text-red-600">赤文字</span>、着地が先週から変わった項目は<span className="font-medium text-amber-600">黄色</span>で表示されます。
@@ -427,9 +504,19 @@ export function ReportForm({
             <>
               <div className="hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]">
                 <div>KPI名</div>
-                <div>目標</div>
-                <div>現状</div>
-                <div>着地予測</div>
+                {isMonthly ? (
+                  <>
+                    <div>予算</div>
+                    <div>着地予測</div>
+                    <div>実績</div>
+                  </>
+                ) : (
+                  <>
+                    <div>目標</div>
+                    <div>現状</div>
+                    <div>着地予測</div>
+                  </>
+                )}
                 <div>コメント</div>
               </div>
               {visibleKpis.length === 0 && (
@@ -456,31 +543,41 @@ export function ReportForm({
                           {k.required && <Badge variant="bad" className="text-[10px]">必須</Badge>}
                           <Badge variant={k.goodDirection === "UP" ? "good" : "warn"} className="text-[10px]">{label(GOOD_DIRECTIONS, k.goodDirection)}</Badge>
                         </div>
-                        <Input type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? "目標" : "—"} />
-                        <Input type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? "現状" : "—"} />
-                        <div>
-                          <Input
-                            type="number"
-                            step="any"
-                            inputMode="decimal"
-                            disabled={!k.hasForecast}
-                            value={kpi[k.id].forecast}
-                            onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))}
-                            placeholder={k.hasForecast ? "着地" : "—"}
-                            className={
-                              isUnder
-                                ? "border-red-400 bg-red-50 font-semibold text-red-700"
-                                : forecastChanged
-                                ? "border-amber-400 bg-amber-50"
-                                : ""
-                            }
-                          />
-                          {isUnder ? (
-                            <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（目標 {target}）</div>
-                          ) : forecastChanged ? (
-                            <div className="mt-0.5 text-[10px] text-amber-600">先週: {prevForecast}</div>
-                          ) : null}
-                        </div>
+                        {(() => {
+                          const budgetCell = (
+                            <Input key="b" type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? (isMonthly ? "予算" : "目標") : "—"} />
+                          );
+                          const actualCell = (
+                            <Input key="a" type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? (isMonthly ? "実績" : "現状") : "—"} />
+                          );
+                          const forecastCell = (
+                            <div key="f">
+                              <Input
+                                type="number"
+                                step="any"
+                                inputMode="decimal"
+                                disabled={!k.hasForecast}
+                                value={kpi[k.id].forecast}
+                                onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))}
+                                placeholder={k.hasForecast ? "着地" : "—"}
+                                className={
+                                  isUnder
+                                    ? "border-red-400 bg-red-50 font-semibold text-red-700"
+                                    : forecastChanged
+                                    ? "border-amber-400 bg-amber-50"
+                                    : ""
+                                }
+                              />
+                              {isUnder ? (
+                                <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（{isMonthly ? "予算" : "目標"} {target}）</div>
+                              ) : forecastChanged ? (
+                                <div className="mt-0.5 text-[10px] text-amber-600">{isMonthly ? "前回" : "先週"}: {prevForecast}</div>
+                              ) : null}
+                            </div>
+                          );
+                          // 月次：予算 → 着地予測 → 実績 ／ 週次：目標 → 現状 → 着地予測
+                          return isMonthly ? [budgetCell, forecastCell, actualCell] : [budgetCell, actualCell, forecastCell];
+                        })()}
                         <Input value={kpi[k.id].comment} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], comment: e.target.value } }))} placeholder="コメント" />
                       </div>
                     );
@@ -491,6 +588,55 @@ export function ReportForm({
           )}
         </CardContent>
       </Card>
+
+      {/* 月次: 来月以降3ヶ月の予測 */}
+      {isMonthly && forwardMonths.length > 0 && (
+        <Card className="border-navy/30">
+          <CardHeader>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <CardTitle>②-2 来月以降の予測（{forwardMonths.length}ヶ月先まで）</CardTitle>
+              {hasCarry && (
+                <Button type="button" variant="outline" size="sm" onClick={applyCarry}>前月から取り込む</Button>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">
+              月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の「予算」と「着地予想」を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
+            </p>
+          </CardHeader>
+          <CardContent className="overflow-x-auto">
+            <div style={{ minWidth: 560 + forwardMonths.length * 150 }}>
+              <div className="grid gap-2 border-b pb-2 text-xs font-medium text-muted-foreground" style={{ gridTemplateColumns: `1.6fr ${forwardMonths.map(() => "1fr").join(" ")}` }}>
+                <div>KPI名</div>
+                {forwardMonths.map((m) => (
+                  <div key={m} className="text-center">{monthShort(m, baseYear)} の予測</div>
+                ))}
+              </div>
+              {groupedVisible.map((g, gi) => (
+                <div key={g.category} className="space-y-2">
+                  <div className={`mt-2 rounded-md px-3 py-1 text-sm font-semibold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>{g.category}</div>
+                  {g.items.map((k) => (
+                    <div key={k.id} className="grid items-center gap-2 border-b pb-2 md:border-0 md:pb-0" style={{ gridTemplateColumns: `1.6fr ${forwardMonths.map(() => "1fr").join(" ")}` }}>
+                      <div className="text-sm font-medium">{k.name}<span className="ml-1 text-xs text-muted-foreground">({k.unit})</span></div>
+                      {forwardMonths.map((m) => (
+                        <div key={m} className="space-y-1">
+                          <div className="flex items-center gap-1">
+                            <span className="w-8 shrink-0 text-[10px] text-muted-foreground">予算</span>
+                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.budget ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), budget: e.target.value } } }))} placeholder="予算" />
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="w-8 shrink-0 text-[10px] text-muted-foreground">着地</span>
+                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="着地予想" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 流入経路 */}
       <Card>

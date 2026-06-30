@@ -26,3 +26,23 @@ export function isoWeek(date: Date): string {
 export function yearMonth(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
+
+/** 年月文字列(YYYY-MM)に n ヶ月足した年月文字列を返す。例: addMonthStr("2026-06",1)→"2026-07" */
+export function addMonthStr(ym: string, n: number): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  if (!m) return ym;
+  const total = Number(m[1]) * 12 + (Number(m[2]) - 1) + n;
+  const y = Math.floor(total / 12);
+  const mo = (total % 12) + 1;
+  return `${y}-${String(mo).padStart(2, "0")}`;
+}
+
+/** 年月文字列(YYYY-MM)を「6月」のような短い表記にする。年が baseYear と違えば「2027/1」。 */
+export function monthShort(ym: string, baseYear?: number): string {
+  const m = /^(\d{4})-(\d{2})$/.exec(ym);
+  if (!m) return ym;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  if (baseYear !== undefined && y !== baseYear) return `${y}/${mo}`;
+  return `${mo}月`;
+}

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendBadge } from "@/components/trend-badge";
 import { FeedbackPanel } from "./feedback-panel";
-import { fmt } from "@/lib/utils";
+import { fmt, addMonthStr, monthShort } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 const KDI_CHECK_LABEL = { OK: "問題なし", WARN: "注意", FIX: "要修正" } as const;
@@ -240,6 +240,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </CardContent>
         </Card>
 
+        {/* 月次：3ヶ月ローリング予測 */}
+        {report.reportType === "MONTHLY" && <RollingForecast report={report} />}
+
         {/* 振り返り + 流入 */}
         <Card>
           <CardHeader>
@@ -373,5 +376,77 @@ function ReviewLine({ label, value }: { label: string; value: string | null }) {
       <div className="text-xs font-medium text-muted-foreground">{label}</div>
       <div className="whitespace-pre-wrap">{value}</div>
     </div>
+  );
+}
+
+type RollingReport = {
+  targetMonth: string | null;
+  kpiValues: KpiValueRow[];
+  projections: { kpiName: string; targetMonth: string; budget: number | null; forecast: number | null }[];
+};
+
+function RollingForecast({ report }: { report: RollingReport }) {
+  const tm = report.targetMonth ?? "";
+  if (!/^\d{4}-\d{2}$/.test(tm)) return null;
+  const baseYear = Number(tm.slice(0, 4));
+  const fwd = [1, 2, 3].map((n) => addMonthStr(tm, n));
+  const projMap = new Map<string, { budget: number | null; forecast: number | null }>();
+  for (const p of report.projections) projMap.set(`${p.kpiName}__${p.targetMonth}`, { budget: p.budget, forecast: p.forecast });
+  const groups = groupKpiValuesByCategory(report.kpiValues);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>3ヶ月ローリング予測（予算・着地・実績）</CardTitle>
+        <p className="text-xs text-muted-foreground">当月の実績と、来月以降の予算・着地予想を横並びで確認できます。着地が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
+      </CardHeader>
+      <CardContent className="overflow-x-auto p-0">
+        <div className="min-w-[820px]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>KPI</TableHead>
+                <TableHead className="text-center">{monthShort(tm, baseYear)}（当月）</TableHead>
+                {fwd.map((m) => (
+                  <TableHead key={m} className="text-center">{monthShort(m, baseYear)}（予測）</TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.map((g, gi) => (
+                <Fragment key={g.category}>
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableCell colSpan={2 + fwd.length} className={`py-1 text-xs font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>{g.category}</TableCell>
+                  </TableRow>
+                  {g.items.map((v) => {
+                    const dir = v.kpiItem?.goodDirection ?? "UP";
+                    const under = v.target != null && v.forecast != null && (dir === "UP" ? v.forecast < v.target : v.forecast > v.target);
+                    return (
+                      <TableRow key={v.id}>
+                        <TableCell className="whitespace-nowrap font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
+                        <TableCell className="text-right text-xs tabular-nums">
+                          <div className="text-muted-foreground">予算 {fmt(v.target)}</div>
+                          <div className={under ? "font-semibold text-red-600" : ""}>着地 {fmt(v.forecast)}</div>
+                          <div className="font-semibold">実績 {fmt(v.current)}</div>
+                        </TableCell>
+                        {fwd.map((m) => {
+                          const p = projMap.get(`${v.kpiName}__${m}`);
+                          return (
+                            <TableCell key={m} className="text-right text-xs tabular-nums">
+                              <div className="text-muted-foreground">予算 {fmt(p?.budget ?? null)}</div>
+                              <div>着地 {fmt(p?.forecast ?? null)}</div>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

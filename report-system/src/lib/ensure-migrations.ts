@@ -12,10 +12,10 @@ import { KPI_PRESETS } from "./kpi-presets";
 
 let ran: Promise<void> | null = null;
 
-// マイグレーションのバージョン。新しい列を足したらここを上げる。
-const DONE_FLAG = "schema_migration_v2";
+// マイグレーションのバージョン。新しい列やテーブルを足したらここを上げる。
+const DONE_FLAG = "schema_migration_v3";
 
-// 追加カラム（既に存在すれば何もしない）
+// 追加カラム・テーブル（既に存在すれば何もしない。各文はtry/catchで実行）
 const COLUMN_MIGRATIONS = [
   `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "baseValue" DOUBLE PRECISION`,
   `ALTER TABLE "ReportAction" ADD COLUMN IF NOT EXISTS "targetValue" DOUBLE PRECISION`,
@@ -23,6 +23,18 @@ const COLUMN_MIGRATIONS = [
   `ALTER TABLE "KpiItem" ADD COLUMN IF NOT EXISTS "category" TEXT`,
   `ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
   `ALTER TABLE "Department" ADD COLUMN IF NOT EXISTS "hiddenKpis" TEXT`,
+  // 月次の3ヶ月予測テーブル
+  `CREATE TABLE IF NOT EXISTS "ReportProjection" (
+    "id" TEXT NOT NULL,
+    "reportId" TEXT NOT NULL,
+    "kpiName" TEXT NOT NULL,
+    "targetMonth" TEXT NOT NULL,
+    "budget" DOUBLE PRECISION,
+    "forecast" DOUBLE PRECISION,
+    CONSTRAINT "ReportProjection_pkey" PRIMARY KEY ("id")
+  )`,
+  `CREATE INDEX IF NOT EXISTS "ReportProjection_reportId_idx" ON "ReportProjection"("reportId")`,
+  `ALTER TABLE "ReportProjection" ADD CONSTRAINT "ReportProjection_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
 ];
 
 async function autoCategorize() {

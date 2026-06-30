@@ -9,6 +9,7 @@ export async function getReportAnalysis(reportId: string) {
       kpiValues: { include: { kpiItem: { select: { goodDirection: true, category: true } } } },
       kdis: true,
       actions: true,
+      projections: true,
       progresses: { include: { previousAction: true } },
       inflows: true,
       store: true,
