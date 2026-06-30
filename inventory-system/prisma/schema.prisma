@@ -1,0 +1,222 @@
+// 整骨院・鍼灸・エステグループ向け 販売品在庫管理システム
+// Prisma schema。DBは PostgreSQL（Supabase / Neon、report-system と同一構成、Vercelデプロイ対応）。
+// 列挙値は String + コメントで表現し、週次報告システムと同じ設計思想
+// （履歴積み上げ・key-value 設定・スナップショット保存）を踏襲。
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+datasource db {
+  // 本番は Supabase / Neon などの PostgreSQL。report-system と同一構成。
+  // 本番(Vercel)では Pooled connection を DATABASE_URL に、
+  // マイグレーション(prisma db push/migrate)では Direct connection を DIRECT_URL に設定する。
+  //
+  // schemas: このアプリのテーブルはすべて専用スキーマ "inventory" に作成する。
+  // 既存アプリ（申込/出席システム等）が public スキーマを使っていても、
+  // 1つの Supabase プロジェクトに安全に同居でき、db push/reset も inventory スキーマだけに作用する。
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["inventory"]
+}
+
+// ===== ユーザー / 権限 =====
+// role: AREA_MANAGER(エリアマネージャー＝本部) | STORE_STAFF(店舗スタッフ＝店舗管理者)
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  role         String   @default("STORE_STAFF")
+  storeId      String?
+  lineUserId   String? // LINE 通知先（本部）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store        Store?        @relation(fields: [storeId], references: [id])
+  transactions Transaction[]
+  stocktakes   Stocktake[]
+
+  @@schema("inventory")
+}
+
+// ===== 店舗 =====
+// businessType: SEIKOTSU(整骨院) | SHINKYU(鍼灸) | ESTHE(エステ) | COMPLEX(複合)
+// status: ACTIVE(稼働中) | SUSPENDED(休止中) | CLOSED(閉院)
+model Store {
+  id             String    @id @default(cuid())
+  name           String
+  businessType   String    @default("SEIKOTSU")
+  isHeadquarters Boolean   @default(false)
+  area           String?
+  directorName   String? // 院長・責任者
+  managerName    String?
+  openDate       DateTime?
+  status         String    @default("ACTIVE")
+  pinCode        String? // 店舗共通ログイン用 4桁PIN（軽量モード）
+  sortOrder      Int       @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  users          User[]
+  transactions   Transaction[] @relation("StoreTransactions")
+  transferTo     Transaction[] @relation("TransferToStore")
+  stocktakes     Stocktake[]
+  productStores  ProductStore[]
+
+  @@schema("inventory")
+}
+
+// ===== ブランド =====
+model Brand {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  colorHex  String   @default("#1e3a5f") // バッジ色
+  sortOrder Int      @default(0)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  products Product[]
+
+  @@schema("inventory")
+}
+
+// ===== カテゴリ（ウェア / ヘアケア / 美容機器 など。管理者が編集） =====
+model Category {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@schema("inventory")
+}
+
+// ===== 商品マスタ =====
+// priceModeNormal / priceModeWholesale: EXCL(税抜入力) | INCL(税込入力) | BOTH(両方入力)
+model Product {
+  id                 String   @id @default(cuid())
+  brandId            String
+  name               String
+  category           String? // カテゴリ名（緩く紐づけ）
+  normalPriceExcl    Float    @default(0) // 通常価格(税抜)
+  normalPriceIncl    Float    @default(0) // 通常価格(税込)
+  wholesalePriceExcl Float    @default(0) // 卸価格(税抜)
+  wholesalePriceIncl Float    @default(0) // 卸価格(税込)
+  taxRate            Int      @default(10) // 8 or 10
+  priceModeNormal    String   @default("BOTH")
+  priceModeWholesale String   @default("BOTH")
+  size               String? // サイズ（S/M/L/LL、足サイズ等。無い商品は null）
+  color              String? // カラー（無い商品は null）
+  unit               String   @default("個")
+  minStock           Int      @default(0) // 最小在庫数（下回るとアラート）
+  allStores          Boolean  @default(true) // 全店共通 or 一部店舗のみ
+  active             Boolean  @default(true)
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  brand          Brand           @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  transactions   Transaction[]
+  stocktakeItems StocktakeItem[]
+  productStores  ProductStore[]
+
+  @@schema("inventory")
+}
+
+// ===== 取扱店舗（allStores=false のときだけ使用） =====
+model ProductStore {
+  id        String @id @default(cuid())
+  productId String
+  storeId   String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+
+  @@schema("inventory")
+}
+
+// ===== 取引（在庫の増減はすべてここに記録し、合計で在庫を導出） =====
+// type: ORDER(発注/入荷 +) | CONSUME(消耗/販売 -) | TRANSFER_OUT(店舗間移動 元 -) |
+//       TRANSFER_IN(店舗間移動 先 +) | EMPLOYEE_SALE(社販 -) | GIFT(プレゼント -)
+model Transaction {
+  id            String   @id @default(cuid())
+  storeId       String // この取引が在庫に影響する店舗
+  productId     String
+  type          String
+  quantity      Int // 常に正の数。在庫への符号は type で決まる
+  date          DateTime @default(now()) // 取引日（発注日/販売日など）
+  unitPriceExcl Float? // 単価(税抜)
+  unitPriceIncl Float? // 単価(税込)
+  supplier      String? // 仕入先（発注）
+  counterpart   String? // 対象者/渡した相手（社販・プレゼント）
+  reason        String? // 理由（プレゼント）
+  assignee      String? // 担当者
+  memo          String?
+  toStoreId     String? // 店舗間移動の移動先（TRANSFER_OUT側に保持）
+  transferGroupId String? // 移動の OUT/IN ペアを紐づける
+  createdAt     DateTime @default(now())
+
+  store     Store    @relation("StoreTransactions", fields: [storeId], references: [id], onDelete: Cascade)
+  toStore   Store?   @relation("TransferToStore", fields: [toStoreId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+
+  @@index([storeId, productId])
+  @@index([transferGroupId])
+
+  @@schema("inventory")
+}
+
+// ===== 棚卸（実数確定） =====
+model Stocktake {
+  id          String   @id @default(cuid())
+  storeId     String
+  targetMonth String // 例: 2026-06
+  confirmedAt DateTime @default(now())
+  assigneeId  String?
+  assigneeName String?
+  diffCount   Int      @default(0) // ズレが出た商品数
+  diffAmount  Float    @default(0) // ズレ総額
+  createdAt   DateTime @default(now())
+
+  store    Store           @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  assignee User?           @relation(fields: [assigneeId], references: [id])
+  items    StocktakeItem[]
+
+  @@unique([storeId, targetMonth])
+  @@index([storeId])
+
+  @@schema("inventory")
+}
+
+// ===== 棚卸明細（商品ごとの理論在庫/実在庫/ズレ） =====
+model StocktakeItem {
+  id             String @id @default(cuid())
+  stocktakeId    String
+  productId      String
+  theoreticalQty Int    @default(0)
+  actualQty      Int    @default(0)
+  diff           Int    @default(0) // 実在庫 - 理論在庫
+  diffAmount     Float  @default(0) // ズレ金額
+
+  stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([stocktakeId])
+
+  @@schema("inventory")
+}
+
+// ===== 設定（通知・連携・締切・閾値）: key-value 単一テーブル =====
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@schema("inventory")
+}
