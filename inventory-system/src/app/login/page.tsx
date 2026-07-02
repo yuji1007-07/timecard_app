@@ -21,7 +21,7 @@ export default async function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-navy to-navy-dark p-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center text-white">
-          <h1 className="text-2xl font-bold">販売品在庫管理システム</h1>
+          <h1 className="text-2xl font-bold">まごころ在庫</h1>
           <p className="mt-1 text-sm text-white/70">整骨院・鍼灸・エステ グループ運営</p>
         </div>
         <Card>

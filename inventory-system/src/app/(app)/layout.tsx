@@ -36,7 +36,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col bg-navy px-3 py-5 text-white md:flex">
         <Link href="/dashboard" className="mb-6 px-2">
-          <div className="text-lg font-bold leading-tight">在庫管理</div>
+          <div className="text-lg font-bold leading-tight">まごころ在庫</div>
           <div className="text-xs text-white/60">整骨院・鍼灸・エステ</div>
         </Link>
         <nav className="flex-1 overflow-y-auto">
@@ -54,7 +54,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="relative flex items-center justify-between border-b bg-card px-4 py-3 md:hidden">
           <Link href="/dashboard" className="font-bold text-navy">
-            在庫管理
+            まごころ在庫
           </Link>
           <MobileMenu items={nav} userName={user.name ?? ""} roleName={label(ROLES, user.role)} />
         </header>
