@@ -76,7 +76,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         action={
           <div className="flex gap-2">
             <Link href={`/reports/${report.id}/edit`}>
-              <Button variant="outline">修正する</Button>
+              <Button variant="outline">{report.status === "DRAFT" ? "続きを入力" : "修正する"}</Button>
             </Link>
             <Link href={`/stores/${report.storeId}`}>
               <Button variant="outline">店舗カルテ</Button>
@@ -84,6 +84,17 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
           </div>
         }
       />
+
+      {report.status === "DRAFT" && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border-2 border-yellow-300 bg-yellow-50 px-4 py-3">
+          <span className="text-sm font-medium text-yellow-800">
+            これは下書きです（未提出）。「続きを入力」から入力を再開し、提出してください。
+          </span>
+          <Link href={`/reports/${report.id}/edit`}>
+            <Button size="sm">続きを入力</Button>
+          </Link>
+        </div>
+      )}
 
       {/* 報告原本（原文） */}
       {report.originalText && (

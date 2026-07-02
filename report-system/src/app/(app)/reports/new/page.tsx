@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
@@ -182,6 +183,11 @@ async function ResolvedForm({
         </CardContent>
       </Card>
     );
+  }
+
+  // 同じ対象期間の「下書き」が既にあれば、その続きの入力へ誘導（二重作成を防ぐ）
+  if (existing && existing.status === "DRAFT") {
+    redirect(`/reports/${existing.id}/edit`);
   }
 
   return (

@@ -178,13 +178,15 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
     report.department?.businessType ?? report.store.businessType
   )}`;
 
+  const isDraft = report.status === "DRAFT";
+
   return (
     <div>
       <PageHeader
-        title="報告を修正"
-        description={`${unitLabel}／対象: ${period}`}
+        title={isDraft ? "下書きの続きを入力" : "報告を修正"}
+        description={`${unitLabel}／対象: ${period}${isDraft ? "（下書き・未提出）" : ""}`}
         action={
-          <Link href={`/reports/${report.id}`}>
+          <Link href={isDraft ? "/reports" : `/reports/${report.id}`}>
             <Button variant="outline">キャンセル</Button>
           </Link>
         }
@@ -200,6 +202,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
         <ReportForm
           mode="edit"
           reportId={report.id}
+          initialStatus={report.status}
           initial={initial}
           storeId={storeId}
           departmentId={departmentId}
