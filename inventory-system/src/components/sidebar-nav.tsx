@@ -15,6 +15,7 @@ import {
   KeyRound,
   Boxes,
   Printer,
+  SlidersHorizontal,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ const ICONS = {
   settings: Settings,
   account: KeyRound,
   print: Printer,
+  toggle: SlidersHorizontal,
 } as const;
 
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS };

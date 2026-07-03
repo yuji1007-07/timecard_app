@@ -12,6 +12,7 @@ const AREA_NAV: NavItem[] = [
   { href: "/stocktake", label: "棚卸", icon: "stocktake" },
   { href: "/stores", label: "店舗管理", icon: "store" },
   { href: "/products", label: "商品マスタ", icon: "product" },
+  { href: "/store-products", label: "店舗別 取扱設定", icon: "toggle" },
   { href: "/brands", label: "ブランド・カテゴリ", icon: "brand" },
   { href: "/users", label: "ユーザー管理", icon: "users" },
   { href: "/backup", label: "PDFバックアップ", icon: "print" },
@@ -36,6 +37,7 @@ const MANAGER_NAV: NavItem[] = [
   { href: "/transactions", label: "取引履歴", icon: "transaction" },
   { href: "/stocktake", label: "棚卸", icon: "stocktake" },
   { href: "/products", label: "商品マスタ", icon: "product" },
+  { href: "/store-products", label: "店舗別 取扱設定", icon: "toggle" },
   { href: "/brands", label: "ブランド・カテゴリ", icon: "brand" },
   { href: "/account", label: "アカウント設定", icon: "account" },
 ];

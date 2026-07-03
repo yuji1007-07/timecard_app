@@ -65,6 +65,7 @@ model Store {
   transferTo     Transaction[] @relation("TransferToStore")
   stocktakes     Stocktake[]
   productStores  ProductStore[]
+  disabledProducts StoreProductDisable[]
 
   @@schema("inventory")
 }
@@ -121,6 +122,7 @@ model Product {
   transactions   Transaction[]
   stocktakeItems StocktakeItem[]
   productStores  ProductStore[]
+  disabledStores StoreProductDisable[]
 
   @@schema("inventory")
 }
@@ -135,6 +137,24 @@ model ProductStore {
   store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([productId, storeId])
+
+  @@schema("inventory")
+}
+
+// ===== 店舗別 取扱オフ（各店舗で「使わない商品」を非表示にする） =====
+// 既定では全商品が各店舗で利用可能（大元＝本部が商品マスタを管理）。
+// ここに (productId, storeId) の行があると、その店舗ではオフ（在庫一覧・取引・棚卸から除外）。
+// 新しく追加した店舗は自動的に全商品オンになる（opt-out 方式）。
+model StoreProductDisable {
+  id        String @id @default(cuid())
+  productId String
+  storeId   String
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, storeId])
+  @@index([storeId])
 
   @@schema("inventory")
 }

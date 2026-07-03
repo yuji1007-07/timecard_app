@@ -78,12 +78,14 @@ export async function computeStoreStocks(storeId: string): Promise<Map<string, n
   return result;
 }
 
-/** 店舗が取り扱う商品（allStores or ProductStore で指定）を返す */
+/** 店舗が取り扱う商品（allStores or ProductStore で指定。店舗別オフは除外）を返す */
 export async function getStoreProducts(storeId: string) {
   return prisma.product.findMany({
     where: {
       active: true,
       OR: [{ allStores: true }, { productStores: { some: { storeId } } }],
+      // 各店舗で「使わない」とオフにした商品は除外
+      NOT: { disabledStores: { some: { storeId } } },
     },
     include: { brand: true },
     orderBy: [{ brand: { sortOrder: "asc" } }, { sortOrder: "asc" }, { name: "asc" }],
