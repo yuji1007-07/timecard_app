@@ -12,15 +12,17 @@
 // ============================================================
 
 import { DEFAULT_TEMPLATES, DEFAULT_STORES } from "./seed.js";
+import { API_BASE, API_PASSWORD } from "./config.js";
 
 // ---- 接続設定（ログイン画面で設定し、ブラウザに記憶） ----
 const KEY_API_BASE = "moushikomi_api_base";   // サーバーのURL
-const KEY_PASSWORD = "moushikomi_password";   // スタッフ共通の合言葉
+const KEY_PASSWORD = "moushikomi_password";   // サーバー共通キー（裏側）
 const KEY_DRAFT = "moushikomi_draft_v1";      // 入力途中の下書き
+const KEY_SESSION = "moushikomi_session_v1";  // ログイン中の店舗/本部の情報
 
 // サーバーURLの初期値（会社の勤怠アプリのURL + /api/moushikomi）。
 // 違う場合はログイン画面で変更できます。
-const DEFAULT_API_BASE = "https://timecard-app-1.onrender.com/api/moushikomi";
+const DEFAULT_API_BASE = API_BASE;
 
 // ------- ID生成 -------
 export function newId() {
@@ -32,14 +34,42 @@ export function getApiBase() {
   return localStorage.getItem(KEY_API_BASE) || DEFAULT_API_BASE;
 }
 export function getPassword() {
-  return localStorage.getItem(KEY_PASSWORD) || "";
+  // 端末に保存済みのキーがあれば優先。無ければ内蔵の共通キーを使う。
+  return localStorage.getItem(KEY_PASSWORD) || API_PASSWORD;
 }
 export function setCredentials(apiBase, password) {
-  localStorage.setItem(KEY_API_BASE, apiBase.replace(/\/+$/, "")); // 末尾スラッシュ除去
-  localStorage.setItem(KEY_PASSWORD, password);
+  if (apiBase) localStorage.setItem(KEY_API_BASE, apiBase.replace(/\/+$/, "")); // 末尾スラッシュ除去
+  if (password) localStorage.setItem(KEY_PASSWORD, password);
 }
 export function clearCredentials() {
   localStorage.removeItem(KEY_PASSWORD);
+}
+
+// ------- ログインセッション（店舗ログイン / 本部ログイン） -------
+// store モード: { mode:"store", storeName, department, pin }
+// hq    モード: { mode:"hq", name }
+export function getSession() {
+  const raw = localStorage.getItem(KEY_SESSION);
+  return raw ? JSON.parse(raw) : null;
+}
+export function setSession(session) {
+  localStorage.setItem(KEY_SESSION, JSON.stringify(session));
+}
+export function clearSession() {
+  localStorage.removeItem(KEY_SESSION);
+}
+export function isHQ() {
+  const s = getSession();
+  return !!s && s.mode === "hq";
+}
+// 店舗ログイン中ならその店舗名、本部なら "" を返す
+export function currentStore() {
+  const s = getSession();
+  return s && s.mode === "store" ? s.storeName : "";
+}
+export function currentDepartment() {
+  const s = getSession();
+  return s && s.mode === "store" ? s.department : "";
 }
 
 // ------- サーバー通信の共通処理 -------

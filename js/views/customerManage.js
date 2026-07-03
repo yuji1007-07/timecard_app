@@ -5,7 +5,7 @@
 // カルテ番号・氏名で検索できます。
 // ============================================================
 
-import { getApplications } from "../storage.js";
+import { getApplications, isHQ, currentStore } from "../storage.js";
 import { esc, formatDateJa, showError } from "../util.js";
 import { exportAppsToZip, downloadBlob } from "../backup.js";
 
@@ -171,6 +171,13 @@ export function render(container) {
     listEl.innerHTML = `<div class="loading-box">⏳ 読み込み中…</div>`;
     try {
       allApps = await getApplications();
+      // 店舗ログイン中は自店のデータだけに絞る（本部は全店）
+      if (!isHQ()) {
+        const mine = currentStore();
+        allApps = allApps.filter((a) => (a.storeName || "") === mine);
+        // 店舗が1つに固定されるので、店舗の絞り込みは隠す
+        storeSelect.style.display = "none";
+      }
       fillStores();
       draw();
     } catch (e) {
