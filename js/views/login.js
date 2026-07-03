@@ -6,7 +6,7 @@
 // ============================================================
 
 import {
-  setCredentials, getApiBase, checkAuth, seedIfEmpty, setSession,
+  setCredentials, getApiBase, checkAuth, seedIfEmpty, setSession, getHqSettings,
 } from "../storage.js";
 import { HQ, findStoreByPin } from "../config.js";
 import { esc } from "../util.js";
@@ -124,22 +124,28 @@ export function render(container, params = {}) {
   hqBtn.addEventListener("click", async () => {
     const id = container.querySelector("#hqId").value.trim();
     const pw = container.querySelector("#hqPw").value;
-    if (id !== HQ.id || pw !== HQ.password) {
-      errEl.textContent = "IDまたはパスワードが正しくありません。";
-      return;
-    }
     hqBtn.disabled = true;
     hqBtn.textContent = "接続中…";
     errEl.textContent = "";
+    // まず接続を確立してから、サーバー保存の本部設定を取得して照合する
     const ok = await connectAndCheck();
-    if (ok) {
-      await finishLogin({ mode: "hq", name: HQ.name });
-    } else {
+    if (!ok) {
       hqBtn.disabled = false;
       hqBtn.textContent = "本部としてログイン";
       errEl.textContent = "サーバーに接続できませんでした。「サーバー設定」を開いてご確認ください。";
       container.querySelector("#advBox").open = true;
+      return;
     }
+    // サーバーに保存された本部ID/パスワードがあればそれを使用。無ければ初期値。
+    const remote = await getHqSettings();
+    const eff = remote || { id: HQ.id, password: HQ.password };
+    if (id !== eff.id || pw !== eff.password) {
+      hqBtn.disabled = false;
+      hqBtn.textContent = "本部としてログイン";
+      errEl.textContent = "IDまたはパスワードが正しくありません。";
+      return;
+    }
+    await finishLogin({ mode: "hq", name: HQ.name });
   });
 
   // Enterキー対応

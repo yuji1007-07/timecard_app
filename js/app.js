@@ -21,6 +21,7 @@ import * as history from "./views/history.js";
 import * as customerManage from "./views/customerManage.js";
 import * as templateList from "./views/templateList.js";
 import * as templateEdit from "./views/templateEdit.js";
+import * as settingsView from "./views/settingsView.js";
 
 const appEl = document.getElementById("app");
 let authed = false; // ログイン済みかどうか
@@ -41,6 +42,21 @@ function updateSessionBar() {
     bar.className = "session-bar";
     nav.after(bar);
   }
+  // 本部ログイン時だけ「本部設定」リンクをナビに出す
+  let navSettings = document.getElementById("navSettings");
+  if (isHQ()) {
+    if (!navSettings) {
+      navSettings = document.createElement("a");
+      navSettings.id = "navSettings";
+      navSettings.className = "nav-link";
+      navSettings.href = "#/settings";
+      navSettings.textContent = "本部設定";
+      nav.appendChild(navSettings);
+    }
+  } else if (navSettings) {
+    navSettings.remove();
+  }
+
   const who = isHQ()
     ? `🏢 本部（全店）`
     : `🏥 ${currentDepartment()}／${currentStore()}`;
@@ -69,6 +85,7 @@ const routes = [
   { pattern: /^\/customers$/, view: customerManage },
   { pattern: /^\/templates$/, view: templateList },
   { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"] },
+  { pattern: /^\/settings$/, view: settingsView },
 ];
 
 function router() {

@@ -125,10 +125,41 @@ export function startKeepAlive() {
 let _templatesCache = null;
 let _storesCache = null;
 
+// 本部設定など、テンプレート以外の予約ドキュメントのID
+const SETTINGS_ID = "__hq_settings__";
+
 export async function getTemplates(force = false) {
   if (!force && _templatesCache) return _templatesCache;
-  _templatesCache = await api("/templates");
+  const all = await api("/templates");
+  // 設定用の予約ドキュメントは「テンプレート一覧」からは除外する
+  _templatesCache = (all || []).filter((t) => t && t.id !== SETTINGS_ID && t.kind !== "settings");
   return _templatesCache;
+}
+
+// ------- 本部ログイン設定（サーバー保存＝全端末で共有） -------
+// サーバーに置くことで、どの端末からでも同じ本部ID/パスワードでログインできます。
+export async function getHqSettings() {
+  try {
+    const all = await api("/templates");
+    const doc = (all || []).find((t) => t && t.id === SETTINGS_ID);
+    return doc ? { id: doc.hqId, password: doc.hqPassword } : null;
+  } catch (e) {
+    return null; // 取得できなければ null（呼び出し側で初期値にフォールバック）
+  }
+}
+export async function saveHqSettings({ id, password }) {
+  const doc = {
+    id: SETTINGS_ID,
+    kind: "settings",
+    hqId: id,
+    hqPassword: password,
+    updatedAt: new Date().toISOString(),
+  };
+  await api("/templates/" + encodeURIComponent(SETTINGS_ID), {
+    method: "PUT",
+    body: JSON.stringify(doc),
+  });
+  _templatesCache = null;
 }
 
 export async function getTemplate(id) {
