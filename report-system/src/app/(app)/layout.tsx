@@ -7,6 +7,7 @@ import { ROLES, label } from "@/lib/constants";
 
 const AREA_NAV: NavItem[] = [
   { href: "/dashboard", label: "ダッシュボード", icon: "dashboard" },
+  { href: "/trends", label: "店舗別 推移・比較", icon: "kpi" },
   { href: "/stores", label: "店舗管理", icon: "store" },
   { href: "/reports", label: "報告一覧", icon: "report" },
   { href: "/kpi-templates", label: "KPIテンプレート", icon: "kpi" },
