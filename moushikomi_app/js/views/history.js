@@ -3,7 +3,7 @@
 // 作成済みの申込書を一覧表示し、検索・PDF確認・削除ができます。
 // ============================================================
 
-import { getApplications, deleteApplication } from "../storage.js";
+import { getApplications, deleteApplication, isHQ, currentStore } from "../storage.js";
 import { esc, formatDateJa, showError } from "../util.js";
 
 export function render(container) {
@@ -117,6 +117,11 @@ export function render(container) {
     listEl.innerHTML = `<div class="loading-box">⏳ 読み込み中…</div>`;
     try {
       allApps = await getApplications();
+      // 店舗ログイン中は自店のデータだけ（本部は全店）
+      if (!isHQ()) {
+        const mine = currentStore();
+        allApps = allApps.filter((a) => (a.storeName || "") === mine);
+      }
       draw();
     } catch (e) {
       showError(listEl, e);

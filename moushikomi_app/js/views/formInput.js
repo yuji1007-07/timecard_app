@@ -4,7 +4,8 @@
 // 入力した内容は「下書き(draft)」として保存し、確認画面に渡します。
 // ============================================================
 
-import { getTemplate, getStores, setDraft, getDraft, newId } from "../storage.js";
+import { getTemplate, getStores, setDraft, getDraft, newId, isHQ, currentStore, currentDepartment } from "../storage.js";
+import { STORES } from "../config.js";
 import { esc, todayStr, go, showLoading, showError } from "../util.js";
 
 export async function render(container, params) {
@@ -28,10 +29,19 @@ export async function render(container, params) {
   const draft = getDraft();
   const prev = draft && draft.templateId === template.id ? draft : null;
 
-  // 店舗の選択肢
+  // 店舗ログイン中は、その店舗に固定（店員さんは店舗を選べません）
+  const lockedStore = currentStore(); // 本部ログインなら ""
+
+  // 店舗の選択肢（本部ログイン時のみ選択可能）
   const storeOptions = stores
     .map((s) => `<option value="${esc(s)}" ${prev && prev.storeName === s ? "selected" : ""}>${esc(s)}</option>`)
     .join("");
+  const storeField = lockedStore
+    ? `<input id="storeName" class="field__input" type="text" value="${esc(lockedStore)}" readonly style="background:#f0f0ec" />`
+    : `<select id="storeName" class="field__input">
+         <option value="">― 選択 ―</option>
+         ${storeOptions}
+       </select>`;
 
   // プランの選択肢（プランがある場合のみ表示）
   const planBlock =
@@ -117,10 +127,7 @@ export async function render(container, params) {
           </div>
           <div class="field">
             <label class="field__label">店舗名 <span class="field__req">必須</span></label>
-            <select id="storeName" class="field__input">
-              <option value="">― 選択 ―</option>
-              ${storeOptions}
-            </select>
+            ${storeField}
           </div>
         </div>
         <div class="field">
@@ -203,6 +210,10 @@ export async function render(container, params) {
       fields: template.fields,        // 表示用に項目定義も保持
       applyDate,
       storeName,
+      // 部門を記録（店舗ログインはその部門、本部は選んだ店舗から判定）
+      department: isHQ()
+        ? ((STORES.find((s) => s.store === storeName) || {}).dept || "")
+        : currentDepartment(),
       staffName: container.querySelector("#staffName").value.trim(),
       fieldValues,
       planId,

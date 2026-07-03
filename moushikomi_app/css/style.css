@@ -399,6 +399,35 @@ a { color: inherit; text-decoration: none; }
 .login-advanced { margin: 8px 0 4px; }
 .login-advanced summary { cursor: pointer; color: var(--blue); font-size: 14px; }
 
+/* ログインのタブ（店舗 / 本部） */
+.login-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+.login-tab {
+  flex: 1; padding: 12px 8px; border: 1px solid var(--gray-line);
+  background: #f4f4f0; color: var(--gray-text); border-radius: 12px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+.login-tab--active { background: var(--navy); color: #fff; border-color: var(--navy); }
+.login-pin {
+  font-size: 30px; letter-spacing: 10px; text-align: center; font-weight: 800;
+}
+
+/* ヘッダーの「ログイン中の店舗／本部＋ログアウト」バー */
+.session-bar {
+  display: flex; align-items: center; gap: 12px; margin-left: auto;
+}
+.session-bar__who {
+  font-size: 14px; font-weight: 700; color: #fff;
+  background: rgba(255,255,255,.15); padding: 6px 12px; border-radius: 999px;
+  white-space: nowrap;
+}
+.session-bar__logout {
+  background: #fff; color: var(--navy); border: none; border-radius: 8px;
+  padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+@media (max-width: 640px) {
+  .session-bar__who { max-width: 42vw; overflow: hidden; text-overflow: ellipsis; }
+}
+
 /* ---------- 複数選択（チェックボックス群） ---------- */
 .checkbox-group {
   display: grid;

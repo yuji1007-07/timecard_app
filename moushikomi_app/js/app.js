@@ -7,7 +7,7 @@
 // 成功してから各画面を表示します。
 // ============================================================
 
-import { checkAuth, seedIfEmpty, startKeepAlive } from "./storage.js";
+import { checkAuth, seedIfEmpty, startKeepAlive, getSession, clearSession, isHQ, currentStore, currentDepartment } from "./storage.js";
 
 // 各画面（views フォルダの中の部品）を読み込む
 import * as login from "./views/login.js";
@@ -24,6 +24,37 @@ import * as templateEdit from "./views/templateEdit.js";
 
 const appEl = document.getElementById("app");
 let authed = false; // ログイン済みかどうか
+
+// 画面上部に「ログイン中の店舗／本部」と「ログアウト」を表示する
+function updateSessionBar() {
+  const nav = document.querySelector(".app-header__nav");
+  if (!nav) return;
+  let bar = document.getElementById("sessionBar");
+  const session = getSession();
+  if (!session) {
+    if (bar) bar.remove();
+    return;
+  }
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "sessionBar";
+    bar.className = "session-bar";
+    nav.after(bar);
+  }
+  const who = isHQ()
+    ? `🏢 本部（全店）`
+    : `🏥 ${currentDepartment()}／${currentStore()}`;
+  bar.innerHTML = `
+    <span class="session-bar__who">${who}</span>
+    <button id="logoutBtn" class="session-bar__logout">ログアウト</button>`;
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    if (!confirm("ログアウトしますか？")) return;
+    clearSession();
+    authed = false;
+    location.hash = "/login";
+    router();
+  });
+}
 
 // ルート定義
 const routes = [
@@ -44,9 +75,11 @@ function router() {
   // 未ログインならログイン画面（または明示的に #/login）
   const hash = location.hash.replace(/^#/, "") || "/";
   if (!authed || hash === "/login") {
+    updateSessionBar();
     showLogin();
     return;
   }
+  updateSessionBar();
 
   for (const route of routes) {
     const match = hash.match(route.pattern);
@@ -71,6 +104,7 @@ function showLogin() {
     onSuccess: () => {
       authed = true;
       startKeepAlive();
+      updateSessionBar();
       location.hash = "/";
       router();
     },
@@ -86,11 +120,13 @@ async function boot() {
         （しばらく使っていなかった場合、最初の接続に最大1分ほどかかります）
       </span>
     </div>`;
-  authed = await checkAuth();
+  // ログイン済み（＝店舗/本部のセッションがある）かどうかで判定
+  authed = !!getSession();
   if (authed) {
     startKeepAlive();       // 開いている間サーバーを起こし続ける
-    await seedIfEmpty();
+    checkAuth().then((ok) => { if (ok) seedIfEmpty(); }); // 疎通確認は裏で
   }
+  updateSessionBar();
   router();
 }
 
