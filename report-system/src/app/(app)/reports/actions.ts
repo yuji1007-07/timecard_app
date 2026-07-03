@@ -62,8 +62,14 @@ export type ReportPayload = {
   projections?: { kpiName: string; targetMonth: string; budget: number | null; forecast: number | null }[];
 };
 
-export async function submitReport(payload: ReportPayload) {
+/**
+ * 報告を新規作成する。
+ * opts.draft=true の場合は「下書き」として保存し、フィードバック枠の作成・
+ * スプレッドシート連携は行わない（提出時に実行される）。
+ */
+export async function submitReport(payload: ReportPayload, opts?: { draft?: boolean }) {
   const user = await requireUser();
+  const isDraft = opts?.draft === true;
 
   // 権限チェック: 管理者以外は自店舗/自部門のみ
   if (user.role !== "AREA_MANAGER") {
@@ -91,7 +97,7 @@ export async function submitReport(payload: ReportPayload) {
       reportType: payload.reportType,
       targetWeek: payload.targetWeek,
       targetMonth: payload.targetMonth,
-      status: "SUBMITTED",
+      status: isDraft ? "DRAFT" : "SUBMITTED",
       originalText: payload.originalText || null,
       goodPoints: payload.review.goodPoints || null,
       badPoints: payload.review.badPoints || null,
@@ -179,10 +185,25 @@ export async function submitReport(payload: ReportPayload) {
     });
   }
 
+  // 下書きの場合はここで終了（フィードバック枠・シート連携は提出時に実行）
+  if (isDraft) {
+    revalidatePath("/reports");
+    redirect("/reports?draft=saved");
+  }
+
   // 空のフィードバック枠を作成
   await prisma.feedback.create({ data: { reportId: report.id } });
 
   // Googleスプレッドシート連携（設定ONかつ認証情報があれば出力／無ければドライランで無視）
+  await syncReportToSheets(payload, user.name ?? "");
+
+  revalidatePath("/dashboard");
+  revalidatePath("/reports");
+  redirect(`/reports/${report.id}`);
+}
+
+/** 提出時のスプレッドシート出力（失敗しても提出はブロックしない） */
+async function syncReportToSheets(payload: ReportPayload, userName: string) {
   try {
     const store = await prisma.store.findUnique({ where: { id: payload.storeId } });
     const dept = payload.departmentId ? await prisma.department.findUnique({ where: { id: payload.departmentId } }) : null;
@@ -193,7 +214,7 @@ export async function submitReport(payload: ReportPayload) {
       store?.name ?? "",
       dept?.name ?? "",
       store?.businessType ?? "",
-      user.name ?? "",
+      userName,
       k.kpiName,
       k.target ?? "",
       k.current ?? "",
@@ -203,19 +224,17 @@ export async function submitReport(payload: ReportPayload) {
   } catch {
     // 連携失敗は提出をブロックしない
   }
-
-  revalidatePath("/dashboard");
-  revalidatePath("/reports");
-  redirect(`/reports/${report.id}`);
 }
 
 /**
- * 既に提出済みの報告を修正する。
+ * 既存の報告（提出済み or 下書き）を更新する。
  * このレポートに紐づく子レコード（KPI値・流入・KDI・Action・前回Action進捗）を入れ替えて、
  * 本文・月次項目を更新する。差分はこのレポートより前の報告に対して再計算する。
+ * 下書きの場合: opts.submit=true なら提出（SUBMITTEDに昇格・提出日時更新・シート連携）、
+ * それ以外は下書きのまま保存する。
  * 注意: このレポートのActionを参照する「より新しい報告の進捗」がある場合、その進捗は再計算対象外。
  */
-export async function updateReport(reportId: string, payload: ReportPayload) {
+export async function updateReport(reportId: string, payload: ReportPayload, opts?: { submit?: boolean }) {
   const user = await requireUser();
 
   const existing = await prisma.report.findUnique({ where: { id: reportId } });
@@ -345,6 +364,26 @@ export async function updateReport(reportId: string, payload: ReportPayload) {
       });
     }
   });
+
+  // 下書きの扱い
+  if (existing.status === "DRAFT") {
+    if (opts?.submit) {
+      // 下書き → 提出（提出日時を今にして昇格）
+      await prisma.report.update({
+        where: { id: reportId },
+        data: { status: "SUBMITTED", submittedAt: new Date() },
+      });
+      // フィードバック枠（無ければ作成）
+      const fb = await prisma.feedback.findUnique({ where: { reportId } });
+      if (!fb) await prisma.feedback.create({ data: { reportId } });
+      // シート連携は提出時に実行
+      await syncReportToSheets(payload, user.name ?? "");
+    } else {
+      // 下書きのまま保存
+      revalidatePath("/reports");
+      redirect("/reports?draft=saved");
+    }
+  }
 
   revalidatePath("/dashboard");
   revalidatePath("/reports");

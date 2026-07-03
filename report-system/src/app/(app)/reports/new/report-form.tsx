@@ -106,6 +106,7 @@ export function ReportForm({
   mode = "create",
   reportId,
   initial = null,
+  initialStatus = "SUBMITTED",
   forwardMonths = [],
   kpiCarry = {},
   projCarry = {},
@@ -125,6 +126,7 @@ export function ReportForm({
   mode?: "create" | "edit";
   reportId?: string;
   initial?: ReportInitial | null;
+  initialStatus?: string; // "DRAFT" | "SUBMITTED"（edit時の元ステータス）
   forwardMonths?: string[];
   kpiCarry?: Record<string, { budget: string; forecast: string }>;
   projCarry?: ProjMap;
@@ -134,6 +136,7 @@ export function ReportForm({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [draftPending, setDraftPending] = useState(false); // どちらのボタンで実行中か
   const [editVisibility, setEditVisibility] = useState(false);
   const [savingVis, setSavingVis] = useState(false);
   const hiddenSet = useMemo(() => new Set(hiddenKpis), [hiddenKpis]);
@@ -268,13 +271,16 @@ export function ReportForm({
     setKdis((prev) => [...prev, { kdiItemId: null, name: "", relatedKpiName: "", assignee: "", deadline: "", frequency: "WEEKLY1", count: "", targetPerson: "", status: "ONGOING", comment: "" }]);
   }
 
-  function handleSubmit() {
+  function handleSubmit(asDraft = false) {
     setError(null);
-    // 必須KPIチェック（非表示の項目は対象外）
-    for (const k of visibleKpis) {
-      if (k.required && k.hasCurrent && numOrNull(kpi[k.id].current) === null) {
-        setError(`必須KPI「${k.name}」の現状値を入力してください。`);
-        return;
+    setDraftPending(asDraft);
+    // 必須KPIチェック（非表示の項目は対象外）。下書き保存時は未入力OK。
+    if (!asDraft) {
+      for (const k of visibleKpis) {
+        if (k.required && k.hasCurrent && numOrNull(kpi[k.id].current) === null) {
+          setError(`必須KPI「${k.name}」の現状値を入力してください。`);
+          return;
+        }
       }
     }
 
@@ -330,9 +336,10 @@ export function ReportForm({
     startTransition(async () => {
       try {
         if (mode === "edit" && reportId) {
-          await updateReport(reportId, payload);
+          // 下書きの編集: asDraft=false なら提出（SUBMITTEDへ昇格）
+          await updateReport(reportId, payload, { submit: !asDraft });
         } else {
-          await submitReport(payload);
+          await submitReport(payload, { draft: asDraft });
         }
       } catch (e) {
         // redirect() は例外を投げるので、本物のエラーのみ表示
@@ -796,9 +803,23 @@ export function ReportForm({
 
       <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t bg-card/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
         {error ? <span className="text-sm text-destructive">{error}</span> : <span className="text-sm text-muted-foreground">対象: {period}</span>}
-        <Button onClick={handleSubmit} disabled={pending} size="lg">
-          {pending ? (mode === "edit" ? "更新中..." : "提出中...") : mode === "edit" ? "報告を更新する" : "報告を提出する"}
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* 下書き保存: 新規作成時、または下書きの続き編集時に表示（提出済みの修正では非表示） */}
+          {(mode === "create" || initialStatus === "DRAFT") && (
+            <Button onClick={() => handleSubmit(true)} disabled={pending} size="lg" variant="outline">
+              {pending && draftPending ? "保存中..." : "下書き保存"}
+            </Button>
+          )}
+          <Button onClick={() => handleSubmit(false)} disabled={pending} size="lg">
+            {pending && !draftPending
+              ? mode === "edit" && initialStatus !== "DRAFT"
+                ? "更新中..."
+                : "提出中..."
+              : mode === "edit" && initialStatus !== "DRAFT"
+                ? "報告を更新する"
+                : "報告を提出する"}
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -17,9 +17,13 @@ export const BUSINESS_TYPE_CLASS: Record<string, string> = {
 
 export const ROLES = {
   AREA_MANAGER: "エリアマネージャー（本部）",
+  STORE_MANAGER: "店舗マネージャー（在庫＋商品設定）",
   STORE_STAFF: "店舗スタッフ",
 } as const;
 export type Role = keyof typeof ROLES;
+
+// 商品・ブランド・カテゴリの設定ができる権限（本部 or 店舗マネージャー）
+export const PRODUCT_MANAGER_ROLES = ["AREA_MANAGER", "STORE_MANAGER"] as const;
 
 export const STORE_STATUS = {
   ACTIVE: "稼働中",

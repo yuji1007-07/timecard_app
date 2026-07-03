@@ -13,7 +13,7 @@ import type { Prisma } from "@prisma/client";
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; storeId?: string }>;
+  searchParams: Promise<{ q?: string; type?: string; storeId?: string; draft?: string }>;
 }) {
   const sp = await searchParams;
   const user = await requireUser();
@@ -53,13 +53,19 @@ export default async function ReportsPage({
     <div>
       <PageHeader
         title="報告一覧"
-        description="提出済の週次/月次報告を検索・確認できます。"
+        description="提出済の週次/月次報告を検索・確認できます。下書きはここから続きを入力できます。"
         action={
           <Link href="/reports/new">
             <Button>報告を作成</Button>
           </Link>
         }
       />
+
+      {sp.draft === "saved" && (
+        <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+          下書きを保存しました。下の一覧の「続きを入力」からいつでも再開できます（提出するまで未提出扱いです）。
+        </div>
+      )}
 
       <Card className="mb-4">
         <CardContent className="pt-5">
@@ -154,18 +160,35 @@ export default async function ReportsPage({
                 </TableRow>
               ) : (
                 reports.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell><Badge variant={r.reportType === "WEEKLY" ? "secondary" : "default"}>{label(REPORT_TYPES, r.reportType)}</Badge></TableCell>
+                  <TableRow key={r.id} className={r.status === "DRAFT" ? "bg-yellow-50/60" : undefined}>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        <Badge variant={r.reportType === "WEEKLY" ? "secondary" : "default"}>{label(REPORT_TYPES, r.reportType)}</Badge>
+                        {r.status === "DRAFT" && <Badge variant="warn">下書き</Badge>}
+                      </div>
+                    </TableCell>
                     <TableCell className="font-medium">{r.store.name}{r.department ? ` ${r.department.name}` : ""}</TableCell>
                     <TableCell>{label(BUSINESS_TYPES, r.department?.businessType ?? r.store.businessType)}</TableCell>
                     <TableCell>{r.targetWeek ?? r.targetMonth}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reporter.name}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(r.kpiValues.find((v) => v.kpiName === "売上")?.current, { suffix: "円" })}</TableCell>
                     <TableCell>
-                      {r.feedback?.sendStatus === "SENT" ? <Badge variant="good">送信済</Badge> : r.feedback?.aiContent || r.feedback?.editedContent ? <Badge variant="warn">下書き</Badge> : <Badge variant="muted">未</Badge>}
+                      {r.status === "DRAFT" ? (
+                        <Badge variant="muted">-</Badge>
+                      ) : r.feedback?.sendStatus === "SENT" ? (
+                        <Badge variant="good">送信済</Badge>
+                      ) : r.feedback?.aiContent || r.feedback?.editedContent ? (
+                        <Badge variant="warn">下書き</Badge>
+                      ) : (
+                        <Badge variant="muted">未</Badge>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <Link href={`/reports/${r.id}`}><Button variant="outline" size="sm">詳細</Button></Link>
+                      {r.status === "DRAFT" ? (
+                        <Link href={`/reports/${r.id}/edit`}><Button size="sm">続きを入力</Button></Link>
+                      ) : (
+                        <Link href={`/reports/${r.id}`}><Button variant="outline" size="sm">詳細</Button></Link>
+                      )}
                     </TableCell>
                   </TableRow>
                 ))

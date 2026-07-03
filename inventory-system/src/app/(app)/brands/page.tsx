@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/prisma";
-import { requireAreaManager } from "@/lib/session";
+import { requireProductManager } from "@/lib/session";
 import { BrandBadge } from "@/components/badges";
 import { ConfirmSubmit, SubmitButton } from "@/components/confirm-submit";
 import { BrandEditForm } from "./brand-form";
@@ -11,7 +11,7 @@ import { createBrand, deleteBrand, createCategory, deleteCategory } from "./acti
 export const dynamic = "force-dynamic";
 
 export default async function BrandsPage() {
-  await requireAreaManager();
+  await requireProductManager();
   const [brands, categories, productCounts] = await Promise.all([
     prisma.brand.findMany({ orderBy: { sortOrder: "asc" } }),
     prisma.category.findMany({ orderBy: { sortOrder: "asc" } }),

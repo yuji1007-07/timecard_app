@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAreaManager } from "@/lib/session";
+import { requireProductManager } from "@/lib/session";
 
 export async function createBrand(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const colorHex = String(formData.get("colorHex") ?? "#1e3a5f");
@@ -15,7 +15,7 @@ export async function createBrand(formData: FormData) {
 }
 
 export async function updateBrand(id: string, formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   await prisma.brand.update({
     where: { id },
     data: {
@@ -28,7 +28,7 @@ export async function updateBrand(id: string, formData: FormData) {
 }
 
 export async function deleteBrand(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const id = String(formData.get("id"));
   const used = await prisma.product.count({ where: { brandId: id } });
   if (used > 0) {
@@ -40,7 +40,7 @@ export async function deleteBrand(formData: FormData) {
 }
 
 export async function createCategory(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
   const count = await prisma.category.count();
@@ -53,7 +53,7 @@ export async function createCategory(formData: FormData) {
 }
 
 export async function deleteCategory(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const id = String(formData.get("id"));
   await prisma.category.delete({ where: { id } });
   revalidatePath("/brands");

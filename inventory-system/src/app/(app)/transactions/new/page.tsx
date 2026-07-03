@@ -1,6 +1,7 @@
 import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
+import { getStoreProducts } from "@/lib/stock";
 import { TransactionForm } from "./transaction-form";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,10 @@ export default async function NewTransactionPage({ searchParams }: { searchParam
   const sp = await searchParams;
 
   const [products, stores] = await Promise.all([
-    prisma.product.findMany({ where: { active: true }, include: { brand: true }, orderBy: [{ brand: { sortOrder: "asc" } }, { sortOrder: "asc" }] }),
+    // 店舗スタッフ/マネージャーは自店舗で「オフ」にした商品を除外。本部は全商品。
+    user.storeId
+      ? getStoreProducts(user.storeId)
+      : prisma.product.findMany({ where: { active: true }, include: { brand: true }, orderBy: [{ brand: { sortOrder: "asc" } }, { sortOrder: "asc" }] }),
     prisma.store.findMany({ where: { isHeadquarters: false, status: "ACTIVE" }, select: { id: true, name: true }, orderBy: { sortOrder: "asc" } }),
   ]);
 

@@ -42,7 +42,7 @@ export function UserForm({ stores }: { stores: { id: string; name: string }[] })
           ))}
         </select>
       </div>
-      {role === "STORE_STAFF" && (
+      {(role === "STORE_STAFF" || role === "STORE_MANAGER") && (
         <div className="space-y-1">
           <Label>担当店舗</Label>
           <select name="storeId" className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
@@ -52,6 +52,11 @@ export function UserForm({ stores }: { stores: { id: string; name: string }[] })
             ))}
           </select>
         </div>
+      )}
+      {role === "STORE_MANAGER" && (
+        <p className="text-xs text-muted-foreground md:col-span-2">
+          ※ 店舗マネージャー：自店舗の在庫操作・棚卸に加えて「商品マスタ」「ブランド・カテゴリ」の設定ができます。店舗管理・ユーザー管理・通知/連携設定は不可です。
+        </p>
       )}
       <div className="space-y-1">
         <Label>LINE ユーザーID（本部通知先・任意）</Label>

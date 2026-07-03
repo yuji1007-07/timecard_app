@@ -9,10 +9,13 @@ import { requireAreaManager } from "@/lib/session";
 const schema = z.object({
   name: z.string().min(1),
   email: z.string().email(),
-  role: z.enum(["AREA_MANAGER", "STORE_STAFF"]),
+  role: z.enum(["AREA_MANAGER", "STORE_MANAGER", "STORE_STAFF"]),
   storeId: z.string().optional(),
   lineUserId: z.string().optional(),
 });
+
+// 店舗に所属する権限（本部以外）
+const STORE_SCOPED_ROLES = ["STORE_MANAGER", "STORE_STAFF"];
 
 export async function createUser(_prev: string | undefined, formData: FormData): Promise<string | undefined> {
   await requireAreaManager();
@@ -35,7 +38,7 @@ export async function createUser(_prev: string | undefined, formData: FormData):
       name: parsed.data.name,
       email: parsed.data.email,
       role: parsed.data.role,
-      storeId: parsed.data.role === "STORE_STAFF" ? parsed.data.storeId || null : null,
+      storeId: STORE_SCOPED_ROLES.includes(parsed.data.role) ? parsed.data.storeId || null : null,
       lineUserId: parsed.data.lineUserId || null,
       passwordHash: await bcrypt.hash(password, 10),
     },

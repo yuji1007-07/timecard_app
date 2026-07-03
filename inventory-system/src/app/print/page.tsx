@@ -54,7 +54,7 @@ export default async function PrintPage({ searchParams }: { searchParams: Promis
       <PrintToolbar title={`${typeLabel}｜${descr}｜${sp.store ? stores[0]?.name ?? "" : "全店舗"}`} />
 
       <div className="mb-6">
-        <h1 className="text-xl font-bold">販売品在庫管理システム — {typeLabel}バックアップ</h1>
+        <h1 className="text-xl font-bold">まごころ在庫 — {typeLabel}バックアップ</h1>
         <p className="text-sm text-gray-600">期間: {descr}｜出力日: {new Date().toISOString().slice(0, 10)}</p>
       </div>
 
