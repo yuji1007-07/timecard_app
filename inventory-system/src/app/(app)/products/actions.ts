@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
-import { requireAreaManager } from "@/lib/session";
+import { requireProductManager } from "@/lib/session";
 import { resolvePrices, type Rounding } from "@/lib/pricing";
 import { getSetting } from "@/lib/settings";
 import { splitSize } from "@/lib/sizes";
@@ -75,7 +75,7 @@ async function buildData(formData: FormData) {
  * 既に size が入っている商品はスキップ（何度押しても安全）。
  */
 export async function autoSplitSizes(): Promise<string> {
-  await requireAreaManager();
+  await requireProductManager();
   const products = await prisma.product.findMany({ where: { size: null } });
   let updated = 0;
   for (const p of products) {
@@ -91,7 +91,7 @@ export async function autoSplitSizes(): Promise<string> {
 }
 
 export async function createProduct(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const data = await buildData(formData);
   const count = await prisma.product.count();
   await prisma.product.create({ data: { ...data, sortOrder: count } });
@@ -100,7 +100,7 @@ export async function createProduct(formData: FormData) {
 }
 
 export async function updateProduct(id: string, formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const data = await buildData(formData);
   await prisma.product.update({ where: { id }, data });
   revalidatePath("/products");
@@ -108,7 +108,7 @@ export async function updateProduct(id: string, formData: FormData) {
 }
 
 export async function deleteProduct(formData: FormData) {
-  await requireAreaManager();
+  await requireProductManager();
   const id = String(formData.get("id"));
   const txCount = await prisma.transaction.count({ where: { productId: id } });
   if (txCount > 0) {
@@ -126,7 +126,7 @@ export async function deleteProduct(formData: FormData) {
  * 片方しか無い価格は税率から補完。卸価格0はそのまま0。
  */
 export async function importCsv(_prev: string | undefined, formData: FormData): Promise<string> {
-  await requireAreaManager();
+  await requireProductManager();
   const text = String(formData.get("csv") ?? "").trim();
   if (!text) return "CSVが空です。";
 

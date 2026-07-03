@@ -28,9 +28,22 @@ const STAFF_NAV: NavItem[] = [
   { href: "/account", label: "アカウント設定", icon: "account" },
 ];
 
+// 店舗マネージャー: スタッフの機能＋商品マスタ・ブランド設定（店舗/ユーザー/通知設定は不可）
+const MANAGER_NAV: NavItem[] = [
+  { href: "/dashboard", label: "店舗ダッシュボード", icon: "dashboard" },
+  { href: "/inventory", label: "在庫一覧", icon: "inventory" },
+  { href: "/transactions/new", label: "取引を記録", icon: "newtx" },
+  { href: "/transactions", label: "取引履歴", icon: "transaction" },
+  { href: "/stocktake", label: "棚卸", icon: "stocktake" },
+  { href: "/products", label: "商品マスタ", icon: "product" },
+  { href: "/brands", label: "ブランド・カテゴリ", icon: "brand" },
+  { href: "/account", label: "アカウント設定", icon: "account" },
+];
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const nav = user.role === "AREA_MANAGER" ? AREA_NAV : STAFF_NAV;
+  const nav =
+    user.role === "AREA_MANAGER" ? AREA_NAV : user.role === "STORE_MANAGER" ? MANAGER_NAV : STAFF_NAV;
 
   return (
     <div className="flex min-h-screen">

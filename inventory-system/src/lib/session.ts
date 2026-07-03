@@ -27,8 +27,19 @@ export async function requireAreaManager(): Promise<SessionUser> {
   return user;
 }
 
+/** 商品・ブランド・カテゴリの設定ができる権限（本部 or 店舗マネージャー）。 */
+export async function requireProductManager(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (user.role !== "AREA_MANAGER" && user.role !== "STORE_MANAGER") redirect("/dashboard");
+  return user;
+}
+
 export function isAreaManager(user: SessionUser | null): boolean {
   return user?.role === "AREA_MANAGER";
+}
+
+export function isProductManager(user: SessionUser | null): boolean {
+  return user?.role === "AREA_MANAGER" || user?.role === "STORE_MANAGER";
 }
 
 /** 実在ユーザーIDのみ返す（PIN軽量モードの仮想ユーザー store:xxx は null）。 */
