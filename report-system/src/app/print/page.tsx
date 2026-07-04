@@ -35,7 +35,7 @@ function groupKpis(values: KpiVal[]) {
 export default async function PrintPage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string; storeId?: string; type?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; storeId?: string; type?: string; reportId?: string }>;
 }) {
   const sp = await searchParams;
   const user = await requireUser();
@@ -66,6 +66,8 @@ export default async function PrintPage({
   }
   if (sp.type === "WEEKLY" || sp.type === "MONTHLY") where.reportType = sp.type;
   if (from && to) where.submittedAt = { gte: from, lt: to };
+  // 1件だけ出力（各報告の「PDF出力」ボタン用）。スコープ条件は維持したまま id で絞る。
+  if (sp.reportId) where.id = sp.reportId;
 
   const reports = await prisma.report.findMany({
     where,

@@ -78,6 +78,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             <Link href={`/reports/${report.id}/edit`}>
               <Button variant="outline">{report.status === "DRAFT" ? "続きを入力" : "修正する"}</Button>
             </Link>
+            <Link href={`/print?reportId=${report.id}`} target="_blank">
+              <Button variant="outline">PDF出力</Button>
+            </Link>
             <Link href={`/stores/${report.storeId}`}>
               <Button variant="outline">店舗カルテ</Button>
             </Link>

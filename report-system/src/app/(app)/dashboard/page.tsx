@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { isoWeek, fmt } from "@/lib/utils";
+import { isoWeek, yearMonth, fmt } from "@/lib/utils";
 import { getDashboardData } from "@/lib/dashboard";
 import { getReportUnits } from "@/lib/units";
 import { getSubmissionStatus } from "@/lib/dashboard";
@@ -8,11 +8,24 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ALERT_COLOR_CLASS, PRIORITIES, label, BUSINESS_TYPES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
 import { NotifyButton } from "./notify-button";
+
+// 月次レポートの kpiValues から、名前候補で最初にヒットした値を取り出す
+function pickKpi(
+  values: { kpiName: string; target: number | null; current: number | null; forecast: number | null }[],
+  names: string[]
+) {
+  for (const n of names) {
+    const v = values.find((x) => x.kpiName === n);
+    if (v) return v;
+  }
+  return null;
+}
 
 export default async function DashboardPage() {
   const user = await requireUser();
@@ -25,7 +38,7 @@ export default async function DashboardPage() {
 }
 
 async function AdminDashboard({ week }: { week: string }) {
-  const { submission, summary, alerts } = await getDashboardData(week);
+  const { submission, alerts } = await getDashboardData(week);
 
   const submitted = submission.filter((s) => s.submitted);
   const unsubmitted = submission.filter((s) => !s.submitted);
@@ -33,6 +46,37 @@ async function AdminDashboard({ week }: { week: string }) {
   // フィードバック待ち（提出済だが未送信のフィードバック）
   const feedbackWaiting = await prisma.report.count({
     where: { reportType: "WEEKLY", targetWeek: week, status: "SUBMITTED", OR: [{ feedback: null }, { feedback: { sendStatus: "UNSENT" } }] },
+  });
+
+  // 店舗別 月次サマリー
+  const thisMonth = yearMonth(new Date());
+  const units = await getReportUnits();
+  const monthlyReports = await prisma.report.findMany({
+    where: { reportType: "MONTHLY", status: "SUBMITTED" },
+    orderBy: { targetMonth: "asc" },
+    include: { kpiValues: true },
+  });
+  const sameUnit = (r: { storeId: string; departmentId: string | null }, u: { storeId: string; departmentId: string | null }) =>
+    r.storeId === u.storeId && (r.departmentId ?? null) === (u.departmentId ?? null);
+
+  const monthlyRows = units.map((u) => {
+    const mine = monthlyReports.filter((r) => sameUnit(r, u));
+    const thisMonthReport = mine.find((r) => r.targetMonth === thisMonth) ?? null;
+    const latest = mine.length > 0 ? mine[mine.length - 1] : null;
+    const kv = latest?.kpiValues ?? [];
+    const sales = pickKpi(kv, ["総売上"]);
+    return {
+      unit: u,
+      submitted: !!thisMonthReport,
+      submittedReportId: thisMonthReport?.id ?? null,
+      latestMonth: latest?.targetMonth ?? null,
+      budget: sales?.target ?? null, // 予算
+      forecast: sales?.forecast ?? null, // 着地
+      actual: sales?.current ?? null, // 総売上(実績)
+      charts: pickKpi(kv, ["総カルテ枚数", "カルテ枚数"])?.current ?? null,
+      freq: pickKpi(kv, ["来店頻度", "通院頻度", "平均来店頻度"])?.current ?? null,
+      unitPrice: pickKpi(kv, ["窓口単価", "単価(1回あたり)", "平均窓口単価"])?.current ?? null,
+    };
   });
 
   return (
@@ -104,26 +148,58 @@ async function AdminDashboard({ week }: { week: string }) {
         </Card>
       </div>
 
-      {/* KPIサマリー */}
+      {/* 店舗別 月次サマリー */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>KPIサマリー（今週・提出済の合算）</CardTitle>
+          <CardTitle>店舗別 月次サマリー（{thisMonth} の提出状況＋最新月次の数値）</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            月次の提出状況と、各店舗の最新月次報告の 総売上/予算/着地 などを一覧化。数値は「最新の月次報告」から表示します。
+          </p>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <StatCard label="全体売上" value={fmt(summary.totalSales, { suffix: "円" })} />
-            <StatCard label="整骨院売上" value={fmt(summary.salesByType.SEIKOTSU, { suffix: "円" })} />
-            <StatCard label="鍼灸売上" value={fmt(summary.salesByType.SHINKYU, { suffix: "円" })} />
-            <StatCard label="エステ売上" value={fmt(summary.salesByType.ESTHE, { suffix: "円" })} />
-            <StatCard label="初診数" value={fmt(summary.firstVisits, { suffix: "人" })} />
-            <StatCard label="新規数" value={fmt(summary.newCustomers, { suffix: "人" })} />
-            <StatCard label="会員数" value={fmt(summary.members, { suffix: "人" })} />
-            <StatCard label="カルテ枚数" value={fmt(summary.charts, { suffix: "枚" })} />
-            <StatCard label="平均成約率" value={summary.avgClosingRate != null ? `${summary.avgClosingRate}%` : "-"} />
-            <StatCard label="平均離反率" value={summary.avgChurnRate != null ? `${summary.avgChurnRate}%` : "-"} tone="warn" />
-            <StatCard label="未達KPI数" value={`${summary.unmetCount}`} tone={summary.unmetCount ? "bad" : "good"} />
+        <CardContent className="overflow-x-auto p-0">
+          <div className="min-w-[820px]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>店舗 / 単位</TableHead>
+                  <TableHead>月次提出</TableHead>
+                  <TableHead className="text-right">総売上(実績)</TableHead>
+                  <TableHead className="text-right">予算</TableHead>
+                  <TableHead className="text-right">着地</TableHead>
+                  <TableHead className="text-right">総カルテ</TableHead>
+                  <TableHead className="text-right">来店頻度</TableHead>
+                  <TableHead className="text-right">窓口単価</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {monthlyRows.map((r) => {
+                  const under = r.budget != null && r.actual != null && r.actual < r.budget;
+                  return (
+                    <TableRow key={r.unit.key}>
+                      <TableCell className="whitespace-nowrap font-medium">
+                        {r.unit.label}
+                        <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, r.unit.businessType)}</span>
+                      </TableCell>
+                      <TableCell>
+                        {r.submitted && r.submittedReportId ? (
+                          <Link href={`/reports/${r.submittedReportId}`}><Badge variant="good">提出済</Badge></Link>
+                        ) : (
+                          <Badge variant="bad">未提出</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className={`text-right tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>{fmt(r.actual)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(r.budget)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(r.forecast)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{fmt(r.unitPrice)}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
-          <p className="mt-3 text-xs text-muted-foreground">※ ダッシュボードの表示項目はKPIテンプレートの「ダッシュボード表示」設定で調整できます。</p>
+          <p className="px-4 py-3 text-xs text-muted-foreground">※ 「月次提出」は今月（{thisMonth}）の提出有無。数値は各店舗の最新月次報告のものです（提出月が違う場合があります）。</p>
         </CardContent>
       </Card>
     </div>
