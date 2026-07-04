@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReportForm, type ReportInitial, type ProjMap } from "../../new/report-form";
+import { updateReportPeriod } from "../../actions";
 import { addMonthStr } from "@/lib/utils";
 import { INFLOW_CHANNELS, BUSINESS_TYPES, label } from "@/lib/constants";
 
@@ -191,6 +192,27 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
           </Link>
         }
       />
+
+      {/* 対象期間の修正（例: 6月なのに7月で提出した等） */}
+      <Card className="mb-4 border-amber-300">
+        <CardContent className="pt-5">
+          <form action={updateReportPeriod} className="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="reportId" value={report.id} />
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">対象{type === "MONTHLY" ? "月" : "週"}の修正</label>
+              {type === "MONTHLY" ? (
+                <input type="month" name="value" defaultValue={period} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              ) : (
+                <input type="week" name="value" defaultValue={period} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+              )}
+            </div>
+            <Button type="submit" variant="outline">この対象に修正</Button>
+            <p className="text-xs text-muted-foreground">
+              「6月なのに7月で提出した」等、対象{type === "MONTHLY" ? "月" : "週"}だけを直せます（他の入力は消えません）。
+            </p>
+          </form>
+        </CardContent>
+      </Card>
 
       {kpiItems.length === 0 ? (
         <Card>

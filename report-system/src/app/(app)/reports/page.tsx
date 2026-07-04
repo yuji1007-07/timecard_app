@@ -148,6 +148,7 @@ export default async function ReportsPage({
                 <TableHead>業態</TableHead>
                 <TableHead>対象</TableHead>
                 <TableHead>報告者</TableHead>
+                <TableHead>提出日</TableHead>
                 <TableHead className="text-right">売上</TableHead>
                 <TableHead>FB</TableHead>
                 <TableHead></TableHead>
@@ -156,7 +157,7 @@ export default async function ReportsPage({
             <TableBody>
               {reports.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">該当する報告がありません。</TableCell>
+                  <TableCell colSpan={9} className="py-8 text-center text-muted-foreground">該当する報告がありません。</TableCell>
                 </TableRow>
               ) : (
                 reports.map((r) => (
@@ -171,6 +172,10 @@ export default async function ReportsPage({
                     <TableCell>{label(BUSINESS_TYPES, r.department?.businessType ?? r.store.businessType)}</TableCell>
                     <TableCell>{r.targetWeek ?? r.targetMonth}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reporter.name}</TableCell>
+                    <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+                      {new Date(r.submittedAt).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}
+                      <span className="ml-1 text-xs">{new Date(r.submittedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}</span>
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(r.kpiValues.find((v) => v.kpiName === "売上")?.current, { suffix: "円" })}</TableCell>
                     <TableCell>
                       {r.status === "DRAFT" ? (

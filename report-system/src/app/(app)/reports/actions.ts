@@ -390,3 +390,37 @@ export async function updateReport(reportId: string, payload: ReportPayload, opt
   revalidatePath(`/reports/${reportId}`);
   redirect(`/reports/${reportId}`);
 }
+
+/**
+ * 報告の「対象期間」（対象月 or 対象週）だけを修正する。
+ * 例: 6月の月次なのに誤って7月(2026-07)で提出した場合に 2026-06 へ直せる。
+ */
+export async function updateReportPeriod(formData: FormData) {
+  const user = await requireUser();
+  const reportId = String(formData.get("reportId") || "");
+  const value = String(formData.get("value") || "").trim();
+
+  const existing = await prisma.report.findUnique({ where: { id: reportId } });
+  if (!existing) throw new Error("報告が見つかりません。");
+
+  // 権限チェック（編集と同じ）
+  if (user.role !== "AREA_MANAGER") {
+    if (user.storeId !== existing.storeId) throw new Error("この報告は編集できません。");
+    if (user.role === "DEPARTMENT_MANAGER" && user.departmentId !== existing.departmentId) {
+      throw new Error("この報告は編集できません。");
+    }
+  }
+
+  const isMonthly = existing.reportType === "MONTHLY";
+  const valid = isMonthly ? /^\d{4}-\d{2}$/.test(value) : /^\d{4}-W\d{2}$/.test(value);
+  if (!valid) redirect(`/reports/${reportId}/edit`);
+
+  await prisma.report.update({
+    where: { id: reportId },
+    data: isMonthly ? { targetMonth: value, targetWeek: null } : { targetWeek: value, targetMonth: null },
+  });
+
+  revalidatePath("/reports");
+  revalidatePath(`/reports/${reportId}`);
+  redirect(`/reports/${reportId}/edit`);
+}
