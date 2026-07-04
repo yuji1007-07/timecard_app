@@ -124,7 +124,7 @@ export default async function TrendsPage({
           <CardHeader>
             <CardTitle>月次の推移（{store.name}{store.departments.find((d) => d.id === departmentId)?.name ? ` ${store.departments.find((d) => d.id === departmentId)!.name}` : ""}）</CardTitle>
             <p className="text-xs text-muted-foreground">
-              過去（予算/実績）→ <span className="font-medium">当月（{monthShort(anchor, baseYear)}）</span> → 来月以降（予算/予測）。着地/実績が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。
+              過去〜当月（予算/実績）→ <span className="font-medium">当月（{monthShort(anchor, baseYear)}）</span> → 来月以降（予算/予測）。実績・予測が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。
             </p>
           </CardHeader>
           <CardContent className="overflow-x-auto p-0">

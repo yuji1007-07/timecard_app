@@ -234,6 +234,8 @@ export function ReportForm({
 
   const visibleKpis = useMemo(() => kpiItems.filter((k) => !hiddenSet.has(k.name)), [kpiItems, hiddenSet]);
   const groupedVisible = useMemo(() => groupByCategory(visibleKpis), [visibleKpis]);
+  // カルテ枚数は KPI 欄で1回だけ入力し、ダイエットコース等の欄には自動反映（読み取り専用）で表示する
+  const karteItem = useMemo(() => kpiItems.find((k) => k.name === "カルテ枚数" || k.name === "総カルテ枚数"), [kpiItems]);
 
   function groupByCategory(items: KpiItemDef[]) {
     const order: string[] = [];
@@ -509,12 +511,11 @@ export function ReportForm({
             </div>
           ) : (
             <>
-              <div className="hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]">
+              <div className={`hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid ${isMonthly ? "md:grid-cols-[1.5fr_1fr_1fr_2fr]" : "md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]"}`}>
                 <div>KPI名</div>
                 {isMonthly ? (
                   <>
                     <div>予算</div>
-                    <div>着地予測</div>
                     <div>実績</div>
                   </>
                 ) : (
@@ -534,57 +535,55 @@ export function ReportForm({
                   <div className={`rounded-md px-3 py-1.5 text-sm font-semibold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>
                     {g.category}
                   </div>
+                  {g.category === "ダイエットコース" && karteItem && (
+                    <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm">
+                      <span className="font-medium">カルテ枚数</span>
+                      <Badge variant="muted" className="text-[10px]">自動反映</Badge>
+                      <span className="tabular-nums font-semibold">{kpi[karteItem.id]?.current || "—"}</span>
+                      <span className="text-xs text-muted-foreground">（KPI欄の入力がそのまま反映されます）</span>
+                    </div>
+                  )}
                   {g.items.map((k) => {
                     const prevForecast = kpiPrev[k.name]?.forecast ?? null;
                     const target = numOrNull(kpi[k.id].target);
+                    const actual = numOrNull(kpi[k.id].current);
                     const curForecast = numOrNull(kpi[k.id].forecast);
                     const forecastChanged = prevForecast != null && curForecast != null && curForecast !== prevForecast;
-                    // 着地未達: 良化方向UPなら着地<目標、DOWNなら着地>目標
-                    const isUnder =
-                      target != null && curForecast != null && (k.goodDirection === "UP" ? curForecast < target : curForecast > target);
+                    // 月次: 実績が予算に届かない ／ 週次: 着地が目標に届かない（良化方向を考慮）
+                    const isUnder = isMonthly
+                      ? target != null && actual != null && (k.goodDirection === "UP" ? actual < target : actual > target)
+                      : target != null && curForecast != null && (k.goodDirection === "UP" ? curForecast < target : curForecast > target);
                     return (
-                      <div key={k.id} className="grid gap-2 border-b pb-2 md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr] md:items-center md:border-0 md:pb-0">
+                      <div key={k.id} className={`grid gap-2 border-b pb-2 md:items-center md:border-0 md:pb-0 ${isMonthly ? "md:grid-cols-[1.5fr_1fr_1fr_2fr]" : "md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]"}`}>
                         <div className="flex items-center gap-1.5 text-sm font-medium">
                           {k.name}
                           <span className="text-xs text-muted-foreground">({k.unit})</span>
                           {k.required && <Badge variant="bad" className="text-[10px]">必須</Badge>}
                           <Badge variant={k.goodDirection === "UP" ? "good" : "warn"} className="text-[10px]">{label(GOOD_DIRECTIONS, k.goodDirection)}</Badge>
                         </div>
-                        {(() => {
-                          const budgetCell = (
-                            <Input key="b" type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? (isMonthly ? "予算" : "目標") : "—"} />
-                          );
-                          const actualCell = (
-                            <Input key="a" type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? (isMonthly ? "実績" : "現状") : "—"} />
-                          );
-                          const forecastCell = (
-                            <div key="f">
-                              <Input
-                                type="number"
-                                step="any"
-                                inputMode="decimal"
-                                disabled={!k.hasForecast}
-                                value={kpi[k.id].forecast}
-                                onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))}
-                                placeholder={k.hasForecast ? "着地" : "—"}
-                                className={
-                                  isUnder
-                                    ? "border-red-400 bg-red-50 font-semibold text-red-700"
-                                    : forecastChanged
-                                    ? "border-amber-400 bg-amber-50"
-                                    : ""
-                                }
-                              />
+                        {/* 予算 / 目標 */}
+                        <Input type="number" step="any" inputMode="decimal" disabled={!k.hasTarget} value={kpi[k.id].target} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], target: e.target.value } }))} placeholder={k.hasTarget ? (isMonthly ? "予算" : "目標") : "—"} />
+                        {isMonthly ? (
+                          // 月次: 実績のみ（着地は確定月には不要）。予算未達なら赤
+                          <div>
+                            <Input type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? "実績" : "—"} className={isUnder ? "border-red-400 bg-red-50 font-semibold text-red-700" : ""} />
+                            {isUnder && <div className="mt-0.5 text-[10px] font-medium text-red-600">予算未達（予算 {target}）</div>}
+                          </div>
+                        ) : (
+                          <>
+                            {/* 週次: 現状 */}
+                            <Input type="number" step="any" inputMode="decimal" disabled={!k.hasCurrent} value={kpi[k.id].current} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], current: e.target.value } }))} placeholder={k.hasCurrent ? "現状" : "—"} />
+                            {/* 週次: 着地予測 */}
+                            <div>
+                              <Input type="number" step="any" inputMode="decimal" disabled={!k.hasForecast} value={kpi[k.id].forecast} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], forecast: e.target.value } }))} placeholder={k.hasForecast ? "着地" : "—"} className={isUnder ? "border-red-400 bg-red-50 font-semibold text-red-700" : forecastChanged ? "border-amber-400 bg-amber-50" : ""} />
                               {isUnder ? (
-                                <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（{isMonthly ? "予算" : "目標"} {target}）</div>
+                                <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（目標 {target}）</div>
                               ) : forecastChanged ? (
-                                <div className="mt-0.5 text-[10px] text-amber-600">{isMonthly ? "前回" : "先週"}: {prevForecast}</div>
+                                <div className="mt-0.5 text-[10px] text-amber-600">先週: {prevForecast}</div>
                               ) : null}
                             </div>
-                          );
-                          // 月次：予算 → 着地予測 → 実績 ／ 週次：目標 → 現状 → 着地予測
-                          return isMonthly ? [budgetCell, forecastCell, actualCell] : [budgetCell, actualCell, forecastCell];
-                        })()}
+                          </>
+                        )}
                         <Input value={kpi[k.id].comment} onChange={(e) => setKpi((s) => ({ ...s, [k.id]: { ...s[k.id], comment: e.target.value } }))} placeholder="コメント" />
                       </div>
                     );

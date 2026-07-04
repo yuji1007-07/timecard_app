@@ -70,7 +70,6 @@ async function AdminDashboard({ week }: { week: string }) {
       submittedReportId: thisMonthReport?.id ?? null,
       latestMonth: latest?.targetMonth ?? null,
       budget: sales?.target ?? null, // 予算
-      forecast: sales?.forecast ?? null, // 着地
       actual: sales?.current ?? null, // 総売上(実績)
       charts: pickKpi(kv, ["総カルテ枚数", "カルテ枚数"])?.current ?? null,
       freq: pickKpi(kv, ["来店頻度", "通院頻度", "平均来店頻度"])?.current ?? null,
@@ -127,11 +126,11 @@ async function AdminDashboard({ week }: { week: string }) {
         <CardHeader>
           <CardTitle>店舗別 月次サマリー（{thisMonth} の提出状況＋最新月次の数値）</CardTitle>
           <p className="text-xs text-muted-foreground">
-            月次の提出状況と、各店舗の最新月次報告の 総売上/予算/着地 などを一覧化。数値は「最新の月次報告」から表示します。
+            月次の提出状況と、各店舗の最新月次報告の 総売上/予算 などを一覧化。数値は「最新の月次報告」から表示します。
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <div className="min-w-[820px]">
+          <div className="min-w-[760px]">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -139,7 +138,6 @@ async function AdminDashboard({ week }: { week: string }) {
                   <TableHead>月次提出</TableHead>
                   <TableHead className="text-right">予算</TableHead>
                   <TableHead className="text-right">総売上(実績)</TableHead>
-                  <TableHead className="text-right">着地</TableHead>
                   <TableHead className="text-right">総カルテ</TableHead>
                   <TableHead className="text-right">来店頻度</TableHead>
                   <TableHead className="text-right">窓口単価</TableHead>
@@ -163,7 +161,6 @@ async function AdminDashboard({ week }: { week: string }) {
                       </TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(r.budget)}</TableCell>
                       <TableCell className={`text-right tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>{fmt(r.actual)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(r.forecast)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.unitPrice)}</TableCell>

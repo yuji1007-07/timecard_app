@@ -66,7 +66,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     if (user.role === "DEPARTMENT_MANAGER" && user.departmentId !== report.departmentId) redirect("/dashboard");
   }
   const isAdmin = user.role === "AREA_MANAGER";
+  const isMonthly = report.reportType === "MONTHLY";
   const feedbackContent = report.feedback?.editedContent || report.feedback?.aiContent || "";
+  // カルテ枚数はダイエットコース欄にも自動反映（読み取り専用）で表示する
+  const karteVal = report.kpiValues.find((v) => v.kpiName === "カルテ枚数" || v.kpiName === "総カルテ枚数")?.current ?? null;
 
   return (
     <div>
@@ -206,16 +209,20 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         <Card>
           <CardHeader>
             <CardTitle>KPI入力値</CardTitle>
-            <p className="text-xs text-muted-foreground">着地が目標に届かない項目（着地未達）は<span className="font-medium text-red-600">赤文字</span>で表示します。</p>
+            <p className="text-xs text-muted-foreground">
+              {isMonthly
+                ? <>実績が予算に届かない項目（予算未達）は<span className="font-medium text-red-600">赤文字</span>で表示します。</>
+                : <>着地が目標に届かない項目（着地未達）は<span className="font-medium text-red-600">赤文字</span>で表示します。</>}
+            </p>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>KPI</TableHead>
-                  <TableHead className="text-right">目標</TableHead>
-                  <TableHead className="text-right">現状</TableHead>
-                  <TableHead className="text-right">着地</TableHead>
+                  <TableHead className="text-right">{isMonthly ? "予算" : "目標"}</TableHead>
+                  <TableHead className="text-right">{isMonthly ? "実績" : "現状"}</TableHead>
+                  {!isMonthly && <TableHead className="text-right">着地</TableHead>}
                   <TableHead className="text-right">達成率</TableHead>
                 </TableRow>
               </TableHeader>
@@ -223,24 +230,41 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                 {groupKpiValuesByCategory(report.kpiValues).map((g, gi) => (
                   <Fragment key={g.category}>
                     <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell colSpan={5} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                      <TableCell colSpan={isMonthly ? 4 : 5} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
                         {g.category}
                       </TableCell>
                     </TableRow>
+                    {g.category === "ダイエットコース" && karteVal != null && (
+                      <TableRow className="bg-muted/20">
+                        <TableCell className="font-medium">
+                          カルテ枚数<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{fmt(karteVal)}</TableCell>
+                        {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
+                        <TableCell className="text-right text-xs tabular-nums text-muted-foreground">—</TableCell>
+                      </TableRow>
+                    )}
                     {g.items.map((v, ii) => {
                       const dir = v.kpiItem?.goodDirection ?? "UP";
+                      // 月次は売上確定済み＝実績(current)で判定。週次は着地(forecast)で判定。
+                      const judgeVal = isMonthly ? v.current : v.forecast;
                       const isUnder =
-                        v.target != null && v.forecast != null && (dir === "UP" ? v.forecast < v.target : v.forecast > v.target);
+                        v.target != null && judgeVal != null && (dir === "UP" ? judgeVal < v.target : judgeVal > v.target);
                       const rate =
-                        v.target != null && v.target !== 0 && v.forecast != null ? Math.round((v.forecast / v.target) * 100) : null;
+                        v.target != null && v.target !== 0 && judgeVal != null ? Math.round((judgeVal / v.target) * 100) : null;
                       return (
                         <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
                           <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
                           <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{fmt(v.current)}</TableCell>
-                          <TableCell className={`text-right tabular-nums ${isUnder ? "font-semibold text-red-600" : ""}`}>
-                            {fmt(v.forecast)}{isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                          <TableCell className={`text-right tabular-nums ${isMonthly && isUnder ? "font-semibold text-red-600" : ""}`}>
+                            {fmt(v.current)}{isMonthly && isUnder && <span className="ml-1 text-[10px]">未達</span>}
                           </TableCell>
+                          {!isMonthly && (
+                            <TableCell className={`text-right tabular-nums ${isUnder ? "font-semibold text-red-600" : ""}`}>
+                              {fmt(v.forecast)}{isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                            </TableCell>
+                          )}
                           <TableCell className={`text-right text-xs tabular-nums ${rate == null ? "text-muted-foreground" : isUnder ? "text-red-600" : "text-emerald-600"}`}>
                             {rate == null ? "—" : `${rate}%`}
                           </TableCell>
@@ -403,14 +427,13 @@ type PrevReport = {
   kpiValues: { kpiName: string; target: number | null; current: number | null; forecast: number | null }[];
 } | null;
 
-// 予算/実績/着地 を縦に並べたセル（先月・当月用）
-function ActualCell({ budget, actual, forecast, good }: { budget: number | null; actual: number | null; forecast: number | null; good: string }) {
-  const under = budget != null && forecast != null && (good === "UP" ? forecast < budget : forecast > budget);
+// 予算/実績 を縦に並べたセル（先月・当月＝売上確定済みなので着地は出さない）
+function ActualCell({ budget, actual, good }: { budget: number | null; actual: number | null; good: string }) {
+  const under = budget != null && actual != null && (good === "UP" ? actual < budget : actual > budget);
   return (
     <TableCell className="text-right text-sm tabular-nums">
       <div className="text-muted-foreground">予算 {fmt(budget)}</div>
-      <div className="font-semibold">実績 {fmt(actual)}</div>
-      <div className={under ? "font-semibold text-red-600" : ""}>着地 {fmt(forecast)}</div>
+      <div className={under ? "font-semibold text-red-600" : "font-semibold"}>実績 {fmt(actual)}</div>
     </TableCell>
   );
 }
@@ -434,8 +457,8 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
   return (
     <Card>
       <CardHeader>
-        <CardTitle>ローリング予測（予算・実績・着地）</CardTitle>
-        <p className="text-sm text-muted-foreground">{hasPrev ? "先月実績・" : ""}当月の実績と、来月以降の予算・着地予想を横並びで確認できます。着地が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
+        <CardTitle>ローリング予測（予算・実績／来月以降は着地予想）</CardTitle>
+        <p className="text-sm text-muted-foreground">{hasPrev ? "先月実績・" : ""}当月は確定した予算・実績、来月以降は予算・着地予想を横並びで確認できます。予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
         <div style={{ minWidth: 260 + totalCols * 140 }}>
@@ -462,8 +485,8 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                     return (
                       <TableRow key={v.id}>
                         <TableCell className="whitespace-nowrap text-sm font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
-                        {hasPrev && <ActualCell budget={pv?.target ?? null} actual={pv?.current ?? null} forecast={pv?.forecast ?? null} good={dir} />}
-                        <ActualCell budget={v.target} actual={v.current} forecast={v.forecast} good={dir} />
+                        {hasPrev && <ActualCell budget={pv?.target ?? null} actual={pv?.current ?? null} good={dir} />}
+                        <ActualCell budget={v.target} actual={v.current} good={dir} />
                         {fwd.map((m) => {
                           const p = projMap.get(`${v.kpiName}__${m}`);
                           return (
