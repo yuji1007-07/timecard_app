@@ -11,8 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ALERT_COLOR_CLASS, PRIORITIES, label, BUSINESS_TYPES } from "@/lib/constants";
-import { cn } from "@/lib/utils";
+import { label, BUSINESS_TYPES } from "@/lib/constants";
 import { NotifyButton } from "./notify-button";
 
 // 月次レポートの kpiValues から、名前候補で最初にヒットした値を取り出す
@@ -95,58 +94,33 @@ async function AdminDashboard({ week }: { week: string }) {
         <StatCard label="フィードバック待ち" value={`${feedbackWaiting}`} tone={feedbackWaiting ? "warn" : "good"} />
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* 提出状況 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>提出状況（週次）</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-1.5">
-            {submission.map((s) => (
-              <div key={s.unit.key} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
-                <span>
-                  {s.unit.label}
-                  <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, s.unit.businessType)}</span>
-                </span>
-                {s.submitted ? (
-                  s.reportId ? (
-                    <Link href={`/reports/${s.reportId}`}>
-                      <Badge variant="good">提出済</Badge>
-                    </Link>
-                  ) : (
+      {/* 提出状況（週次） */}
+      <Card>
+        <CardHeader>
+          <CardTitle>提出状況（週次）</CardTitle>
+        </CardHeader>
+        <CardContent className="grid gap-1.5 sm:grid-cols-2">
+          {submission.map((s) => (
+            <div key={s.unit.key} className="flex items-center justify-between rounded-md border px-3 py-2 text-sm">
+              <span>
+                {s.unit.label}
+                <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, s.unit.businessType)}</span>
+              </span>
+              {s.submitted ? (
+                s.reportId ? (
+                  <Link href={`/reports/${s.reportId}`}>
                     <Badge variant="good">提出済</Badge>
-                  )
+                  </Link>
                 ) : (
-                  <Badge variant="bad">未提出</Badge>
-                )}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-
-        {/* 要注意店舗 */}
-        <Card>
-          <CardHeader>
-            <CardTitle>要注意店舗</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {alerts.length === 0 && <p className="text-sm text-muted-foreground">該当する店舗はありません。</p>}
-            {alerts.map((a, i) => (
-              <div key={i} className={cn("rounded-md border px-3 py-2 text-sm", ALERT_COLOR_CLASS[a.condition.color])}>
-                <div className="flex items-center justify-between">
-                  <span className="font-medium">{a.unit.label}</span>
-                  <Badge variant="outline" className="bg-white/60">
-                    優先度: {label(PRIORITIES, a.condition.priority)}
-                  </Badge>
-                </div>
-                <div className="mt-0.5 text-xs">
-                  {a.condition.name} — {a.reason}
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      </div>
+                  <Badge variant="good">提出済</Badge>
+                )
+              ) : (
+                <Badge variant="bad">未提出</Badge>
+              )}
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* 店舗別 月次サマリー */}
       <Card className="mt-6">
@@ -163,8 +137,8 @@ async function AdminDashboard({ week }: { week: string }) {
                 <TableRow>
                   <TableHead>店舗 / 単位</TableHead>
                   <TableHead>月次提出</TableHead>
-                  <TableHead className="text-right">総売上(実績)</TableHead>
                   <TableHead className="text-right">予算</TableHead>
+                  <TableHead className="text-right">総売上(実績)</TableHead>
                   <TableHead className="text-right">着地</TableHead>
                   <TableHead className="text-right">総カルテ</TableHead>
                   <TableHead className="text-right">来店頻度</TableHead>
@@ -187,8 +161,8 @@ async function AdminDashboard({ week }: { week: string }) {
                           <Badge variant="bad">未提出</Badge>
                         )}
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>{fmt(r.actual)}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(r.budget)}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>{fmt(r.actual)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.forecast)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
                       <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
