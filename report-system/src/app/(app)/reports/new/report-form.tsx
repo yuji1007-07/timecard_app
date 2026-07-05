@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { submitReport, updateReport, type ReportPayload } from "../actions";
 import { setUnitHiddenKpis } from "../hide-actions";
+import { PdfImportCard, type PdfKpiUpdates, type PdfProjUpdates } from "./pdf-import";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -190,6 +191,33 @@ export function ReportForm({
     });
   }
   const hasCarry = Object.keys(kpiCarry).length > 0 || Object.keys(projCarry).length > 0;
+  // PDF自動入力の反映：読み取った数値をKPI欄と来月以降の予測欄に流し込む
+  function applyPdfImport(kpiUpd: PdfKpiUpdates, projUpd: PdfProjUpdates) {
+    setKpi((prev) => {
+      const next = { ...prev };
+      for (const [id, u] of Object.entries(kpiUpd)) {
+        if (!next[id]) continue;
+        next[id] = {
+          ...next[id],
+          ...(u.target != null ? { target: u.target } : {}),
+          ...(u.current != null ? { current: u.current } : {}),
+        };
+      }
+      return next;
+    });
+    setProj((prev) => {
+      const next: ProjMap = { ...prev };
+      for (const [name, months] of Object.entries(projUpd)) {
+        next[name] = { ...(next[name] ?? {}) };
+        for (const [mo, u] of Object.entries(months)) {
+          if (!forwardMonths.includes(mo)) continue;
+          const cur = next[name][mo] ?? { budget: "", forecast: "" };
+          next[name][mo] = { budget: u.budget ?? cur.budget, forecast: u.forecast ?? cur.forecast };
+        }
+      }
+      return next;
+    });
+  }
   const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
   const [review, setReview] = useState<ReviewState>(initial?.review ?? { goodPoints: "", badPoints: "", dataIssues: "", doneThings: "", notDoneThings: "" });
   const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
@@ -434,6 +462,17 @@ export function ReportForm({
         </Card>
       )}
 
+      {/* 月次: スプレッドシートPDFから自動入力 */}
+      {isMonthly && (
+        <PdfImportCard
+          kpis={visibleKpis}
+          period={period}
+          forwardMonths={forwardMonths}
+          baseYear={baseYear}
+          onApply={applyPdfImport}
+        />
+      )}
+
       {/* KPI入力 */}
       <Card>
         <CardHeader>
@@ -465,7 +504,7 @@ export function ReportForm({
               <>この店舗で<span className="font-medium">使わないKPI項目のチェックを外す</span>と、入力欄から非表示になります（管理側でもカットできます）。</>
             ) : isMonthly ? (
               <>
-                月次は<span className="font-medium">予算 / 着地予測 / 実績</span>を入力します。着地予測は前月に立てた予測（月内は基本変えない）。「前月から取り込む」で先月立てた予測を自動反映できます。着地が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>です。
+                月次は<span className="font-medium">予算 / 実績</span>を入力します（売上確定済みのため着地はありません。着地予想は下の「来月以降の予測」で入力）。「前月から取り込む」で先月立てた予測を予算に自動反映できます。実績が予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>です。
               </>
             ) : (
               <>
