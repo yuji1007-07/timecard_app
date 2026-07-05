@@ -1,8 +1,9 @@
 "use client";
 
-// スプレッドシートを印刷したPDFをアップロードして、月次KPIの数値を自動入力するカード。
-// 1) PDFをサーバーで表に復元 → 2) 項目名をKPIに自動対応付け → 3) どの列を実績/予測として
-// 取り込むかを選択 → 4) プレビュー確認後にフォームへ一括反映（スタッフは確認するだけ）。
+// スプレッドシートを印刷したPDFをアップロードして、KPIの数値を自動入力するカード。
+// スタッフの操作は最小限：アップロード →（週次のみ「今週の列」を1タップ）→ 内容確認 → 反映。
+// 列の割り当てはシートの運用（当月列=予算/目標、月末列=実績/着地予測、翌月以降=着地予想）に
+// 合わせて自動で行い、手動調整は「上級者向け」に畳んで隠す。
 
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -58,17 +59,24 @@ function matchRows(rows: PdfRow[], kpis: KpiItemDef[]): { row: PdfRow; kpi: KpiI
 
 // 列見出しから取り込み先を推測。
 // シートの運用: 「月末」列は週次では着地予想、月次では確定した実績が入る。
-// 「6月」など当月の列は前月に立てた予測＝予算に相当、「7月」「8月」は先の着地予想。
+// 「7月」など当月の列は前月に立てた予測＝予算（週次では目標）、翌月以降は着地予想。
 function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forwardMonths: string[]): string {
   const h = norm(header);
   if (h.includes("月末")) return isMonthly ? "current" : "forecast";
-  if (!isMonthly) return "";
   const hasMonth = (n: number) => new RegExp(`(?:^|[^0-9])${n}月`).test(h);
-  if (hasMonth(curMonthNum)) return "target";
+  if (curMonthNum > 0 && hasMonth(curMonthNum)) return "target";
+  if (!isMonthly) return "";
   for (const m of forwardMonths) {
     if (hasMonth(Number(m.slice(5, 7)))) return `pf:${m}`;
   }
   return "";
+}
+
+// 見出しの表示用（スペース除去・長すぎは省略）
+function headerLabel(c: PdfCol): string {
+  const h = c.header.replace(/\s+/g, "");
+  if (!h) return `列${c.index + 1}`;
+  return h.length > 12 ? `${h.slice(0, 12)}…` : h;
 }
 
 export function PdfImportCard({
@@ -94,17 +102,20 @@ export function PdfImportCard({
   const [colMap, setColMap] = useState<Record<string, string>>({});
   const [applied, setApplied] = useState<number | null>(null);
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const matched = useMemo(() => (data ? matchRows(data.rows, kpis) : []), [data, kpis]);
   const matchedCount = matched.filter((m) => m.kpi).length;
   const unmatched = matched.filter((m) => !m.kpi);
-  const curMonthNum = isMonthly ? Number(period.slice(5, 7)) || 0 : 0;
+  // 月次は対象月から、週次は今日の日付から「当月」を推定（目標/予算列の自動判定に使う）
+  const curMonthNum = isMonthly ? Number(period.slice(5, 7)) || 0 : new Date().getMonth() + 1;
   const curLabel = isMonthly ? (/^\d{4}-\d{2}$/.test(period) ? monthShort(period, baseYear) : "当月") : "今週";
 
   async function handleFile(f: File) {
     setError(null);
     setApplied(null);
     setData(null);
+    setShowAdvanced(false);
     if (f.size > 10 * 1024 * 1024) {
       setError("ファイルが大きすぎます（10MBまで）。");
       return;
@@ -121,7 +132,7 @@ export function PdfImportCard({
       }
       const cols: PdfCol[] = json.columns;
       setData({ columns: cols, rows: json.rows });
-      // 列見出しから初期の取り込み先を推測（間違っていても下で変更できる）
+      // 列の取り込み先を自動判定（下の「上級者向け」で変更可能）
       const init: Record<string, string> = {};
       for (const c of cols) {
         const g = guessRole(c.header, isMonthly, curMonthNum, forwardMonths);
@@ -133,6 +144,30 @@ export function PdfImportCard({
     } finally {
       setBusy(false);
     }
+  }
+
+  // 週次で「今週の列」として選べる列（~7日・~14日…・月末）
+  const weekChoiceCols = useMemo(() => {
+    if (!data || isMonthly) return [];
+    return data.columns.filter((c) => {
+      const h = norm(c.header);
+      return /~\d+日/.test(h) || h.includes("月末");
+    });
+  }, [data, isMonthly]);
+  const currentWeekColIndex = Object.entries(colMap).find(([, r]) => r === "current")?.[0] ?? null;
+
+  function pickWeekCol(index: number) {
+    setColMap((m) => {
+      const next = { ...m };
+      // 既存の「現状」割り当てを外してから、選んだ列を現状に
+      for (const [ci, r] of Object.entries(next)) {
+        if (r === "current") delete next[ci];
+      }
+      // 月末列を現状に選んだ場合は着地予測の割り当てと入れ替わる
+      next[String(index)] = "current";
+      return next;
+    });
+    setApplied(null);
   }
 
   function apply() {
@@ -172,7 +207,6 @@ export function PdfImportCard({
     setApplied(n);
   }
 
-  const activeCols = data ? data.columns.filter((c) => colMap[String(c.index)]) : [];
   const roleLabel = (role: string) => {
     if (role === "current") return isMonthly ? `実績（${curLabel}）` : "現状（今週）";
     if (role === "target") return isMonthly ? `予算（${curLabel}）` : "目標";
@@ -181,20 +215,32 @@ export function PdfImportCard({
     const ml = /^\d{4}-\d{2}$/.test(m) ? monthShort(m, baseYear) : m;
     return role.startsWith("pb:") ? `${ml}の予算` : `${ml}の着地予想`;
   };
+  const roleOrder = (role: string) => (role === "target" ? 0 : role === "current" ? 1 : role === "forecast" ? 2 : 10);
+
+  const activeCols = data
+    ? data.columns
+        .filter((c) => colMap[String(c.index)])
+        .sort((a, b) => roleOrder(colMap[String(a.index)]) - roleOrder(colMap[String(b.index)]) || a.index - b.index)
+    : [];
+  // プレビューは値が1つもない行を省く（見やすさ優先）
+  const previewRows = matched.filter(
+    ({ row, kpi }) => kpi && activeCols.some((c) => row.cells[String(c.index)] != null)
+  );
+  const needsWeekPick = !isMonthly && weekChoiceCols.length > 0 && currentWeekColIndex == null;
 
   return (
     <Card className="border-dashed border-navy/40">
       <CardHeader>
-        <CardTitle>📄 スプレッドシートのPDFから自動入力（任意）</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          いつも使っているスプレッドシートをPDFにしてアップロードすると、項目を自動で読み取ってKPI欄に反映します。
-          {isMonthly ? (
-            <>「月末」列は<span className="font-medium">実績</span>、「{curLabel}」列は<span className="font-medium">予算</span>として自動セットされます。</>
-          ) : (
-            <>「月末」列は<span className="font-medium">着地予測</span>として自動セット。「~7日」「~14日」などの列から今週分を<span className="font-medium">現状（今週）</span>に選んでください。</>
-          )}
-          反映後に数値を確認してから提出してください。（スプレッドシートの「ファイル → ダウンロード → PDF」で作成したものが対象。写真・スキャンは不可）
-        </p>
+        <CardTitle>📄 いつものシート（PDF）から自動入力</CardTitle>
+        <div className="text-sm text-muted-foreground">
+          手入力しなくても、いつものスプレッドシートから数値を取り込めます。
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+            <li>スプレッドシートをPDFで保存（ファイル → ダウンロード → PDF）</li>
+            <li>下の「ファイルを選択」でそのPDFを選ぶ</li>
+            {!isMonthly && <li>「今週の数字はどの列？」で今週の列をタップ</li>}
+            <li>内容を確認して「反映する」を押す → あとは数値をチェックして提出するだけ</li>
+          </ol>
+        </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center gap-2">
@@ -209,85 +255,84 @@ export function PdfImportCard({
               if (f) handleFile(f);
             }}
           />
-          {busy && <span className="text-sm text-muted-foreground">解析中...</span>}
+          {busy && <span className="text-sm text-muted-foreground">読み取り中...</span>}
         </div>
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
         {data && (
           <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <Badge variant="good">{matchedCount}項目をKPIに対応付けました</Badge>
+              <Badge variant="good">✅ {matchedCount}項目を読み取りました</Badge>
               {unmatched.length > 0 && (
                 <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setShowUnmatched((v) => !v)}>
-                  対応できなかった行 {unmatched.length}件 {showUnmatched ? "を隠す" : "を見る"}
+                  読み取れなかった行 {unmatched.length}件 {showUnmatched ? "を隠す" : ""}
                 </button>
               )}
             </div>
             {showUnmatched && unmatched.length > 0 && (
               <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
                 {unmatched.map((m) => m.row.label).join(" ／ ")}
+                <span className="mt-1 block">※ 集計行など、アプリのKPIにない項目はスキップされます（問題ありません）。</span>
               </p>
             )}
 
-            {/* 列の取り込み先を選ぶ */}
-            <div>
-              <p className="mb-1 text-xs font-medium">どの列をどこに取り込むかを選んでください（見出しとサンプル値を参考に）:</p>
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {data.columns.map((c) => (
-                  <div key={c.index} className="rounded-md border p-2">
-                    <div className="truncate text-xs font-medium" title={c.header || `列${c.index + 1}`}>
-                      {c.header || `列${c.index + 1}`}
-                    </div>
-                    <div className="truncate text-[11px] text-muted-foreground">例: {c.samples.join(", ") || "—"}</div>
-                    <select
-                      className={`${selectClass} mt-1`}
-                      value={colMap[String(c.index)] ?? ""}
-                      onChange={(e) => setColMap((m) => ({ ...m, [String(c.index)]: e.target.value }))}
-                    >
-                      <option value="">取り込まない</option>
-                      {isMonthly ? (
-                        <>
-                          <option value="current">実績（{curLabel}）</option>
-                          <option value="target">予算（{curLabel}）</option>
-                          {forwardMonths.map((m) => (
-                            <option key={`pb:${m}`} value={`pb:${m}`}>{monthShort(m, baseYear)}の予算</option>
-                          ))}
-                          {forwardMonths.map((m) => (
-                            <option key={`pf:${m}`} value={`pf:${m}`}>{monthShort(m, baseYear)}の着地予想</option>
-                          ))}
-                        </>
-                      ) : (
-                        <>
-                          <option value="target">目標</option>
-                          <option value="current">現状（今週）</option>
-                          <option value="forecast">着地予測</option>
-                        </>
-                      )}
-                    </select>
-                  </div>
-                ))}
+            {/* 週次: 今週の列を1タップで選ぶ */}
+            {!isMonthly && weekChoiceCols.length > 0 && (
+              <div className={`rounded-lg border-2 p-3 ${needsWeekPick ? "border-amber-400 bg-amber-50" : "border-navy/20 bg-navy/5"}`}>
+                <p className="text-sm font-bold">
+                  {needsWeekPick ? "👉 今週の数字はどの列に入っていますか？（タップで選択）" : "今週の列:"}
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {weekChoiceCols.map((c) => {
+                    const selected = currentWeekColIndex === String(c.index);
+                    return (
+                      <button
+                        key={c.index}
+                        type="button"
+                        onClick={() => pickWeekCol(c.index)}
+                        className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${
+                          selected ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
+                        }`}
+                      >
+                        {headerLabel(c)}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
 
-            {/* プレビュー（選択した列のみ） */}
+            {/* この内容で取り込みます（自動判定の結果） */}
             {activeCols.length > 0 && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                <p className="text-xs font-bold text-emerald-900">この内容で取り込みます（自動判定）:</p>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {activeCols.map((c) => (
+                    <span key={c.index} className="rounded-md bg-white px-2 py-1 text-xs shadow-sm ring-1 ring-emerald-200">
+                      <span className="font-bold text-emerald-800">{roleLabel(colMap[String(c.index)])}</span>
+                      <span className="text-muted-foreground"> ← シートの「{headerLabel(c)}」列</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* プレビュー（取り込む数値の確認） */}
+            {activeCols.length > 0 && previewRows.length > 0 && (
               <div className="max-h-72 overflow-auto rounded-md border">
                 <table className="w-full text-xs">
                   <thead className="sticky top-0 bg-muted">
                     <tr>
-                      <th className="px-2 py-1.5 text-left font-medium">PDFの項目 → KPI</th>
+                      <th className="px-2 py-1.5 text-left font-medium">項目</th>
                       {activeCols.map((c) => (
                         <th key={c.index} className="px-2 py-1.5 text-right font-medium">{roleLabel(colMap[String(c.index)])}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {matched.filter((m) => m.kpi).map(({ row, kpi }) => (
+                    {previewRows.map(({ row, kpi }) => (
                       <tr key={`${row.section}|${row.label}`} className="border-t">
-                        <td className="px-2 py-1">
-                          {row.label}
-                          {kpi!.name !== row.label && <span className="text-muted-foreground"> → {kpi!.name}</span>}
-                        </td>
+                        <td className="px-2 py-1 font-medium">{kpi!.name}</td>
                         {activeCols.map((c) => (
                           <td key={c.index} className="px-2 py-1 text-right tabular-nums">
                             {row.cells[String(c.index)] != null ? row.cells[String(c.index)].toLocaleString() : "—"}
@@ -300,18 +345,73 @@ export function PdfImportCard({
               </div>
             )}
 
+            {needsWeekPick && (
+              <p className="text-sm font-medium text-amber-700">↑ 先に「今週の列」を選ぶと反映できるようになります。</p>
+            )}
+
             <div className="flex flex-wrap items-center gap-2">
-              <Button type="button" onClick={apply} disabled={activeCols.length === 0 || matchedCount === 0}>
-                この内容をフォームに反映する
+              <Button type="button" size="lg" onClick={apply} disabled={activeCols.length === 0 || matchedCount === 0 || needsWeekPick}>
+                ✅ この数値をフォームに反映する
               </Button>
               {applied != null && (
                 <span className="text-sm font-medium text-emerald-700">
-                  ✅ {applied}件の数値を反映しました。下のKPI欄・予測欄を確認してください。
+                  {applied}件を反映しました。下のKPI欄を確認してください。
                 </span>
+              )}
+            </div>
+
+            {/* 上級者向け: 列の割り当てを手動調整 */}
+            <div>
+              <button type="button" className="text-xs text-muted-foreground underline" onClick={() => setShowAdvanced((v) => !v)}>
+                {showAdvanced ? "手動調整を閉じる" : "うまく取り込めないとき（列の割り当てを手動で調整）"}
+              </button>
+              {showAdvanced && (
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {data.columns.map((c) => (
+                    <div key={c.index} className="rounded-md border p-2">
+                      <div className="truncate text-xs font-medium" title={c.header || `列${c.index + 1}`}>
+                        {headerLabel(c)}
+                      </div>
+                      <div className="truncate text-[11px] text-muted-foreground">例: {c.samples.join(", ") || "—"}</div>
+                      <select
+                        className={`${selectClass} mt-1`}
+                        value={colMap[String(c.index)] ?? ""}
+                        onChange={(e) => {
+                          setColMap((m) => ({ ...m, [String(c.index)]: e.target.value }));
+                          setApplied(null);
+                        }}
+                      >
+                        <option value="">取り込まない</option>
+                        {isMonthly ? (
+                          <>
+                            <option value="current">実績（{curLabel}）</option>
+                            <option value="target">予算（{curLabel}）</option>
+                            {forwardMonths.map((m) => (
+                              <option key={`pb:${m}`} value={`pb:${m}`}>{monthShort(m, baseYear)}の予算</option>
+                            ))}
+                            {forwardMonths.map((m) => (
+                              <option key={`pf:${m}`} value={`pf:${m}`}>{monthShort(m, baseYear)}の着地予想</option>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            <option value="target">目標</option>
+                            <option value="current">現状（今週）</option>
+                            <option value="forecast">着地予測</option>
+                          </>
+                        )}
+                      </select>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           </div>
         )}
+
+        <p className="text-[11px] text-muted-foreground">
+          ※ スプレッドシートから直接PDF出力したものが対象です（写真・スキャンは読み取れません）。反映後は必ず数値を確認してから提出してください。
+        </p>
       </CardContent>
     </Card>
   );
