@@ -56,11 +56,15 @@ function matchRows(rows: PdfRow[], kpis: KpiItemDef[]): { row: PdfRow; kpi: KpiI
   });
 }
 
-// 列見出しから取り込み先を推測（「6月」→当月実績、「7月」→7月の着地予想 など）
-function guessRole(header: string, curMonthNum: number, forwardMonths: string[]): string {
+// 列見出しから取り込み先を推測。
+// シートの運用: 「月末」列は週次では着地予想、月次では確定した実績が入る。
+// 「6月」など当月の列は前月に立てた予測＝予算に相当、「7月」「8月」は先の着地予想。
+function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forwardMonths: string[]): string {
   const h = norm(header);
+  if (h.includes("月末")) return isMonthly ? "current" : "forecast";
+  if (!isMonthly) return "";
   const hasMonth = (n: number) => new RegExp(`(?:^|[^0-9])${n}月`).test(h);
-  if (hasMonth(curMonthNum)) return "current";
+  if (hasMonth(curMonthNum)) return "target";
   for (const m of forwardMonths) {
     if (hasMonth(Number(m.slice(5, 7)))) return `pf:${m}`;
   }
@@ -117,13 +121,11 @@ export function PdfImportCard({
       }
       const cols: PdfCol[] = json.columns;
       setData({ columns: cols, rows: json.rows });
-      // 列見出しから初期の取り込み先を推測（月次のみ。間違っていても下で変更できる）
+      // 列見出しから初期の取り込み先を推測（間違っていても下で変更できる）
       const init: Record<string, string> = {};
-      if (isMonthly) {
-        for (const c of cols) {
-          const g = guessRole(c.header, curMonthNum, forwardMonths);
-          if (g) init[String(c.index)] = g;
-        }
+      for (const c of cols) {
+        const g = guessRole(c.header, isMonthly, curMonthNum, forwardMonths);
+        if (g) init[String(c.index)] = g;
       }
       setColMap(init);
     } catch {
@@ -186,7 +188,11 @@ export function PdfImportCard({
         <CardTitle>📄 スプレッドシートのPDFから自動入力（任意）</CardTitle>
         <p className="text-sm text-muted-foreground">
           いつも使っているスプレッドシートをPDFにしてアップロードすると、項目を自動で読み取ってKPI欄に反映します。
-          {!isMonthly && <>週次では「~7日」「~14日」などの列を<span className="font-medium">現状（今週）</span>として取り込めます。</>}
+          {isMonthly ? (
+            <>「月末」列は<span className="font-medium">実績</span>、「{curLabel}」列は<span className="font-medium">予算</span>として自動セットされます。</>
+          ) : (
+            <>「月末」列は<span className="font-medium">着地予測</span>として自動セット。「~7日」「~14日」などの列から今週分を<span className="font-medium">現状（今週）</span>に選んでください。</>
+          )}
           反映後に数値を確認してから提出してください。（スプレッドシートの「ファイル → ダウンロード → PDF」で作成したものが対象。写真・スキャンは不可）
         </p>
       </CardHeader>
