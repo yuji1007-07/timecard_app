@@ -14,7 +14,7 @@ import type { KpiItemDef } from "./report-form";
 type PdfCol = { index: number; header: string; samples: string[] };
 type PdfRow = { section: string | null; label: string; cells: Record<string, number> };
 
-export type PdfKpiUpdates = Record<string, { target?: string; current?: string }>; // kpiItemId ->
+export type PdfKpiUpdates = Record<string, { target?: string; current?: string; forecast?: string }>; // kpiItemId ->
 export type PdfProjUpdates = Record<string, Record<string, { budget?: string; forecast?: string }>>; // kpiName -> month ->
 
 const selectClass =
@@ -69,17 +69,20 @@ function guessRole(header: string, curMonthNum: number, forwardMonths: string[])
 
 export function PdfImportCard({
   kpis,
+  reportType,
   period,
   forwardMonths,
   baseYear,
   onApply,
 }: {
   kpis: KpiItemDef[];
-  period: string; // YYYY-MM
+  reportType: "WEEKLY" | "MONTHLY";
+  period: string; // 月次: YYYY-MM ／ 週次: YYYY-Wnn
   forwardMonths: string[];
   baseYear: number;
   onApply: (kpiUpdates: PdfKpiUpdates, projUpdates: PdfProjUpdates) => void;
 }) {
+  const isMonthly = reportType === "MONTHLY";
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,8 +94,8 @@ export function PdfImportCard({
   const matched = useMemo(() => (data ? matchRows(data.rows, kpis) : []), [data, kpis]);
   const matchedCount = matched.filter((m) => m.kpi).length;
   const unmatched = matched.filter((m) => !m.kpi);
-  const curMonthNum = Number(period.slice(5, 7)) || 0;
-  const curLabel = /^\d{4}-\d{2}$/.test(period) ? monthShort(period, baseYear) : "当月";
+  const curMonthNum = isMonthly ? Number(period.slice(5, 7)) || 0 : 0;
+  const curLabel = isMonthly ? (/^\d{4}-\d{2}$/.test(period) ? monthShort(period, baseYear) : "当月") : "今週";
 
   async function handleFile(f: File) {
     setError(null);
@@ -114,11 +117,13 @@ export function PdfImportCard({
       }
       const cols: PdfCol[] = json.columns;
       setData({ columns: cols, rows: json.rows });
-      // 列見出しから初期の取り込み先を推測（間違っていても下で変更できる）
+      // 列見出しから初期の取り込み先を推測（月次のみ。間違っていても下で変更できる）
       const init: Record<string, string> = {};
-      for (const c of cols) {
-        const g = guessRole(c.header, curMonthNum, forwardMonths);
-        if (g) init[String(c.index)] = g;
+      if (isMonthly) {
+        for (const c of cols) {
+          const g = guessRole(c.header, curMonthNum, forwardMonths);
+          if (g) init[String(c.index)] = g;
+        }
       }
       setColMap(init);
     } catch {
@@ -147,6 +152,10 @@ export function PdfImportCard({
           if (!kpi.hasTarget) continue;
           (kpiUpd[kpi.id] ??= {}).target = s;
           n++;
+        } else if (role === "forecast") {
+          if (!kpi.hasForecast) continue;
+          (kpiUpd[kpi.id] ??= {}).forecast = s;
+          n++;
         } else if (role.startsWith("pb:") || role.startsWith("pf:")) {
           const m = role.slice(3);
           if (!forwardMonths.includes(m)) continue;
@@ -163,8 +172,9 @@ export function PdfImportCard({
 
   const activeCols = data ? data.columns.filter((c) => colMap[String(c.index)]) : [];
   const roleLabel = (role: string) => {
-    if (role === "current") return `実績（${curLabel}）`;
-    if (role === "target") return `予算（${curLabel}）`;
+    if (role === "current") return isMonthly ? `実績（${curLabel}）` : "現状（今週）";
+    if (role === "target") return isMonthly ? `予算（${curLabel}）` : "目標";
+    if (role === "forecast") return "着地予測";
     const m = role.slice(3);
     const ml = /^\d{4}-\d{2}$/.test(m) ? monthShort(m, baseYear) : m;
     return role.startsWith("pb:") ? `${ml}の予算` : `${ml}の着地予想`;
@@ -176,6 +186,7 @@ export function PdfImportCard({
         <CardTitle>📄 スプレッドシートのPDFから自動入力（任意）</CardTitle>
         <p className="text-sm text-muted-foreground">
           いつも使っているスプレッドシートをPDFにしてアップロードすると、項目を自動で読み取ってKPI欄に反映します。
+          {!isMonthly && <>週次では「~7日」「~14日」などの列を<span className="font-medium">現状（今週）</span>として取り込めます。</>}
           反映後に数値を確認してから提出してください。（スプレッドシートの「ファイル → ダウンロード → PDF」で作成したものが対象。写真・スキャンは不可）
         </p>
       </CardHeader>
@@ -228,14 +239,24 @@ export function PdfImportCard({
                       onChange={(e) => setColMap((m) => ({ ...m, [String(c.index)]: e.target.value }))}
                     >
                       <option value="">取り込まない</option>
-                      <option value="current">実績（{curLabel}）</option>
-                      <option value="target">予算（{curLabel}）</option>
-                      {forwardMonths.map((m) => (
-                        <option key={`pb:${m}`} value={`pb:${m}`}>{monthShort(m, baseYear)}の予算</option>
-                      ))}
-                      {forwardMonths.map((m) => (
-                        <option key={`pf:${m}`} value={`pf:${m}`}>{monthShort(m, baseYear)}の着地予想</option>
-                      ))}
+                      {isMonthly ? (
+                        <>
+                          <option value="current">実績（{curLabel}）</option>
+                          <option value="target">予算（{curLabel}）</option>
+                          {forwardMonths.map((m) => (
+                            <option key={`pb:${m}`} value={`pb:${m}`}>{monthShort(m, baseYear)}の予算</option>
+                          ))}
+                          {forwardMonths.map((m) => (
+                            <option key={`pf:${m}`} value={`pf:${m}`}>{monthShort(m, baseYear)}の着地予想</option>
+                          ))}
+                        </>
+                      ) : (
+                        <>
+                          <option value="target">目標</option>
+                          <option value="current">現状（今週）</option>
+                          <option value="forecast">着地予測</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 ))}

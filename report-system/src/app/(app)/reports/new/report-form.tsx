@@ -201,6 +201,7 @@ export function ReportForm({
           ...next[id],
           ...(u.target != null ? { target: u.target } : {}),
           ...(u.current != null ? { current: u.current } : {}),
+          ...(u.forecast != null ? { forecast: u.forecast } : {}),
         };
       }
       return next;
@@ -462,16 +463,16 @@ export function ReportForm({
         </Card>
       )}
 
-      {/* 月次: スプレッドシートPDFから自動入力 */}
-      {isMonthly && (
-        <PdfImportCard
-          kpis={visibleKpis}
-          period={period}
-          forwardMonths={forwardMonths}
-          baseYear={baseYear}
-          onApply={applyPdfImport}
-        />
-      )}
+      {/* スプレッドシートPDFから自動入力（週次・月次共通） */}
+      <PdfImportCard
+        kpis={visibleKpis}
+        reportType={reportType}
+        period={period}
+        forwardMonths={forwardMonths}
+        baseYear={baseYear}
+        onApply={applyPdfImport}
+      />
+
 
       {/* KPI入力 */}
       <Card>
