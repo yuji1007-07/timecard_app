@@ -8,6 +8,7 @@
 // ============================================================
 
 import { getTemplate, saveTemplate, newId } from "../storage.js";
+import { DEPARTMENTS } from "../config.js";
 import { esc, go, showLoading, showError } from "../util.js";
 
 export async function render(container, params) {
@@ -48,6 +49,11 @@ export async function render(container, params) {
     model.category = val("#tCategory");
     model.bodyText = val("#tBody");
     model.terms = val("#tTerms");
+
+    // 対象部門（チェックが1つも無ければ「全部門共通」＝空配列）
+    model.departments = Array.from(
+      container.querySelectorAll(".dept-check:checked")
+    ).map((el) => el.value);
 
     model.fields.forEach((f) => {
       f.label = val(`#fl_${f.id}`);
@@ -93,6 +99,16 @@ export async function render(container, params) {
           <div class="field">
             <label class="field__label">種類（カテゴリ）</label>
             <input id="tCategory" class="field__input" type="text" value="${esc(model.category)}" placeholder="例: 整骨院 / 鍼灸 / エステ / 回数券 / 同意書" />
+          </div>
+          <div class="field">
+            <label class="field__label">対象部門（この申込書を使える部門）</label>
+            <div class="checkbox-group">
+              ${DEPARTMENTS.map(
+                (d) =>
+                  `<label class="cbx"><input type="checkbox" class="dept-check" value="${esc(d)}" ${(model.departments || []).includes(d) ? "checked" : ""}/> ${esc(d)}</label>`
+              ).join("")}
+            </div>
+            <p class="field__hint">どれもチェックしない場合は「全部門で表示（共通）」になります。店舗ログインでは、その店舗の部門に合った申込書だけが表示されます。</p>
           </div>
           <div class="field">
             <label class="field__label">本文（冒頭の説明）</label>

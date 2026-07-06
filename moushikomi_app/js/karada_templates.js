@@ -33,11 +33,13 @@ function chk(label) {
 }
 
 // テンプレートを1件作るヘルパー
-function tpl({ name, category, body, plans, checks, fields }) {
+// からだラボ整骨院の標準テンプレートは、すべて「整骨院」部門向けです。
+function tpl({ name, category, body, plans, checks, fields, departments }) {
   return {
     id: newId(),
     name,
     category,
+    departments: departments || ["整骨院"], // 対象部門（店舗ログインでの絞り込みに使用）
     bodyText: body,
     fields: fields || karadaFields(),
     plans: plans || [],

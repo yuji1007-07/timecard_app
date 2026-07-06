@@ -22,7 +22,7 @@ export function render(container) {
       .map(
         (t) => `
         <tr>
-          <td class="td-strong">${esc(t.name)}</td>
+          <td class="td-strong">${esc(t.name)}<br><span class="dept-badge">${(t.departments && t.departments.length) ? esc(t.departments.join("・")) : "全部門共通"}</span></td>
           <td>${esc(t.category || "")}</td>
           <td>${t.fields.length}項目 / ${(t.plans || []).length}プラン</td>
           <td>${esc(formatDateTime(t.updatedAt))}</td>

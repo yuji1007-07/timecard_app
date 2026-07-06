@@ -3,8 +3,16 @@
 // スタッフがどの申込書を作るか選びます。
 // ============================================================
 
-import { getTemplates } from "../storage.js";
+import { getTemplates, isHQ, currentDepartment } from "../storage.js";
 import { esc, showLoading, showError } from "../util.js";
+
+// テンプレートがこの部門で表示対象か判定する。
+// departments が未設定/空 = 全部門共通（どの部門でも表示）
+function visibleForDept(t, dept) {
+  const ds = t.departments || [];
+  if (ds.length === 0) return true;
+  return ds.includes(dept);
+}
 
 export async function render(container) {
   showLoading(container);
@@ -16,12 +24,18 @@ export async function render(container) {
     return;
   }
 
+  // 店舗ログイン中は自部門のテンプレートだけに絞る（本部は全部表示）
+  const dept = currentDepartment();
+  if (!isHQ() && dept) {
+    templates = templates.filter((t) => visibleForDept(t, dept));
+  }
+
   if (templates.length === 0) {
     container.innerHTML = `
       <div class="page-head"><h1>申込書を選択</h1></div>
       <div class="empty-box">
-        <p>テンプレートがまだありません。</p>
-        <a href="#/templates" class="btn btn--primary">テンプレート管理で作成する</a>
+        <p>${dept ? `「${esc(dept)}」で使える申込書がまだ設定されていません。` : "テンプレートがまだありません。"}</p>
+        <p class="muted" style="margin-top:8px">本部にお問い合わせください。（本部ログイン → テンプレート管理 → 各テンプレートの「対象部門」を設定）</p>
       </div>`;
     return;
   }
