@@ -42,6 +42,10 @@ function updateSessionBar() {
     bar.className = "session-bar";
     nav.after(bar);
   }
+  // テンプレート管理は本部ログイン専用（店舗ログインでは隠す）
+  const navTemplates = nav.querySelector('a[href="#/templates"]');
+  if (navTemplates) navTemplates.style.display = isHQ() ? "" : "none";
+
   // 本部ログイン時だけ「本部設定」リンクをナビに出す
   let navSettings = document.getElementById("navSettings");
   if (isHQ()) {
@@ -83,9 +87,9 @@ const routes = [
   { pattern: /^\/print\/(.+)$/, view: pdfPreview, keys: ["appId"] },
   { pattern: /^\/history$/, view: history },
   { pattern: /^\/customers$/, view: customerManage },
-  { pattern: /^\/templates$/, view: templateList },
-  { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"] },
-  { pattern: /^\/settings$/, view: settingsView },
+  { pattern: /^\/templates$/, view: templateList, hqOnly: true },
+  { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"], hqOnly: true },
+  { pattern: /^\/settings$/, view: settingsView, hqOnly: true },
 ];
 
 function router() {
@@ -101,6 +105,11 @@ function router() {
   for (const route of routes) {
     const match = hash.match(route.pattern);
     if (match) {
+      // 本部専用の画面に、店舗(PIN)ログインでアクセスしたらホームへ戻す
+      if (route.hqOnly && !isHQ()) {
+        location.hash = "/";
+        return;
+      }
       const params = {};
       (route.keys || []).forEach((key, i) => {
         params[key] = decodeURIComponent(match[i + 1]);

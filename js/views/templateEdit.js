@@ -102,13 +102,13 @@ export async function render(container, params) {
           </div>
           <div class="field">
             <label class="field__label">対象部門（この申込書を使える部門）</label>
-            <div class="checkbox-group">
+            <div class="dept-toggles">
               ${DEPARTMENTS.map(
                 (d) =>
-                  `<label class="cbx"><input type="checkbox" class="dept-check" value="${esc(d)}" ${(model.departments || []).includes(d) ? "checked" : ""}/> ${esc(d)}</label>`
+                  `<label class="dept-toggle"><input type="checkbox" class="dept-check" value="${esc(d)}" ${(model.departments || []).includes(d) ? "checked" : ""}/><span>${esc(d)}</span></label>`
               ).join("")}
             </div>
-            <p class="field__hint">どれもチェックしない場合は「全部門で表示（共通）」になります。店舗ログインでは、その店舗の部門に合った申込書だけが表示されます。</p>
+            <p class="field__hint">ボタンを押すとオン／オフが切り替わります。どれもオフの場合は「全部門で表示（共通）」になります。店舗ログインでは、その店舗の部門に合った申込書だけが表示されます。</p>
           </div>
           <div class="field">
             <label class="field__label">本文（冒頭の説明）</label>
