@@ -7,7 +7,12 @@
 // 成功してから各画面を表示します。
 // ============================================================
 
-import { checkAuth, seedIfEmpty, startKeepAlive, getSession, clearSession, isHQ, currentStore, currentDepartment } from "./storage.js";
+import { checkAuth, seedIfEmpty, startKeepAlive, getSession, clearSession, isHQ, currentStore, currentDepartment, getStoreEditAllowed, refreshStoreEditFlag } from "./storage.js";
+
+// テンプレート編集ができるか（本部、または本部が店舗編集を許可している場合）
+function canEditTemplates() {
+  return isHQ() || getStoreEditAllowed();
+}
 
 // 各画面（views フォルダの中の部品）を読み込む
 import * as login from "./views/login.js";
@@ -42,9 +47,9 @@ function updateSessionBar() {
     bar.className = "session-bar";
     nav.after(bar);
   }
-  // テンプレート管理は本部ログイン専用（店舗ログインでは隠す）
+  // テンプレート管理は「本部」または「編集を許可された店舗」だけ表示
   const navTemplates = nav.querySelector('a[href="#/templates"]');
-  if (navTemplates) navTemplates.style.display = isHQ() ? "" : "none";
+  if (navTemplates) navTemplates.style.display = canEditTemplates() ? "" : "none";
 
   // 本部ログイン時だけ「本部設定」リンクをナビに出す
   let navSettings = document.getElementById("navSettings");
@@ -87,8 +92,8 @@ const routes = [
   { pattern: /^\/print\/(.+)$/, view: pdfPreview, keys: ["appId"] },
   { pattern: /^\/history$/, view: history },
   { pattern: /^\/customers$/, view: customerManage },
-  { pattern: /^\/templates$/, view: templateList, hqOnly: true },
-  { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"], hqOnly: true },
+  { pattern: /^\/templates$/, view: templateList, editArea: true },
+  { pattern: /^\/template\/(.+)$/, view: templateEdit, keys: ["id"], editArea: true },
   { pattern: /^\/settings$/, view: settingsView, hqOnly: true },
 ];
 
@@ -107,6 +112,11 @@ function router() {
     if (match) {
       // 本部専用の画面に、店舗(PIN)ログインでアクセスしたらホームへ戻す
       if (route.hqOnly && !isHQ()) {
+        location.hash = "/";
+        return;
+      }
+      // テンプレート編集エリアは、本部 or 編集許可された店舗のみ
+      if (route.editArea && !canEditTemplates()) {
         location.hash = "/";
         return;
       }
@@ -130,9 +140,12 @@ function showLogin() {
     onSuccess: () => {
       authed = true;
       startKeepAlive();
-      updateSessionBar();
-      location.hash = "/";
-      router();
+      // 最新の「店舗編集許可」を取得してから画面を出す
+      refreshStoreEditFlag().finally(() => {
+        updateSessionBar();
+        location.hash = "/";
+        router();
+      });
     },
   });
 }
@@ -151,6 +164,8 @@ async function boot() {
   if (authed) {
     startKeepAlive();       // 開いている間サーバーを起こし続ける
     checkAuth().then((ok) => { if (ok) seedIfEmpty(); }); // 疎通確認は裏で
+    // 店舗の編集許可を最新化し、変わっていたら画面の出し分けを更新
+    refreshStoreEditFlag().finally(() => { updateSessionBar(); router(); });
   }
   updateSessionBar();
   router();

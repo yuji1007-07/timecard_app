@@ -434,6 +434,27 @@ a { color: inherit; text-decoration: none; }
 .dept-toggle input:checked + span::before { content: "ON"; opacity: 1; }
 .dept-toggle input:focus-visible + span { outline: 3px solid #9dc0ea; outline-offset: 2px; }
 
+/* オン/オフ スイッチ（本部設定の権限切り替え） */
+.switch-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 8px 0;
+}
+.switch-row__title { font-size: 16px; font-weight: 700; color: var(--navy, #1f3a5f); }
+.switch-row__desc { font-size: 13px; color: var(--gray-text, #6b7785); margin-top: 4px; line-height: 1.5; }
+.switch { position: relative; display: inline-block; width: 60px; height: 34px; flex-shrink: 0; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch__slider {
+  position: absolute; inset: 0; cursor: pointer; background: #c3c8d0;
+  border-radius: 999px; transition: .2s;
+}
+.switch__slider::before {
+  content: ""; position: absolute; height: 26px; width: 26px; left: 4px; bottom: 4px;
+  background: #fff; border-radius: 50%; transition: .2s; box-shadow: 0 1px 3px rgba(0,0,0,.3);
+}
+.switch input:checked + .switch__slider { background: #1f7a4d; }
+.switch input:checked + .switch__slider::before { transform: translateX(26px); }
+.switch input:focus-visible + .switch__slider { outline: 3px solid #9dc0ea; outline-offset: 2px; }
+
 /* テンプレート管理などの一覧テーブルを見やすく整える */
 .data-table td, .data-table th { vertical-align: middle; }
 .data-table td.td-actions { white-space: nowrap; }

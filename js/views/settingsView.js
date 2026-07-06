@@ -4,7 +4,7 @@
 // 変更内容はサーバーに保存され、全店・全端末に反映されます。
 // ============================================================
 
-import { isHQ, getHqSettings, saveHqSettings } from "../storage.js";
+import { isHQ, getHqSettings, saveHqSettings, setStoreEditPermission } from "../storage.js";
 import { HQ } from "../config.js";
 import { esc, showLoading } from "../util.js";
 
@@ -21,7 +21,8 @@ export async function render(container) {
 
   showLoading(container);
   const remote = await getHqSettings();
-  const cur = remote || { id: HQ.id, password: HQ.password };
+  const cur = remote || { id: HQ.id, password: HQ.password, allowStoreEdit: false };
+  const allowEdit = !!(remote && remote.allowStoreEdit);
 
   container.innerHTML = `
     <div class="page-head">
@@ -57,6 +58,21 @@ export async function render(container) {
       </div>
 
       <div class="form-section">
+        <h2 class="form-section__title">店舗アカウントの権限</h2>
+        <div class="switch-row">
+          <div class="switch-row__text">
+            <div class="switch-row__title">店舗アカウントにテンプレート編集を許可する</div>
+            <div class="switch-row__desc">オフ＝店舗(PIN)ログインはテンプレート管理を使えません（本部のみ）。オンにすると店舗でも作成・編集できます。</div>
+          </div>
+          <label class="switch">
+            <input id="allowEdit" type="checkbox" ${allowEdit ? "checked" : ""} />
+            <span class="switch__slider"></span>
+          </label>
+        </div>
+        <p id="permMsg" class="form-error"></p>
+      </div>
+
+      <div class="form-section">
         <p class="muted" style="font-size:13px; line-height:1.7">
           ・変更後は、次回のログインから新しいID・パスワードが必要になります。<br>
           ・パスワードは忘れないよう、紙かパスワード管理アプリに控えてください。<br>
@@ -65,6 +81,29 @@ export async function render(container) {
       </div>
     </div>
   `;
+
+  // 店舗の編集許可スイッチ（切り替えたら即保存）
+  const allowSwitch = container.querySelector("#allowEdit");
+  const permMsg = container.querySelector("#permMsg");
+  allowSwitch.addEventListener("change", async () => {
+    const on = allowSwitch.checked;
+    allowSwitch.disabled = true;
+    permMsg.style.color = "";
+    permMsg.textContent = "保存中…";
+    try {
+      await setStoreEditPermission(on);
+      permMsg.style.color = "#1f7a4d";
+      permMsg.textContent = on
+        ? "✅ 店舗アカウントの編集を「許可」に変更しました。"
+        : "✅ 店舗アカウントの編集を「不可」に変更しました。";
+    } catch (e) {
+      allowSwitch.checked = !on; // 失敗したら元に戻す
+      permMsg.style.color = "";
+      permMsg.textContent = "❌ 保存に失敗しました。通信状態をご確認ください。";
+    } finally {
+      allowSwitch.disabled = false;
+    }
+  });
 
   const msg = container.querySelector("#setMsg");
   const saveBtn = container.querySelector("#saveSet");

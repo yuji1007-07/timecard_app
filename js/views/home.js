@@ -3,7 +3,7 @@
 // 「新しい申込書を作成」「申込履歴」「テンプレート管理」への入口
 // ============================================================
 
-import { getApplications, getTemplates, isHQ } from "../storage.js";
+import { getApplications, getTemplates, isHQ, getStoreEditAllowed } from "../storage.js";
 import { showError } from "../util.js";
 
 export async function render(container) {
@@ -47,13 +47,14 @@ export async function render(container) {
         <div class="home-card__desc">店舗別・カルテ番号順で一覧管理</div>
       </a>
 
-      ${isHQ() ? `
+      ${(isHQ() || getStoreEditAllowed()) ? `
       <a href="#/templates" class="home-card">
         <div class="home-card__icon">⚙️</div>
         <div class="home-card__title">テンプレート管理</div>
         <div class="home-card__desc">登録 ${templates} 種類 / 作成・編集</div>
-      </a>
+      </a>` : ""}
 
+      ${isHQ() ? `
       <a href="#/settings" class="home-card">
         <div class="home-card__icon">🏢</div>
         <div class="home-card__title">本部設定</div>

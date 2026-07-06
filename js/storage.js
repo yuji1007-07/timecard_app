@@ -12,7 +12,7 @@
 // ============================================================
 
 import { DEFAULT_TEMPLATES, DEFAULT_STORES } from "./seed.js";
-import { API_BASE, API_PASSWORD } from "./config.js";
+import { API_BASE, API_PASSWORD, HQ } from "./config.js";
 
 // ---- 接続設定（ログイン画面で設定し、ブラウザに記憶） ----
 const KEY_API_BASE = "moushikomi_api_base";   // サーバーのURL
@@ -137,22 +137,40 @@ export async function getTemplates(force = false) {
 }
 
 // ------- 本部ログイン設定（サーバー保存＝全端末で共有） -------
-// サーバーに置くことで、どの端末からでも同じ本部ID/パスワードでログインできます。
+// サーバーに置くことで、どの端末からでも同じ本部ID/パスワード・権限設定を共有できます。
+const KEY_ALLOW_EDIT = "moushikomi_allow_store_edit"; // 店舗の編集許可フラグ（端末キャッシュ）
+
+// 設定ドキュメント本体（無ければ null）
+async function getHqSettingsDoc() {
+  const all = await api("/templates");
+  return (all || []).find((t) => t && t.id === SETTINGS_ID) || null;
+}
+
 export async function getHqSettings() {
   try {
-    const all = await api("/templates");
-    const doc = (all || []).find((t) => t && t.id === SETTINGS_ID);
-    return doc ? { id: doc.hqId, password: doc.hqPassword } : null;
+    const doc = await getHqSettingsDoc();
+    if (!doc) return null;
+    return {
+      id: doc.hqId,
+      password: doc.hqPassword,
+      allowStoreEdit: !!doc.allowStoreEdit,
+    };
   } catch (e) {
     return null; // 取得できなければ null（呼び出し側で初期値にフォールバック）
   }
 }
-export async function saveHqSettings({ id, password }) {
+
+// 設定の一部だけ更新する（他の項目は既存値を保持）
+export async function updateHqSettings(partial) {
+  let cur = null;
+  try { cur = await getHqSettingsDoc(); } catch (e) { cur = null; }
+  cur = cur || {};
   const doc = {
     id: SETTINGS_ID,
     kind: "settings",
-    hqId: id,
-    hqPassword: password,
+    hqId: partial.id !== undefined ? partial.id : (cur.hqId || HQ.id),
+    hqPassword: partial.password !== undefined ? partial.password : (cur.hqPassword || HQ.password),
+    allowStoreEdit: partial.allowStoreEdit !== undefined ? partial.allowStoreEdit : !!cur.allowStoreEdit,
     updatedAt: new Date().toISOString(),
   };
   await api("/templates/" + encodeURIComponent(SETTINGS_ID), {
@@ -160,6 +178,36 @@ export async function saveHqSettings({ id, password }) {
     body: JSON.stringify(doc),
   });
   _templatesCache = null;
+  cacheStoreEditFlag(doc.allowStoreEdit);
+  return doc;
+}
+
+// 本部ID/パスワードの変更
+export async function saveHqSettings({ id, password }) {
+  return await updateHqSettings({ id, password });
+}
+// 店舗アカウントの編集許可 ON/OFF
+export async function setStoreEditPermission(allow) {
+  return await updateHqSettings({ allowStoreEdit: !!allow });
+}
+
+// ---- 店舗の編集許可フラグ（画面の出し分けは端末キャッシュを同期的に参照） ----
+function cacheStoreEditFlag(allow) {
+  localStorage.setItem(KEY_ALLOW_EDIT, allow ? "1" : "0");
+}
+export function getStoreEditAllowed() {
+  return localStorage.getItem(KEY_ALLOW_EDIT) === "1";
+}
+// サーバーから最新の許可フラグを取得してキャッシュを更新
+// ※通信エラー時は従来のキャッシュを維持（誤って権限を落とさないため）。
+//   サーバーに繋がって「設定が無い/オフ」と確定した時だけオフにする。
+export async function refreshStoreEditFlag() {
+  try {
+    const doc = await getHqSettingsDoc(); // 通信エラー時はここで例外
+    cacheStoreEditFlag(!!(doc && doc.allowStoreEdit));
+  } catch (e) {
+    /* 取得できなければ従来のキャッシュのまま */
+  }
 }
 
 export async function getTemplate(id) {
