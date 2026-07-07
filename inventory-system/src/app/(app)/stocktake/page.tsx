@@ -97,9 +97,16 @@ export default async function StocktakePage({ searchParams }: { searchParams: Pr
                   <td className="px-3 py-2 text-right tabular-nums">{st ? st.diffCount : "-"}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${st && st.diffAmount !== 0 ? "text-red-600" : ""}`}>{st ? yen(st.diffAmount) : "-"}</td>
                   <td className="px-3 py-2 text-right">
-                    <Button asChild size="sm" variant={done ? "outline" : "default"}>
-                      <Link href={`/stocktake/${s.id}?month=${month}`}>{done ? "再入力" : "棚卸する"}</Link>
-                    </Button>
+                    <div className="flex justify-end gap-2">
+                      {done && (
+                        <Button asChild size="sm" variant="outline">
+                          <a href={`/print/stocktake-report?store=${s.id}&month=${month}`} target="_blank" rel="noopener noreferrer">報告書</a>
+                        </Button>
+                      )}
+                      <Button asChild size="sm" variant={done ? "outline" : "default"}>
+                        <Link href={`/stocktake/${s.id}?month=${month}`}>{done ? "再入力" : "棚卸する"}</Link>
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               );

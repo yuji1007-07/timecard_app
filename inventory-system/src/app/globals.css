@@ -49,6 +49,12 @@
   .page-break { break-before: page; }
   body { background: #fff; }
 }
+/* A4 レポート（棚卸報告書など。社長提出用） */
+.a4-report { width: 190mm; margin: 0 auto; }
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  .a4-report { width: auto; margin: 0; }
+}
 .print-table { width: 100%; border-collapse: collapse; }
 .print-table th, .print-table td {
   border: 1px solid #d1d5db;
