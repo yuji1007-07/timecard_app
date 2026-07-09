@@ -134,36 +134,34 @@ async function AdminDashboard({ week }: { week: string }) {
         <CardHeader>
           <CardTitle>店舗別 月次サマリー（{thisMonth} の提出状況＋最新月次の数値）</CardTitle>
           <p className="text-xs text-muted-foreground">
-            過去2ヶ月＋今月の 総売上の予算/実績 と、最新月次報告の 総カルテ/来店頻度/窓口単価 を一覧化。実績が予算に届かない月は<span className="font-medium text-red-600">赤文字</span>。
+            総売上を月ごとに「上段: 予算 ／ 下段: <span className="font-medium">実績（達成率）</span>」で表示。予算未達の月は<span className="font-medium text-red-600">赤文字</span>です。
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <div className="min-w-[1000px]">
+          <div className="min-w-[960px]">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>店舗 / 単位</TableHead>
-                  <TableHead>月次提出</TableHead>
+                <TableRow className="bg-muted/60">
+                  <TableHead className="w-[220px]">店舗 / 単位</TableHead>
+                  <TableHead className="w-[88px] text-center">月次提出</TableHead>
                   {summaryMonths.map((m) => (
-                    <TableHead key={m} className={`text-right ${m === thisMonth ? "font-bold text-navy" : ""}`}>
-                      {monthShort(m, baseYear)}
-                      {m === thisMonth && "（今月）"}
-                      <div className="text-[10px] font-normal text-muted-foreground">予算 / 実績</div>
+                    <TableHead key={m} className={`w-[150px] border-l text-center ${m === thisMonth ? "bg-navy/10 font-bold text-navy" : ""}`}>
+                      <span className="text-sm">{monthShort(m, baseYear)}{m === thisMonth && <span className="ml-0.5 rounded bg-navy px-1 py-0.5 text-[10px] font-bold text-white">今月</span>}</span>
                     </TableHead>
                   ))}
-                  <TableHead className="text-right">総カルテ</TableHead>
-                  <TableHead className="text-right">来店頻度</TableHead>
-                  <TableHead className="text-right">窓口単価</TableHead>
+                  <TableHead className="w-[90px] border-l text-right">総カルテ</TableHead>
+                  <TableHead className="w-[90px] text-right">来店頻度</TableHead>
+                  <TableHead className="w-[100px] text-right">窓口単価</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {monthlyRows.map((r) => (
-                  <TableRow key={r.unit.key}>
-                    <TableCell className="whitespace-nowrap font-medium">
+                {monthlyRows.map((r, ri) => (
+                  <TableRow key={r.unit.key} className={ri % 2 === 1 ? "bg-muted/30" : ""}>
+                    <TableCell className="whitespace-nowrap py-2.5 font-medium">
                       {r.unit.label}
-                      <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, r.unit.businessType)}</span>
+                      <div className="text-xs font-normal text-muted-foreground">{label(BUSINESS_TYPES, r.unit.businessType)}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="text-center">
                       {r.submitted && r.submittedReportId ? (
                         <Link href={`/reports/${r.submittedReportId}`}><Badge variant="good">提出済</Badge></Link>
                       ) : (
@@ -172,20 +170,30 @@ async function AdminDashboard({ week }: { week: string }) {
                     </TableCell>
                     {r.monthCells.map((c) => {
                       const under = c.budget != null && c.actual != null && c.actual < c.budget;
+                      const rate = c.budget != null && c.budget !== 0 && c.actual != null ? Math.round((c.actual / c.budget) * 100) : null;
                       return (
-                        <TableCell key={c.month} className={`text-right tabular-nums ${c.month === thisMonth ? "bg-navy/5" : ""}`}>
+                        <TableCell key={c.month} className={`border-l text-right tabular-nums ${c.month === thisMonth ? "bg-navy/5" : ""}`}>
                           {c.budget == null && c.actual == null ? (
-                            <span className="text-muted-foreground">—</span>
+                            <div className="text-center text-muted-foreground/50">—</div>
                           ) : (
                             <>
-                              <div className="text-xs text-muted-foreground">予 {fmt(c.budget)}</div>
-                              <div className={under ? "font-semibold text-red-600" : "font-semibold"}>実 {fmt(c.actual)}</div>
+                              <div className="text-[11px] text-muted-foreground">予算 {c.budget != null ? fmt(c.budget) : "—"}</div>
+                              {c.actual != null ? (
+                                <div className={`text-[15px] font-bold ${under ? "text-red-600" : ""}`}>
+                                  {fmt(c.actual)}
+                                  {rate != null && (
+                                    <span className={`ml-1 text-[11px] font-semibold ${under ? "text-red-600" : "text-emerald-600"}`}>({rate}%)</span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-muted-foreground/60">実績 未入力</div>
+                              )}
                             </>
                           )}
                         </TableCell>
                       );
                     })}
-                    <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
+                    <TableCell className="border-l text-right tabular-nums">{fmt(r.charts)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(r.unitPrice)}</TableCell>
                   </TableRow>
@@ -194,7 +202,7 @@ async function AdminDashboard({ week }: { week: string }) {
             </Table>
           </div>
           <p className="px-4 py-3 text-xs text-muted-foreground">
-            ※ 「月次提出」は今月（{thisMonth}）の提出有無。その月の月次報告が未提出の欄は「—」になります。総カルテ/来店頻度/窓口単価は最新の月次報告の値です。
+            ※ 「月次提出」は今月（{thisMonth}）の提出有無。「—」はその月の月次報告が未提出。総カルテ/来店頻度/窓口単価は最新の月次報告の値です。
           </p>
         </CardContent>
       </Card>
