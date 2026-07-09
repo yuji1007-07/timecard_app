@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { fmt, addMonthStr, monthShort, yearMonth } from "@/lib/utils";
+import { fmt, addMonthStr, monthShort, yearMonth, weekLabel } from "@/lib/utils";
 import { TrendPicker } from "./trend-picker";
 
 export const dynamic = "force-dynamic";
@@ -201,7 +201,7 @@ export default async function TrendsPage({
         for (const v of r.kpiValues) cellMap.set(`${r.targetWeek}__${v.kpiName}`, { target: v.target, current: v.current });
       }
       const groups = buildKpiList(weeks[weeks.length - 1].kpiValues);
-      const weekLabels = weeks.map((r) => (r.targetWeek ?? "").replace(/^\d{4}-/, ""));
+      const weekLabels = weeks.map((r) => weekLabel(r.targetWeek, { short: true }));
 
       body = (
         <Card>

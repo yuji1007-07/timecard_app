@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendBadge } from "@/components/trend-badge";
 import { FeedbackPanel } from "./feedback-panel";
-import { fmt, addMonthStr, monthShort } from "@/lib/utils";
+import { fmt, addMonthStr, monthShort, weekLabel } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 const KDI_CHECK_LABEL = { OK: "問題なし", WARN: "注意", FIX: "要修正" } as const;
@@ -75,7 +75,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     <div>
       <PageHeader
         title={`${report.store.name}${report.department ? ` ${report.department.name}` : ""} の報告`}
-        description={`${label(REPORT_TYPES, report.reportType)}／対象: ${report.targetWeek ?? report.targetMonth}／報告者: ${report.reporter.name}／${label(BUSINESS_TYPES, report.department?.businessType ?? report.store.businessType)}`}
+        description={`${label(REPORT_TYPES, report.reportType)}／対象: ${report.targetWeek ? weekLabel(report.targetWeek, { withYear: true }) : report.targetMonth}／報告者: ${report.reporter.name}／${label(BUSINESS_TYPES, report.department?.businessType ?? report.store.businessType)}`}
         action={
           <div className="flex gap-2">
             <Link href={`/reports/${report.id}/edit`}>

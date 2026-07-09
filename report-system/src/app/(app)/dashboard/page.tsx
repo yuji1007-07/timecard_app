@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { isoWeek, yearMonth, fmt, addMonthStr, monthShort } from "@/lib/utils";
+import { monthWeek, weekLabel, jstNow, yearMonth, fmt, addMonthStr, monthShort } from "@/lib/utils";
 import { getDashboardData } from "@/lib/dashboard";
 import { getReportUnits } from "@/lib/units";
 import { getSubmissionStatus } from "@/lib/dashboard";
@@ -28,7 +28,7 @@ function pickKpi(
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const week = isoWeek(new Date());
+  const week = monthWeek(jstNow());
 
   if (user.role === "AREA_MANAGER") {
     return <AdminDashboard week={week} />;
@@ -48,7 +48,7 @@ async function AdminDashboard({ week }: { week: string }) {
   });
 
   // 店舗別 月次サマリー
-  const thisMonth = yearMonth(new Date());
+  const thisMonth = yearMonth(jstNow());
   const units = await getReportUnits();
   const monthlyReports = await prisma.report.findMany({
     where: { reportType: "MONTHLY", status: "SUBMITTED" },
@@ -89,7 +89,7 @@ async function AdminDashboard({ week }: { week: string }) {
     <div>
       <PageHeader
         title="管理者ダッシュボード"
-        description={`対象週: ${week} ／ 全店舗の状況を一覧で確認できます。`}
+        description={`対象週: ${weekLabel(week, { withYear: true })} ／ 全店舗の状況を一覧で確認できます。`}
         action={<NotifyButton week={week} />}
       />
 
@@ -246,7 +246,7 @@ async function ManagerDashboard({
     <div>
       <PageHeader
         title={`${store?.name ?? ""} ダッシュボード`}
-        description={`${name} さん ／ 対象週: ${week}`}
+        description={`${name} さん ／ 対象週: ${weekLabel(week, { withYear: true })}`}
         action={
           <Link href="/reports/new">
             <Button>今週の報告を入力</Button>
@@ -276,7 +276,7 @@ async function ManagerDashboard({
           <CardContent>
             {latestReport ? (
               <div className="space-y-2 text-sm">
-                <div>対象週: {latestReport.targetWeek}</div>
+                <div>対象週: {weekLabel(latestReport.targetWeek)}</div>
                 <div className="grid grid-cols-2 gap-2">
                   {latestReport.kpiValues.slice(0, 6).map((v) => (
                     <div key={v.id} className="rounded-md border px-2 py-1.5">

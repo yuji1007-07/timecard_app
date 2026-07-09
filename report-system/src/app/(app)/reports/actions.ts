@@ -209,7 +209,7 @@ async function syncReportToSheets(payload: ReportPayload, userName: string) {
     const dept = payload.departmentId ? await prisma.department.findUnique({ where: { id: payload.departmentId } }) : null;
     const sheetName = payload.reportType === "WEEKLY" ? SHEET_NAMES.WEEKLY : SHEET_NAMES.MONTHLY;
     const rows = payload.kpis.map((k) => [
-      new Date().toLocaleString("ja-JP"),
+      new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
       payload.targetWeek ?? payload.targetMonth ?? "",
       store?.name ?? "",
       dept?.name ?? "",
@@ -398,7 +398,10 @@ export async function updateReport(reportId: string, payload: ReportPayload, opt
 export async function updateReportPeriod(formData: FormData) {
   const user = await requireUser();
   const reportId = String(formData.get("reportId") || "");
-  const value = String(formData.get("value") || "").trim();
+  // 月次は value(YYYY-MM)、週次は wmonth(YYYY-MM) + wweek(1〜5) から組み立てる
+  const wmonth = String(formData.get("wmonth") || "").trim();
+  const wweek = String(formData.get("wweek") || "").trim();
+  const value = wmonth && wweek ? `${wmonth}-W${wweek}` : String(formData.get("value") || "").trim();
 
   const existing = await prisma.report.findUnique({ where: { id: reportId } });
   if (!existing) throw new Error("報告が見つかりません。");
@@ -412,7 +415,7 @@ export async function updateReportPeriod(formData: FormData) {
   }
 
   const isMonthly = existing.reportType === "MONTHLY";
-  const valid = isMonthly ? /^\d{4}-\d{2}$/.test(value) : /^\d{4}-W\d{2}$/.test(value);
+  const valid = isMonthly ? /^\d{4}-\d{2}$/.test(value) : /^\d{4}-\d{2}-W[1-5]$/.test(value);
   if (!valid) redirect(`/reports/${reportId}/edit`);
 
   await prisma.report.update({

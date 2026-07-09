@@ -77,14 +77,14 @@ export async function sendFeedbackAction(reportId: string): Promise<{ message: s
   // スプレッドシート フィードバック履歴
   await appendRows(SHEET_NAMES.FEEDBACK, [
     [
-      new Date().toLocaleString("ja-JP"),
+      new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
       report.store.name,
       report.department?.name ?? "",
       label(BUSINESS_TYPES, report.department?.businessType ?? report.store.businessType),
       report.reporter.name,
       report.feedback?.aiContent ?? "",
       content,
-      new Date().toLocaleString("ja-JP"),
+      new Date().toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" }),
     ],
   ]);
 

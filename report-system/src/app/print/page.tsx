@@ -1,7 +1,7 @@
 import { Fragment } from "react";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { fmt } from "@/lib/utils";
+import { fmt, weekLabel } from "@/lib/utils";
 import { REPORT_TYPES, BUSINESS_TYPES, KDI_STATUS, label } from "@/lib/constants";
 import { PrintToolbar } from "./print-toolbar";
 import type { Prisma } from "@prisma/client";
@@ -145,7 +145,7 @@ export default async function PrintPage({
                     </span>
                   </h2>
                   <div className="mt-1 text-xs text-gray-600">
-                    対象: {r.targetWeek ?? r.targetMonth} ／ 報告者: {r.reporter.name} ／ 提出: {r.submittedAt.toLocaleString("ja-JP")}
+                    対象: {r.targetWeek ? weekLabel(r.targetWeek, { withYear: true }) : r.targetMonth} ／ 報告者: {r.reporter.name} ／ 提出: {r.submittedAt.toLocaleString("ja-JP", { timeZone: "Asia/Tokyo" })}
                   </div>
                 </div>
 

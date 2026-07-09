@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fmt } from "@/lib/utils";
+import { fmt, weekLabel } from "@/lib/utils";
 import { REPORT_TYPES, BUSINESS_TYPES, label } from "@/lib/constants";
 import type { Prisma } from "@prisma/client";
 
@@ -170,11 +170,11 @@ export default async function ReportsPage({
                     </TableCell>
                     <TableCell className="font-medium">{r.store.name}{r.department ? ` ${r.department.name}` : ""}</TableCell>
                     <TableCell>{label(BUSINESS_TYPES, r.department?.businessType ?? r.store.businessType)}</TableCell>
-                    <TableCell>{r.targetWeek ?? r.targetMonth}</TableCell>
+                    <TableCell className="whitespace-nowrap">{r.targetWeek ? weekLabel(r.targetWeek, { withYear: true }) : r.targetMonth}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reporter.name}</TableCell>
                     <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                      {new Date(r.submittedAt).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric" })}
-                      <span className="ml-1 text-xs">{new Date(r.submittedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}</span>
+                      {new Date(r.submittedAt).toLocaleDateString("ja-JP", { month: "numeric", day: "numeric", timeZone: "Asia/Tokyo" })}
+                      <span className="ml-1 text-xs">{new Date(r.submittedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Tokyo" })}</span>
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{fmt(r.kpiValues.find((v) => v.kpiName === "売上")?.current, { suffix: "円" })}</TableCell>
                     <TableCell>

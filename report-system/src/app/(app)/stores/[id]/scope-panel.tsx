@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { KpiTrendChart, type TrendPoint } from "@/components/kpi-trend-chart";
 import { REPORT_TYPES, KDI_STATUS, label } from "@/lib/constants";
-import { fmt } from "@/lib/utils";
+import { fmt, weekLabel } from "@/lib/utils";
 
 /** 店舗（または部門）スコープの履歴・推移を表示するパネル。 */
 export async function ScopePanel({ storeId, departmentId }: { storeId: string; departmentId: string | null }) {
@@ -95,7 +95,7 @@ export async function ScopePanel({ storeId, departmentId }: { storeId: string; d
                     <TableCell>
                       <Badge variant={r.reportType === "WEEKLY" ? "secondary" : "default"}>{label(REPORT_TYPES, r.reportType)}</Badge>
                     </TableCell>
-                    <TableCell>{r.targetWeek ?? r.targetMonth}</TableCell>
+                    <TableCell className="whitespace-nowrap">{r.targetWeek ? weekLabel(r.targetWeek) : r.targetMonth}</TableCell>
                     <TableCell className="text-muted-foreground">{r.reporter.name}</TableCell>
                     <TableCell className="tabular-nums">{fmt(r.kpiValues.find((v) => v.kpiName === "売上")?.current, { suffix: "円" })}</TableCell>
                     <TableCell>
@@ -171,7 +171,7 @@ export async function ScopePanel({ storeId, departmentId }: { storeId: string; d
             feedbacks.map(({ report, fb }) => (
               <div key={fb.id} className="rounded-md border p-3">
                 <div className="mb-1 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{report.targetWeek ?? report.targetMonth}</span>
+                  <span>{report.targetWeek ? weekLabel(report.targetWeek) : report.targetMonth}</span>
                   <Badge variant={fb.sendStatus === "SENT" ? "good" : "muted"}>{fb.sendStatus === "SENT" ? "送信済" : "未送信"}</Badge>
                 </div>
                 <div className="whitespace-pre-wrap text-sm">{fb.editedContent || fb.aiContent}</div>

@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ReportForm, type ReportInitial, type ProjMap } from "../../new/report-form";
 import { updateReportPeriod } from "../../actions";
-import { addMonthStr } from "@/lib/utils";
+import { addMonthStr, weekLabel, monthWeek, jstNow, MONTH_WEEK_RANGES } from "@/lib/utils";
 import { INFLOW_CHANNELS, BUSINESS_TYPES, label } from "@/lib/constants";
 
 const s = (n: number | null) => (n != null ? String(n) : "");
@@ -42,6 +42,10 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   const departmentId = report.departmentId;
   const type = report.reportType as "WEEKLY" | "MONTHLY";
   const period = (type === "WEEKLY" ? report.targetWeek : report.targetMonth) ?? "";
+  // 週次の対象期間フォーム用に 月(YYYY-MM) と 週番号 に分解（旧形式・不正値は今日基準）
+  const wm = /^(\d{4}-\d{2})-W([1-5])$/.exec(period) ?? /^(\d{4}-\d{2})-W([1-5])$/.exec(monthWeek(jstNow()))!;
+  const weekYm = wm[1];
+  const weekN = Number(wm[2]);
 
   const [kpiItems, kdiItems] = await Promise.all([
     getEffectiveKpiItems({ storeId, departmentId }),
@@ -185,7 +189,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
     <div>
       <PageHeader
         title={isDraft ? "下書きの続きを入力" : "報告を修正"}
-        description={`${unitLabel}／対象: ${period}${isDraft ? "（下書き・未提出）" : ""}`}
+        description={`${unitLabel}／対象: ${type === "WEEKLY" ? weekLabel(period, { withYear: true }) : period}${isDraft ? "（下書き・未提出）" : ""}`}
         action={
           <Link href={isDraft ? "/reports" : `/reports/${report.id}`}>
             <Button variant="outline">キャンセル</Button>
@@ -203,7 +207,14 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
               {type === "MONTHLY" ? (
                 <input type="month" name="value" defaultValue={period} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
               ) : (
-                <input type="week" name="value" defaultValue={period} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                <div className="flex gap-2">
+                  <input type="month" name="wmonth" defaultValue={weekYm} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                  <select name="wweek" defaultValue={weekN} className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                    {MONTH_WEEK_RANGES.map((range, i) => (
+                      <option key={i + 1} value={i + 1}>第{i + 1}週（{range}）</option>
+                    ))}
+                  </select>
+                </div>
               )}
             </div>
             <Button type="submit" variant="outline">この対象に修正</Button>

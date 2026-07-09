@@ -1,5 +1,6 @@
 import { prisma } from "./prisma";
 import { KPI_PRESETS } from "./kpi-presets";
+import { isoWeekToMonthWeek } from "./utils";
 
 /**
  * アプリ起動時（最初のDBアクセス時）に一度だけ実行される非破壊マイグレーション。
@@ -73,7 +74,34 @@ async function autoCategorize() {
   }
 }
 
+// 週表記の移行: 旧ISO形式(2026-W27) → 月内週形式(2026-07-W1)。データは書き換えのみで削除しない。
+const WEEK_FLAG = "week_format_migration_v1";
+
+async function migrateWeekFormat() {
+  const done = await prisma.setting.findUnique({ where: { key: WEEK_FLAG } }).catch(() => null);
+  if (done) return;
+  const olds = await prisma.report.findMany({
+    where: { targetWeek: { not: null } },
+    select: { id: true, targetWeek: true },
+  });
+  for (const r of olds) {
+    if (!r.targetWeek || !/^\d{4}-W\d{2}$/.test(r.targetWeek)) continue;
+    const next = isoWeekToMonthWeek(r.targetWeek);
+    if (next !== r.targetWeek) {
+      await prisma.report.update({ where: { id: r.id }, data: { targetWeek: next } }).catch(() => {});
+    }
+  }
+  await prisma.setting.create({ data: { key: WEEK_FLAG, value: new Date().toISOString() } }).catch(() => {});
+}
+
 async function run() {
+  // 週表記の移行（フラグ管理で一度だけ実行）
+  try {
+    await migrateWeekFormat();
+  } catch {
+    // 失敗しても旧表記のまま表示されるだけなので続行
+  }
+
   // 既に移行済みなら SELECT 1回で即終了（ページ表示を遅くしない）
   const done = await prisma.setting.findUnique({ where: { key: DONE_FLAG } }).catch(() => null);
   if (done) return;

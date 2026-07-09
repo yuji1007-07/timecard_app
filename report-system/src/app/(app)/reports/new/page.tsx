@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
-import { isoWeek, yearMonth, addMonthStr } from "@/lib/utils";
+import { monthWeek, yearMonth, addMonthStr, jstNow } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportSetup, type StoreOpt } from "./report-setup";
@@ -30,7 +30,7 @@ export default async function NewReportPage({
   const storeId = isAdmin ? sp.storeId ?? null : user.storeId;
   const departmentId = isDept ? user.departmentId : sp.departmentId ?? null;
   const type = (sp.type as "WEEKLY" | "MONTHLY") ?? "WEEKLY";
-  const period = sp.period ?? (type === "WEEKLY" ? isoWeek(new Date()) : yearMonth(new Date()));
+  const period = sp.period ?? (type === "WEEKLY" ? monthWeek(jstNow()) : yearMonth(jstNow()));
 
   const storeOpts: StoreOpt[] = stores.map((s) => ({
     id: s.id,
@@ -89,8 +89,8 @@ async function ResolvedForm({
   storeName: string;
   businessType: string;
 }) {
-  // 当月の範囲（月初の目標・着地を反映ボタン用）
-  const now = new Date();
+  // 当月の範囲（月初の目標・着地を反映ボタン用）※日本時間基準
+  const now = jstNow();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
