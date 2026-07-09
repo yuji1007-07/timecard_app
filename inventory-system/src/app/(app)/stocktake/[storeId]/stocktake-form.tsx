@@ -40,11 +40,32 @@ export function StocktakeForm({
   });
   const [result, action] = useActionState(confirmStocktake, undefined);
 
+  // 確定成功後は、社長提出用の報告書印刷ボタンを表示する
   if (result?.ok) {
-    setTimeout(() => {
-      router.push("/stocktake");
-      router.refresh();
-    }, 1200);
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-green-300 bg-green-50 p-5">
+          <p className="text-lg font-bold text-green-700">棚卸を確定しました ✓</p>
+          <p className="mt-1 text-sm text-green-800">{result.message}</p>
+        </div>
+        <div className="rounded-lg border bg-card p-5">
+          <p className="mb-3 text-sm font-medium">社長へ提出する報告書（A4）を印刷・PDF保存できます。</p>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild>
+              <a href={`/print/stocktake-report?store=${storeId}&month=${month}`} target="_blank" rel="noopener noreferrer">
+                📄 棚卸報告書を印刷 / PDF保存
+              </a>
+            </Button>
+            <Button variant="outline" onClick={() => { router.push("/stocktake"); router.refresh(); }}>
+              棚卸一覧へ戻る
+            </Button>
+          </div>
+          <p className="mt-3 text-xs text-muted-foreground">
+            ※ 新しいタブで報告書が開きます。右上の「印刷 / PDF保存」から、印刷または PDF として保存してください。
+          </p>
+        </div>
+      </div>
+    );
   }
 
   // 入力済みのズレサマリー
