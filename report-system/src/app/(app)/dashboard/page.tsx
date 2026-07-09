@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { isoWeek, yearMonth, fmt } from "@/lib/utils";
+import { isoWeek, yearMonth, fmt, addMonthStr, monthShort } from "@/lib/utils";
 import { getDashboardData } from "@/lib/dashboard";
 import { getReportUnits } from "@/lib/units";
 import { getSubmissionStatus } from "@/lib/dashboard";
@@ -58,19 +58,27 @@ async function AdminDashboard({ week }: { week: string }) {
   const sameUnit = (r: { storeId: string; departmentId: string | null }, u: { storeId: string; departmentId: string | null }) =>
     r.storeId === u.storeId && (r.departmentId ?? null) === (u.departmentId ?? null);
 
+  // 過去2ヶ月＋今月の3列で 予算/実績（総売上）を並べる
+  const summaryMonths = [-2, -1, 0].map((n) => addMonthStr(thisMonth, n));
+  const baseYear = Number(thisMonth.slice(0, 4));
+
   const monthlyRows = units.map((u) => {
     const mine = monthlyReports.filter((r) => sameUnit(r, u));
     const thisMonthReport = mine.find((r) => r.targetMonth === thisMonth) ?? null;
     const latest = mine.length > 0 ? mine[mine.length - 1] : null;
     const kv = latest?.kpiValues ?? [];
-    const sales = pickKpi(kv, ["総売上"]);
+    const byMonth = new Map(mine.map((r) => [r.targetMonth ?? "", r]));
+    const monthCells = summaryMonths.map((m) => {
+      const r = byMonth.get(m) ?? null;
+      const sales = r ? pickKpi(r.kpiValues, ["総売上"]) : null;
+      return { month: m, budget: sales?.target ?? null, actual: sales?.current ?? null };
+    });
     return {
       unit: u,
       submitted: !!thisMonthReport,
       submittedReportId: thisMonthReport?.id ?? null,
       latestMonth: latest?.targetMonth ?? null,
-      budget: sales?.target ?? null, // 予算
-      actual: sales?.current ?? null, // 総売上(実績)
+      monthCells,
       charts: pickKpi(kv, ["総カルテ枚数", "カルテ枚数"])?.current ?? null,
       freq: pickKpi(kv, ["来店頻度", "通院頻度", "平均来店頻度"])?.current ?? null,
       unitPrice: pickKpi(kv, ["窓口単価", "単価(1回あたり)", "平均窓口単価"])?.current ?? null,
@@ -126,51 +134,68 @@ async function AdminDashboard({ week }: { week: string }) {
         <CardHeader>
           <CardTitle>店舗別 月次サマリー（{thisMonth} の提出状況＋最新月次の数値）</CardTitle>
           <p className="text-xs text-muted-foreground">
-            月次の提出状況と、各店舗の最新月次報告の 総売上/予算 などを一覧化。数値は「最新の月次報告」から表示します。
+            過去2ヶ月＋今月の 総売上の予算/実績 と、最新月次報告の 総カルテ/来店頻度/窓口単価 を一覧化。実績が予算に届かない月は<span className="font-medium text-red-600">赤文字</span>。
           </p>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <div className="min-w-[760px]">
+          <div className="min-w-[1000px]">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>店舗 / 単位</TableHead>
                   <TableHead>月次提出</TableHead>
-                  <TableHead className="text-right">予算</TableHead>
-                  <TableHead className="text-right">総売上(実績)</TableHead>
+                  {summaryMonths.map((m) => (
+                    <TableHead key={m} className={`text-right ${m === thisMonth ? "font-bold text-navy" : ""}`}>
+                      {monthShort(m, baseYear)}
+                      {m === thisMonth && "（今月）"}
+                      <div className="text-[10px] font-normal text-muted-foreground">予算 / 実績</div>
+                    </TableHead>
+                  ))}
                   <TableHead className="text-right">総カルテ</TableHead>
                   <TableHead className="text-right">来店頻度</TableHead>
                   <TableHead className="text-right">窓口単価</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {monthlyRows.map((r) => {
-                  const under = r.budget != null && r.actual != null && r.actual < r.budget;
-                  return (
-                    <TableRow key={r.unit.key}>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {r.unit.label}
-                        <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, r.unit.businessType)}</span>
-                      </TableCell>
-                      <TableCell>
-                        {r.submitted && r.submittedReportId ? (
-                          <Link href={`/reports/${r.submittedReportId}`}><Badge variant="good">提出済</Badge></Link>
-                        ) : (
-                          <Badge variant="bad">未提出</Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(r.budget)}</TableCell>
-                      <TableCell className={`text-right tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>{fmt(r.actual)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{fmt(r.unitPrice)}</TableCell>
-                    </TableRow>
-                  );
-                })}
+                {monthlyRows.map((r) => (
+                  <TableRow key={r.unit.key}>
+                    <TableCell className="whitespace-nowrap font-medium">
+                      {r.unit.label}
+                      <span className="ml-2 text-xs text-muted-foreground">{label(BUSINESS_TYPES, r.unit.businessType)}</span>
+                    </TableCell>
+                    <TableCell>
+                      {r.submitted && r.submittedReportId ? (
+                        <Link href={`/reports/${r.submittedReportId}`}><Badge variant="good">提出済</Badge></Link>
+                      ) : (
+                        <Badge variant="bad">未提出</Badge>
+                      )}
+                    </TableCell>
+                    {r.monthCells.map((c) => {
+                      const under = c.budget != null && c.actual != null && c.actual < c.budget;
+                      return (
+                        <TableCell key={c.month} className={`text-right tabular-nums ${c.month === thisMonth ? "bg-navy/5" : ""}`}>
+                          {c.budget == null && c.actual == null ? (
+                            <span className="text-muted-foreground">—</span>
+                          ) : (
+                            <>
+                              <div className="text-xs text-muted-foreground">予 {fmt(c.budget)}</div>
+                              <div className={under ? "font-semibold text-red-600" : "font-semibold"}>実 {fmt(c.actual)}</div>
+                            </>
+                          )}
+                        </TableCell>
+                      );
+                    })}
+                    <TableCell className="text-right tabular-nums">{fmt(r.charts)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.freq)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.unitPrice)}</TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </div>
-          <p className="px-4 py-3 text-xs text-muted-foreground">※ 「月次提出」は今月（{thisMonth}）の提出有無。数値は各店舗の最新月次報告のものです（提出月が違う場合があります）。</p>
+          <p className="px-4 py-3 text-xs text-muted-foreground">
+            ※ 「月次提出」は今月（{thisMonth}）の提出有無。その月の月次報告が未提出の欄は「—」になります。総カルテ/来店頻度/窓口単価は最新の月次報告の値です。
+          </p>
         </CardContent>
       </Card>
     </div>
