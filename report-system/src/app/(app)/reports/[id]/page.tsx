@@ -162,7 +162,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             {progressResults.map(({ progress: p, consistency }) => (
               <div key={p.id} className="rounded-md border p-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">{p.previousAction.content}</span>
+                  <span className="font-medium">
+                    {p.previousAction.relatedKpiName && <span className="text-navy">{p.previousAction.relatedKpiName}-</span>}
+                    {p.previousAction.content}
+                  </span>
                   <div className="flex items-center gap-2">
                     <Badge variant="muted">{label(KDI_STATUS, p.status)}</Badge>
                     <Badge variant={CONSISTENCY_VARIANT[consistency.judgement]}>{consistency.judgement}</Badge>
@@ -301,9 +304,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             )}
             <ReviewLine label="良かった点" value={report.goodPoints} />
             <ReviewLine label="悪かった点" value={report.badPoints} />
-            <ReviewLine label="数値から見た課題" value={report.dataIssues} />
             <ReviewLine label="実施したこと" value={report.doneThings} />
-            <ReviewLine label="未実施だったこと" value={report.notDoneThings} />
+            <ReviewLine label="数値から見た課題（→ アクションプラン）" value={report.dataIssues} />
+            <ReviewLine label="未実施だったこと（何が・なぜ）" value={report.notDoneThings} />
           </CardContent>
         </Card>
       </div>
@@ -321,8 +324,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
               report.kdis.map((k) => (
                 <div key={k.id} className="rounded-md border px-3 py-2 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{k.name}</span>
-                    {k.relatedKpiName && <Badge variant="outline">{k.relatedKpiName}</Badge>}
+                    <span className="font-medium">
+                      {k.relatedKpiName && <span className="text-navy">{k.relatedKpiName}-</span>}
+                      {k.name}
+                    </span>
                     <Badge variant="muted">{label(KDI_STATUS, k.status)}</Badge>
                     {k.frequency && <Badge variant="secondary">{label(FREQUENCIES, k.frequency)}</Badge>}
                   </div>

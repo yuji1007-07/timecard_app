@@ -116,8 +116,8 @@ export default async function PrintPage({
             const reviews: [string, string | null][] = [
               ["良かった点", r.goodPoints],
               ["悪かった点", r.badPoints],
-              ["数値から見た課題", r.dataIssues],
               ["実施したこと", r.doneThings],
+              ["数値から見た課題", r.dataIssues],
               ["未実施だったこと", r.notDoneThings],
             ];
             const monthly: [string, string | null][] = [

@@ -62,7 +62,72 @@ type KpiState = Record<string, { target: string; current: string; forecast: stri
 type KdiRow = { kdiItemId: string | null; name: string; relatedKpiName: string; assignee: string; deadline: string; frequency: string; count: string; targetPerson: string; status: string; comment: string };
 type ActionRow = { relatedKpiName: string; targetValue: string; content: string };
 
-type ReviewState = { goodPoints: string; badPoints: string; dataIssues: string; doneThings: string; notDoneThings: string };
+// 振り返りは構造化して入力し、保存時は読みやすいテキストに整形する（DBはそのままTEXT列）
+type ReviewEntry = { kpi: string; text: string }; // 良かった点・悪かった点: 対象KPI＋詳細
+type IssueEntry = { kpi: string; issue: string; action: string }; // 数値から見た課題: 課題＋アクションプラン
+type NotDoneEntry = { what: string; why: string }; // 未実施: 何ができなかったか＋なぜできなかったか
+type ReviewState = { good: ReviewEntry[]; bad: ReviewEntry[]; done: string; issues: IssueEntry[]; notDone: NotDoneEntry[] };
+type ReviewStrings = { goodPoints: string; badPoints: string; dataIssues: string; doneThings: string; notDoneThings: string };
+
+const emptyEntry = (): ReviewEntry => ({ kpi: "", text: "" });
+const emptyIssue = (): IssueEntry => ({ kpi: "", issue: "", action: "" });
+const emptyNotDone = (): NotDoneEntry => ({ what: "", why: "" });
+
+// 保存形式: 【対象KPI】詳細（KPIなしは詳細のみ）／ 課題は「→ アクションプラン:」、未実施は「→ できなかった理由:」を続ける
+function serializeReview(r: ReviewState): ReviewStrings {
+  const pts = (es: ReviewEntry[]) =>
+    es.filter((e) => e.text.trim() || e.kpi).map((e) => (e.kpi ? `【${e.kpi}】${e.text}` : e.text)).join("\n");
+  const issues = r.issues
+    .filter((e) => e.issue.trim() || e.action.trim())
+    .map((e) => `${e.kpi ? `【${e.kpi}】` : ""}${e.issue}${e.action.trim() ? `\n→ アクションプラン: ${e.action}` : ""}`)
+    .join("\n");
+  const notDone = r.notDone
+    .filter((e) => e.what.trim() || e.why.trim())
+    .map((e) => `${e.what}${e.why.trim() ? `\n→ できなかった理由: ${e.why}` : ""}`)
+    .join("\n");
+  return { goodPoints: pts(r.good), badPoints: pts(r.bad), dataIssues: issues, doneThings: r.done, notDoneThings: notDone };
+}
+
+// 編集時: 保存済みテキストを行単位で構造に戻す（旧形式の自由文は詳細欄にそのまま入る）
+function parseReview(s: ReviewStrings | undefined | null): ReviewState {
+  const parsePts = (t: string | undefined): ReviewEntry[] => {
+    if (!t?.trim()) return [emptyEntry()];
+    return t.split("\n").filter((l) => l.trim()).map((l) => {
+      const m = /^【(.+?)】(.*)$/.exec(l);
+      return m ? { kpi: m[1], text: m[2] } : { kpi: "", text: l };
+    });
+  };
+  const parseIssues = (t: string | undefined): IssueEntry[] => {
+    if (!t?.trim()) return [emptyIssue()];
+    const out: IssueEntry[] = [];
+    for (const l of t.split("\n")) {
+      if (!l.trim()) continue;
+      const act = /^→ アクションプラン: (.*)$/.exec(l.trim());
+      if (act && out.length > 0) { out[out.length - 1].action = act[1]; continue; }
+      const m = /^【(.+?)】(.*)$/.exec(l);
+      out.push(m ? { kpi: m[1], issue: m[2], action: "" } : { kpi: "", issue: l, action: "" });
+    }
+    return out.length ? out : [emptyIssue()];
+  };
+  const parseNotDone = (t: string | undefined): NotDoneEntry[] => {
+    if (!t?.trim()) return [emptyNotDone()];
+    const out: NotDoneEntry[] = [];
+    for (const l of t.split("\n")) {
+      if (!l.trim()) continue;
+      const why = /^→ できなかった理由: (.*)$/.exec(l.trim());
+      if (why && out.length > 0) { out[out.length - 1].why = why[1]; continue; }
+      out.push({ what: l, why: "" });
+    }
+    return out.length ? out : [emptyNotDone()];
+  };
+  return {
+    good: parsePts(s?.goodPoints),
+    bad: parsePts(s?.badPoints),
+    done: s?.doneThings ?? "",
+    issues: parseIssues(s?.dataIssues),
+    notDone: parseNotDone(s?.notDoneThings),
+  };
+}
 type MonthlyState = {
   monthlySummary: string; successCases: string; missFactors: string; nextMonthFocusKpi: string; nextMonthKdi: string; nextMonthAction: string;
   hrIssues: string; marketingIssues: string; educationIssues: string; operationIssues: string;
@@ -72,7 +137,7 @@ export type ReportInitial = {
   originalText: string;
   kpiByName: Record<string, { target: string; current: string; forecast: string; comment: string }>;
   inflow: Record<string, string>;
-  review: ReviewState;
+  review: ReviewStrings;
   monthly: MonthlyState | null;
   progressByActionId: Record<string, { status: string; comment: string }>;
   kdis: KdiRow[];
@@ -220,7 +285,7 @@ export function ReportForm({
     });
   }
   const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
-  const [review, setReview] = useState<ReviewState>(initial?.review ?? { goodPoints: "", badPoints: "", dataIssues: "", doneThings: "", notDoneThings: "" });
+  const [review, setReview] = useState<ReviewState>(() => parseReview(initial?.review));
   const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
   const [progress, setProgress] = useState<Record<string, { status: string; comment: string }>>(() =>
     Object.fromEntries(previousActions.map((a) => [a.id, initial?.progressByActionId[a.id] ?? { status: "ONGOING", comment: "" }]))
@@ -322,7 +387,7 @@ export function ReportForm({
       targetWeek: reportType === "WEEKLY" ? period : null,
       targetMonth: reportType === "MONTHLY" ? period : null,
       originalText,
-      review,
+      review: serializeReview(review),
       monthly: reportType === "MONTHLY" ? monthly : null,
       kpis: visibleKpis.map((k) => ({
         kpiItemId: k.id,
@@ -414,8 +479,10 @@ export function ReportForm({
               return (
                 <div key={a.id} className="rounded-md border p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{a.content}</span>
-                    {a.relatedKpiName && <Badge variant="outline">関連KPI: {a.relatedKpiName}</Badge>}
+                    <span className="font-medium">
+                      {a.relatedKpiName && <span className="text-navy">{a.relatedKpiName}-</span>}
+                      {a.content}
+                    </span>
                     {a.assignee && <Badge variant="secondary">担当: {a.assignee}</Badge>}
                   </div>
                   <div className="mt-2 grid gap-3 md:grid-cols-2">
@@ -706,12 +773,112 @@ export function ReportForm({
         <CardHeader>
           <CardTitle>④ {reportType === "WEEKLY" ? "先週" : "先月"}の振り返り</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-3 md:grid-cols-2">
-          <Field label="良かった点"><Textarea rows={2} value={review.goodPoints} onChange={(e) => setReview((s) => ({ ...s, goodPoints: e.target.value }))} /></Field>
-          <Field label="悪かった点"><Textarea rows={2} value={review.badPoints} onChange={(e) => setReview((s) => ({ ...s, badPoints: e.target.value }))} /></Field>
-          <Field label="数値から見た課題"><Textarea rows={2} value={review.dataIssues} onChange={(e) => setReview((s) => ({ ...s, dataIssues: e.target.value }))} /></Field>
-          <Field label="実施したこと"><Textarea rows={2} value={review.doneThings} onChange={(e) => setReview((s) => ({ ...s, doneThings: e.target.value }))} /></Field>
-          <Field label="未実施だったこと"><Textarea rows={2} value={review.notDoneThings} onChange={(e) => setReview((s) => ({ ...s, notDoneThings: e.target.value }))} /></Field>
+        <CardContent className="space-y-5">
+          {/* 良かった点・悪かった点: 対象KPIを選んで詳細を書く */}
+          {(["good", "bad"] as const).map((sec) => (
+            <div key={sec} className="space-y-2">
+              <Label className="text-sm font-semibold">{sec === "good" ? "良かった点" : "悪かった点"}</Label>
+              {review[sec].map((e, i) => (
+                <div key={i} className="flex flex-wrap items-center gap-2">
+                  <select
+                    className={selectClass + " w-52 shrink-0"}
+                    value={e.kpi}
+                    onChange={(ev) => setReview((s) => ({ ...s, [sec]: s[sec].map((x, xi) => (xi === i ? { ...x, kpi: ev.target.value } : x)) }))}
+                  >
+                    <option value="">対象KPIを選択（任意）</option>
+                    {visibleKpis.map((k) => (
+                      <option key={k.id} value={k.name}>{k.name}</option>
+                    ))}
+                  </select>
+                  <Input
+                    className="min-w-[240px] flex-1"
+                    value={e.text}
+                    onChange={(ev) => setReview((s) => ({ ...s, [sec]: s[sec].map((x, xi) => (xi === i ? { ...x, text: ev.target.value } : x)) }))}
+                    placeholder="詳細を入力"
+                  />
+                  {review[sec].length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setReview((s) => ({ ...s, [sec]: s[sec].filter((_, xi) => xi !== i) }))}>✕</Button>
+                  )}
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, [sec]: [...s[sec], emptyEntry()] }))}>
+                ＋ {sec === "good" ? "良かった点" : "悪かった点"}を追加
+              </Button>
+            </div>
+          ))}
+
+          {/* 実施したこと（課題より先） */}
+          <div className="space-y-1.5">
+            <Label className="text-sm font-semibold">実施したこと</Label>
+            <Textarea rows={2} value={review.done} onChange={(e) => setReview((s) => ({ ...s, done: e.target.value }))} placeholder="今回やったことを入力" />
+          </div>
+
+          {/* 数値から見た課題 → アクションプラン */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">数値から見た課題（→ 必要なアクションプランまで書く）</Label>
+            {review.issues.map((e, i) => (
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <select
+                    className={selectClass + " w-52 shrink-0"}
+                    value={e.kpi}
+                    onChange={(ev) => setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, kpi: ev.target.value } : x)) }))}
+                  >
+                    <option value="">対象KPIを選択（任意）</option>
+                    {visibleKpis.map((k) => (
+                      <option key={k.id} value={k.name}>{k.name}</option>
+                    ))}
+                  </select>
+                  <Input
+                    className="min-w-[240px] flex-1"
+                    value={e.issue}
+                    onChange={(ev) => setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, issue: ev.target.value } : x)) }))}
+                    placeholder="課題（例: HPBの成約率が上がらない）"
+                  />
+                  {review.issues.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setReview((s) => ({ ...s, issues: s.issues.filter((_, xi) => xi !== i) }))}>✕</Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-navy">→ アクションプラン</span>
+                  <Input
+                    value={e.action}
+                    onChange={(ev) => setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, action: ev.target.value } : x)) }))}
+                    placeholder="この課題に対して何をするか"
+                  />
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, issues: [...s.issues, emptyIssue()] }))}>＋ 課題を追加</Button>
+          </div>
+
+          {/* 未実施: 何が・なぜ */}
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">未実施だったこと（何が・なぜ）</Label>
+            {review.notDone.map((e, i) => (
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={e.what}
+                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, what: ev.target.value } : x)) }))}
+                    placeholder="できていなかったこと"
+                  />
+                  {review.notDone.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: s.notDone.filter((_, xi) => xi !== i) }))}>✕</Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-navy">→ なぜできなかったのか</span>
+                  <Input
+                    value={e.why}
+                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, why: ev.target.value } : x)) }))}
+                    placeholder="理由（人員不足・時間が取れなかった 等）"
+                  />
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: [...s.notDone, emptyNotDone()] }))}>＋ 未実施項目を追加</Button>
+          </div>
         </CardContent>
       </Card>
 
