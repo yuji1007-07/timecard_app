@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { monthWeek, weekLabel, jstNow, yearMonth, fmt, addMonthStr, monthShort } from "@/lib/utils";
+import { reportingMonthWeek, reportingMonth, weekLabel, jstNow, fmt, addMonthStr, monthShort } from "@/lib/utils";
 import { getDashboardData } from "@/lib/dashboard";
 import { getReportUnits } from "@/lib/units";
 import { getSubmissionStatus } from "@/lib/dashboard";
@@ -28,7 +28,7 @@ function pickKpi(
 
 export default async function DashboardPage() {
   const user = await requireUser();
-  const week = monthWeek(jstNow());
+  const week = reportingMonthWeek(jstNow());
 
   if (user.role === "AREA_MANAGER") {
     return <AdminDashboard week={week} />;
@@ -48,7 +48,7 @@ async function AdminDashboard({ week }: { week: string }) {
   });
 
   // 店舗別 月次サマリー
-  const thisMonth = yearMonth(jstNow());
+  const reportMonth = reportingMonth(jstNow()); // 月次の提出対象＝先月
   const units = await getReportUnits();
   const monthlyReports = await prisma.report.findMany({
     where: { reportType: "MONTHLY", status: "SUBMITTED" },
@@ -59,12 +59,12 @@ async function AdminDashboard({ week }: { week: string }) {
     r.storeId === u.storeId && (r.departmentId ?? null) === (u.departmentId ?? null);
 
   // 過去2ヶ月＋今月の3列で 予算/実績（総売上）を並べる
-  const summaryMonths = [-2, -1, 0].map((n) => addMonthStr(thisMonth, n));
-  const baseYear = Number(thisMonth.slice(0, 4));
+  const summaryMonths = [-2, -1, 0].map((n) => addMonthStr(reportMonth, n));
+  const baseYear = Number(reportMonth.slice(0, 4));
 
   const monthlyRows = units.map((u) => {
     const mine = monthlyReports.filter((r) => sameUnit(r, u));
-    const thisMonthReport = mine.find((r) => r.targetMonth === thisMonth) ?? null;
+    const reportMonthReport = mine.find((r) => r.targetMonth === reportMonth) ?? null;
     const latest = mine.length > 0 ? mine[mine.length - 1] : null;
     const kv = latest?.kpiValues ?? [];
     const byMonth = new Map(mine.map((r) => [r.targetMonth ?? "", r]));
@@ -75,8 +75,8 @@ async function AdminDashboard({ week }: { week: string }) {
     });
     return {
       unit: u,
-      submitted: !!thisMonthReport,
-      submittedReportId: thisMonthReport?.id ?? null,
+      submitted: !!reportMonthReport,
+      submittedReportId: reportMonthReport?.id ?? null,
       latestMonth: latest?.targetMonth ?? null,
       monthCells,
       charts: pickKpi(kv, ["総カルテ枚数", "カルテ枚数"])?.current ?? null,
@@ -89,14 +89,14 @@ async function AdminDashboard({ week }: { week: string }) {
     <div>
       <PageHeader
         title="管理者ダッシュボード"
-        description={`対象週: ${weekLabel(week, { withYear: true })} ／ 全店舗の状況を一覧で確認できます。`}
+        description={`対象週: ${weekLabel(week, { withYear: true })} ＝ 直近で終わった週の提出状況を確認します。`}
         action={<NotifyButton week={week} />}
       />
 
       {/* サマリーカード */}
       <div className="mb-6 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="今週 提出済" value={`${submitted.length}`} sub={`全${submission.length}単位中`} tone="good" />
-        <StatCard label="今週 未提出" value={`${unsubmitted.length}`} sub="要フォロー" tone={unsubmitted.length ? "warn" : "good"} />
+        <StatCard label="対象週 提出済" value={`${submitted.length}`} sub={`全${submission.length}単位中`} tone="good" />
+        <StatCard label="対象週 未提出" value={`${unsubmitted.length}`} sub="要フォロー" tone={unsubmitted.length ? "warn" : "good"} />
         <StatCard label="要注意 該当" value={`${alerts.length}`} sub="条件ヒット数" tone={alerts.length ? "bad" : "good"} />
         <StatCard label="フィードバック待ち" value={`${feedbackWaiting}`} tone={feedbackWaiting ? "warn" : "good"} />
       </div>
@@ -104,7 +104,7 @@ async function AdminDashboard({ week }: { week: string }) {
       {/* 提出状況（週次） */}
       <Card>
         <CardHeader>
-          <CardTitle>提出状況（週次）</CardTitle>
+          <CardTitle>提出状況（週次・{weekLabel(week)}分）</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-1.5 sm:grid-cols-2">
           {submission.map((s) => (
@@ -132,7 +132,7 @@ async function AdminDashboard({ week }: { week: string }) {
       {/* 店舗別 月次サマリー */}
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>店舗別 月次サマリー（{thisMonth} の提出状況＋最新月次の数値）</CardTitle>
+          <CardTitle>店舗別 月次サマリー（{monthShort(reportMonth, baseYear)}分の提出状況＋総売上の推移）</CardTitle>
           <p className="text-xs text-muted-foreground">
             総売上を月ごとに「上段: 予算 ／ 下段: <span className="font-medium">実績（達成率）</span>」で表示。予算未達の月は<span className="font-medium text-red-600">赤文字</span>です。
           </p>
@@ -145,8 +145,8 @@ async function AdminDashboard({ week }: { week: string }) {
                   <TableHead className="w-[220px]">店舗 / 単位</TableHead>
                   <TableHead className="w-[88px] text-center">月次提出</TableHead>
                   {summaryMonths.map((m) => (
-                    <TableHead key={m} className={`w-[150px] border-l text-center ${m === thisMonth ? "bg-navy/10 font-bold text-navy" : ""}`}>
-                      <span className="text-sm">{monthShort(m, baseYear)}{m === thisMonth && <span className="ml-0.5 rounded bg-navy px-1 py-0.5 text-[10px] font-bold text-white">今月</span>}</span>
+                    <TableHead key={m} className={`w-[150px] border-l text-center ${m === reportMonth ? "bg-navy/10 font-bold text-navy" : ""}`}>
+                      <span className="text-sm">{monthShort(m, baseYear)}{m === reportMonth && <span className="ml-0.5 rounded bg-navy px-1 py-0.5 text-[10px] font-bold text-white">提出対象</span>}</span>
                     </TableHead>
                   ))}
                   <TableHead className="w-[90px] border-l text-right">総カルテ</TableHead>
@@ -172,7 +172,7 @@ async function AdminDashboard({ week }: { week: string }) {
                       const under = c.budget != null && c.actual != null && c.actual < c.budget;
                       const rate = c.budget != null && c.budget !== 0 && c.actual != null ? Math.round((c.actual / c.budget) * 100) : null;
                       return (
-                        <TableCell key={c.month} className={`border-l text-right tabular-nums ${c.month === thisMonth ? "bg-navy/5" : ""}`}>
+                        <TableCell key={c.month} className={`border-l text-right tabular-nums ${c.month === reportMonth ? "bg-navy/5" : ""}`}>
                           {c.budget == null && c.actual == null ? (
                             <div className="text-center text-muted-foreground/50">—</div>
                           ) : (
@@ -202,7 +202,7 @@ async function AdminDashboard({ week }: { week: string }) {
             </Table>
           </div>
           <p className="px-4 py-3 text-xs text-muted-foreground">
-            ※ 「月次提出」は今月（{thisMonth}）の提出有無。「—」はその月の月次報告が未提出。総カルテ/来店頻度/窓口単価は最新の月次報告の値です。
+            ※ 「月次提出」は先月分（{monthShort(reportMonth, baseYear)}）の提出有無（先月分の月次を今月に提出する運用のため）。「—」はその月の報告が未提出。総カルテ/来店頻度/窓口単価は最新の月次報告の値です。
           </p>
         </CardContent>
       </Card>
@@ -249,7 +249,7 @@ async function ManagerDashboard({
         description={`${name} さん ／ 対象週: ${weekLabel(week, { withYear: true })}`}
         action={
           <Link href="/reports/new">
-            <Button>今週の報告を入力</Button>
+            <Button>報告を入力</Button>
           </Link>
         }
       />
@@ -260,7 +260,7 @@ async function ManagerDashboard({
             <div className="flex items-center justify-between">
               <div>
                 <div className="font-medium">{s.unit.label}</div>
-                <div className="text-xs text-muted-foreground">今週の週次報告</div>
+                <div className="text-xs text-muted-foreground">{weekLabel(week)} の週次報告</div>
               </div>
               {s.submitted ? <Badge variant="good">提出済</Badge> : <Badge variant="bad">未提出</Badge>}
             </div>

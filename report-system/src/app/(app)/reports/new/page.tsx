@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
-import { monthWeek, yearMonth, addMonthStr, jstNow } from "@/lib/utils";
+import { reportingMonthWeek, reportingMonth, yearMonth, addMonthStr, jstNow } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportSetup, type StoreOpt } from "./report-setup";
@@ -30,7 +30,8 @@ export default async function NewReportPage({
   const storeId = isAdmin ? sp.storeId ?? null : user.storeId;
   const departmentId = isDept ? user.departmentId : sp.departmentId ?? null;
   const type = (sp.type as "WEEKLY" | "MONTHLY") ?? "WEEKLY";
-  const period = sp.period ?? (type === "WEEKLY" ? monthWeek(jstNow()) : yearMonth(jstNow()));
+  // デフォルトは「直近で終わった週／先月」（終わった期間の報告を提出する運用のため）
+  const period = sp.period ?? (type === "WEEKLY" ? reportingMonthWeek(jstNow()) : reportingMonth(jstNow()));
 
   const storeOpts: StoreOpt[] = stores.map((s) => ({
     id: s.id,

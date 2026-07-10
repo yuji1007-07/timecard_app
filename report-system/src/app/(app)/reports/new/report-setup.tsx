@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { Label } from "@/components/ui/label";
-import { monthWeek, MONTH_WEEK_RANGES } from "@/lib/utils";
+import { reportingMonthWeek, reportingMonth, MONTH_WEEK_RANGES } from "@/lib/utils";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -13,7 +13,7 @@ export type StoreOpt = { id: string; name: string; businessType: string; departm
 function parseWeekPeriod(period: string): { ym: string; wn: number } {
   const m = /^(\d{4}-\d{2})-W([1-5])$/.exec(period);
   if (m) return { ym: m[1], wn: Number(m[2]) };
-  const now = monthWeek(new Date());
+  const now = reportingMonthWeek(new Date());
   const n = /^(\d{4}-\d{2})-W([1-5])$/.exec(now)!;
   return { ym: n[1], wn: Number(n[2]) };
 }
@@ -86,7 +86,7 @@ export function ReportSetup({
             const t = e.target.value as "WEEKLY" | "MONTHLY";
             // 区分を切り替えたら期間フォーマットも切り替え
             const now = new Date();
-            const p = t === "MONTHLY" ? `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}` : monthWeek(now);
+            const p = t === "MONTHLY" ? reportingMonth(now) : reportingMonthWeek(now);
             go({ type: t, period: p });
           }}
         >

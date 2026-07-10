@@ -37,6 +37,27 @@ export function monthWeek(date: Date): string {
 }
 
 /**
+ * 報告対象週＝「直近で終わった」月内週。
+ * 週の報告はその週が終わってから提出・確認するため（例: 7/10 時点の対象は 7月第1週(1〜7日)、
+ * 第2週(8〜14日)の確認は 15日以降）。第1週の間は先月の最終週を返す。
+ */
+export function reportingMonthWeek(date: Date): string {
+  const y = date.getFullYear();
+  const mo = date.getMonth(); // 0始まり
+  const w = Math.min(5, Math.floor((date.getDate() - 1) / 7) + 1);
+  if (w > 1) return `${y}-${String(mo + 1).padStart(2, "0")}-W${w - 1}`;
+  // 第1週の間は先月の最終週（先月末日が属する週）
+  const lastDayPrev = new Date(y, mo, 0); // 先月末日
+  const lw = Math.min(5, Math.floor((lastDayPrev.getDate() - 1) / 7) + 1);
+  return `${lastDayPrev.getFullYear()}-${String(lastDayPrev.getMonth() + 1).padStart(2, "0")}-W${lw}`;
+}
+
+/** 報告対象月＝先月（月次はその月が終わってから提出・確認するため） */
+export function reportingMonth(date: Date): string {
+  return addMonthStr(yearMonth(date), -1);
+}
+
+/**
  * 週文字列を読みやすい表記にする。
  * 新形式 "2026-07-W2" → 「7月 第2週（8〜14日）」（withYear で年つき、short で「7月2週」）。
  * 旧ISO形式（2026-W27）や不明な形式はそのまま返す。
