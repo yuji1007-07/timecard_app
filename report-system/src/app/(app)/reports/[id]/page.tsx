@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { TrendBadge } from "@/components/trend-badge";
 import { FeedbackPanel } from "./feedback-panel";
-import { fmt, addMonthStr, monthShort, weekLabel } from "@/lib/utils";
+import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 const KDI_CHECK_LABEL = { OK: "問題なし", WARN: "注意", FIX: "要修正" } as const;
@@ -114,38 +114,43 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         </Card>
       )}
 
-      {/* KPI差分比較 */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>前回指数との差分</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>KPI名</TableHead>
-                <TableHead className="text-right">前回</TableHead>
-                <TableHead className="text-right">今回</TableHead>
-                <TableHead className="text-right">差分</TableHead>
-                <TableHead className="text-right">増減率</TableHead>
-                <TableHead>判定</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {diffRows.map((r) => (
-                <TableRow key={r.kpiName}>
-                  <TableCell className="font-medium">{r.kpiName}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.prev)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{fmt(r.curr)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.diff == null ? "-" : `${r.diff > 0 ? "+" : ""}${r.diff}`}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.rate == null ? "-" : `${r.rate}%`}</TableCell>
-                  <TableCell><TrendBadge trend={r.trend} /></TableCell>
+      {/* 週次: 今月の推移（第1週→月末、対 目標） */}
+      {!isMonthly && <WeeklyProgress report={report} weeks={analysis.sameMonthWeeklies} />}
+
+      {/* KPI差分比較（週次は同じ月の前週とだけ比較。第1週は比較対象がないため非表示） */}
+      {analysis.prev && (
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>{isMonthly ? "前回（前月）との差分" : "前週との差分（同じ月内）"}</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>KPI名</TableHead>
+                  <TableHead className="text-right">{isMonthly ? "前回" : "前週"}</TableHead>
+                  <TableHead className="text-right">今回</TableHead>
+                  <TableHead className="text-right">差分</TableHead>
+                  <TableHead className="text-right">増減率</TableHead>
+                  <TableHead>判定</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {diffRows.map((r) => (
+                  <TableRow key={r.kpiName}>
+                    <TableCell className="font-medium">{r.kpiName}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.prev)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{fmt(r.curr)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.diff == null ? "-" : `${r.diff > 0 ? "+" : ""}${r.diff}`}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.rate == null ? "-" : `${r.rate}%`}</TableCell>
+                    <TableCell><TrendBadge trend={r.trend} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
 
       {/* 前回KDIと結果の接続チェック */}
       {progressResults.length > 0 && (
@@ -404,6 +409,90 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// 週次: 同じ月の 第1週（1〜7日）→ 月末 の現状値を横並びにし、目標に対する進捗率を添える
+type WeekSnapshot = { id: string; targetWeek: string | null; kpiValues: { kpiName: string; current: number | null }[] };
+
+function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null; kpiValues: KpiValueRow[] }; weeks: WeekSnapshot[] }) {
+  const m = /^(\d{4}-\d{2})-W([1-5])$/.exec(report.targetWeek ?? "");
+  if (!m) return null;
+  const curW = Number(m[2]);
+  const monthLabel = monthShort(m[1]);
+
+  const valByWeek = new Map<number, Map<string, number | null>>();
+  for (const w of weeks) {
+    const wm = /-W([1-5])$/.exec(w.targetWeek ?? "");
+    if (!wm) continue;
+    valByWeek.set(Number(wm[1]), new Map(w.kpiValues.map((v) => [v.kpiName, v.current])));
+  }
+  const groups = groupKpiValuesByCategory(report.kpiValues);
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <CardTitle>{monthLabel}の週次推移（目標に対する進み具合）</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          同じ月の 第1週（1〜7日）→ 月末 の数値を横並びで比較します。カッコ内は<span className="font-medium">目標に対する進捗率</span>、100%以上は<span className="font-medium text-emerald-600">緑</span>。前月との比較はしません（月内の積み上げのため）。
+        </p>
+      </CardHeader>
+      <CardContent className="overflow-x-auto p-0">
+        <div className="min-w-[900px]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>KPI</TableHead>
+                <TableHead className="text-right">目標</TableHead>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <TableHead key={n} className={`text-center ${n === curW ? "bg-navy/10 font-bold text-navy" : ""}`}>
+                    第{n}週{n === curW && <span className="ml-0.5 rounded bg-navy px-1 py-0.5 text-[10px] font-bold text-white">今回</span>}
+                    <div className="text-[10px] font-normal text-muted-foreground">{MONTH_WEEK_RANGES[n - 1]}</div>
+                  </TableHead>
+                ))}
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {groups.map((g, gi) => (
+                <Fragment key={g.category}>
+                  <TableRow className="border-0 hover:bg-transparent">
+                    <TableCell colSpan={7} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                      {g.category}
+                    </TableCell>
+                  </TableRow>
+                  {g.items.map((v) => (
+                    <TableRow key={v.id}>
+                      <TableCell className="whitespace-nowrap font-medium">
+                        {v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(v.target)}</TableCell>
+                      {[1, 2, 3, 4, 5].map((n) => {
+                        const val = valByWeek.get(n)?.get(v.kpiName) ?? null;
+                        const rate = v.target != null && v.target !== 0 && val != null ? Math.round((val / v.target) * 100) : null;
+                        return (
+                          <TableCell key={n} className={`whitespace-nowrap text-right tabular-nums ${n === curW ? "bg-navy/5 font-semibold" : ""}`}>
+                            {val == null ? (
+                              <span className="text-muted-foreground/40">—</span>
+                            ) : (
+                              <>
+                                {fmt(val)}
+                                {rate != null && (
+                                  <span className={`ml-1 text-[10px] ${rate >= 100 ? "font-semibold text-emerald-600" : "text-muted-foreground"}`}>({rate}%)</span>
+                                )}
+                              </>
+                            )}
+                          </TableCell>
+                        );
+                      })}
+                    </TableRow>
+                  ))}
+                </Fragment>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 

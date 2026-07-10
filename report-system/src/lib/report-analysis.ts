@@ -20,18 +20,52 @@ export async function getReportAnalysis(reportId: string) {
   });
   if (!report) return null;
 
-  // 直前の同一スコープ報告
-  const prev = await prisma.report.findFirst({
-    where: {
-      storeId: report.storeId,
-      departmentId: report.departmentId,
-      reportType: report.reportType,
-      status: "SUBMITTED",
-      submittedAt: { lt: report.submittedAt },
-    },
-    orderBy: { submittedAt: "desc" },
-    include: { kpiValues: true },
-  });
+  // 比較対象の「前回」
+  // 週次: 数値は月内の累計なので、同じ月の「前の週」とだけ比較する（第1週は前月末と比べない）。
+  // 月次: 直前の提出（＝先月分）と比較する。
+  const wm = report.reportType === "WEEKLY" && report.targetWeek ? /^(\d{4}-\d{2})-W([1-5])$/.exec(report.targetWeek) : null;
+  const prevWeek = wm && Number(wm[2]) > 1 ? `${wm[1]}-W${Number(wm[2]) - 1}` : null;
+  const prev =
+    report.reportType === "WEEKLY"
+      ? prevWeek
+        ? await prisma.report.findFirst({
+            where: {
+              storeId: report.storeId,
+              departmentId: report.departmentId,
+              reportType: "WEEKLY",
+              status: "SUBMITTED",
+              targetWeek: prevWeek,
+            },
+            orderBy: { submittedAt: "desc" },
+            include: { kpiValues: true },
+          })
+        : null
+      : await prisma.report.findFirst({
+          where: {
+            storeId: report.storeId,
+            departmentId: report.departmentId,
+            reportType: report.reportType,
+            status: "SUBMITTED",
+            submittedAt: { lt: report.submittedAt },
+          },
+          orderBy: { submittedAt: "desc" },
+          include: { kpiValues: true },
+        });
+
+  // 週次: 同じ月の各週の報告（第1週→月末の推移比較用）
+  const sameMonthWeeklies = wm
+    ? await prisma.report.findMany({
+        where: {
+          storeId: report.storeId,
+          departmentId: report.departmentId,
+          reportType: "WEEKLY",
+          status: "SUBMITTED",
+          targetWeek: { startsWith: `${wm[1]}-W` },
+        },
+        orderBy: { targetWeek: "asc" },
+        select: { id: true, targetWeek: true, kpiValues: { select: { kpiName: true, current: true } } },
+      })
+    : [];
 
   const goodDirByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.kpiItem?.goodDirection ?? "UP"]));
 
@@ -72,7 +106,7 @@ export async function getReportAnalysis(reportId: string) {
     unfinishedPrevActions,
   });
 
-  return { report, prev, diffRows, progressResults, unmetKpiNames, kdiCheck };
+  return { report, prev, sameMonthWeeklies, diffRows, progressResults, unmetKpiNames, kdiCheck };
 }
 
 export type ReportAnalysis = NonNullable<Awaited<ReturnType<typeof getReportAnalysis>>>;
