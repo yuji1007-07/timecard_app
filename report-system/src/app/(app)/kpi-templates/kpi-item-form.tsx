@@ -14,6 +14,7 @@ const selectClass =
 export type KpiItemData = {
   id: string;
   name: string;
+  category: string | null;
   unit: string;
   inputType: string;
   goodDirection: string;
@@ -40,11 +41,13 @@ export function KpiItemForm({
   level,
   scopeKey,
   item,
+  categories = [],
   onDone,
 }: {
   level: string;
   scopeKey: string;
   item?: KpiItemData;
+  categories?: string[];
   onDone?: () => void;
 }) {
   const isEdit = !!item;
@@ -60,6 +63,15 @@ export function KpiItemForm({
       <div className="space-y-1.5">
         <Label>KPI名 *</Label>
         <Input name="name" defaultValue={item?.name} required />
+      </div>
+      <div className="space-y-1.5">
+        <Label>大枠カテゴリ（色分けの見出し）</Label>
+        <Input name="category" defaultValue={item?.category ?? ""} list="kpi-category-list" placeholder="例: 会員 / 骨盤（空欄なら「会員-〇〇」の接頭辞から自動）" />
+        <datalist id="kpi-category-list">
+          {categories.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div className="space-y-1.5">
@@ -126,7 +138,7 @@ export function KpiItemForm({
   );
 }
 
-export function AddKpiToggle({ level, scopeKey }: { level: string; scopeKey: string }) {
+export function AddKpiToggle({ level, scopeKey, categories = [] }: { level: string; scopeKey: string; categories?: string[] }) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
@@ -134,10 +146,10 @@ export function AddKpiToggle({ level, scopeKey }: { level: string; scopeKey: str
         ＋ KPI項目を追加
       </Button>
     );
-  return <KpiItemForm level={level} scopeKey={scopeKey} onDone={() => setOpen(false)} />;
+  return <KpiItemForm level={level} scopeKey={scopeKey} categories={categories} onDone={() => setOpen(false)} />;
 }
 
-export function EditKpiToggle({ level, scopeKey, item }: { level: string; scopeKey: string; item: KpiItemData }) {
+export function EditKpiToggle({ level, scopeKey, item, categories = [] }: { level: string; scopeKey: string; item: KpiItemData; categories?: string[] }) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
@@ -147,7 +159,7 @@ export function EditKpiToggle({ level, scopeKey, item }: { level: string; scopeK
     );
   return (
     <div className="md:col-span-full">
-      <KpiItemForm level={level} scopeKey={scopeKey} item={item} onDone={() => setOpen(false)} />
+      <KpiItemForm level={level} scopeKey={scopeKey} item={item} categories={categories} onDone={() => setOpen(false)} />
     </div>
   );
 }
@@ -189,9 +201,13 @@ export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: strin
       <div className="space-y-1.5">
         <Label>KPI名（1行に1つ）</Label>
         <Textarea name="names" rows={6} placeholder={"売上\n初診数\n会員数\nカルテ枚数"} />
-        <p className="text-xs text-muted-foreground">改行で区切って入力すると、まとめて追加されます。単位や良化方向は追加後に各項目の「編集」で変更できます。</p>
+        <p className="text-xs text-muted-foreground">改行で区切って入力すると、まとめて追加されます。「会員-カルテ枚数」のように「カテゴリ-項目名」で入力すると、接頭辞が大枠カテゴリ（色分けの見出し）に自動で入ります。単位や並び順は追加後に変更できます。</p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
+        <div className="space-y-1.5">
+          <Label>大枠カテゴリ（任意・共通）</Label>
+          <Input name="category" className="w-56" placeholder="空欄なら接頭辞から自動" />
+        </div>
         <div className="space-y-1.5">
           <Label>単位</Label>
           <select name="unit" className={selectClass + " w-48"} defaultValue="AUTO">

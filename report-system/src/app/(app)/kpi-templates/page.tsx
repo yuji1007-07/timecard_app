@@ -6,8 +6,20 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScopeSelector, type ScopeOption } from "@/components/scope-selector";
 import { AddKpiToggle, EditKpiToggle, BulkAddKpi, ClearScopeKpiButton } from "./kpi-item-form";
-import { deleteKpiItem, moveKpiItem, copyKpiTemplate } from "./actions";
+import { deleteKpiItem, moveKpiItem, reorderKpiItem, autoFillCategories, copyKpiTemplate } from "./actions";
 import { BUSINESS_TYPES, INPUT_TYPES, GOOD_DIRECTIONS, label } from "@/lib/constants";
+
+// カテゴリ見出しの色（報告フォームと合わせる）
+const CATEGORY_COLORS = [
+  "bg-navy text-white",
+  "bg-blue-100 text-blue-900",
+  "bg-emerald-100 text-emerald-900",
+  "bg-amber-100 text-amber-900",
+  "bg-purple-100 text-purple-900",
+  "bg-rose-100 text-rose-900",
+  "bg-cyan-100 text-cyan-900",
+  "bg-lime-100 text-lime-900",
+];
 
 const BIZ = ["SEIKOTSU", "ESTHE", "SHINKYU"] as const;
 
@@ -39,6 +51,11 @@ export default async function KpiTemplatesPage({
     level === "store" ? { storeId: key } : level === "department" ? { departmentId: key } : { businessType: key, storeId: null, departmentId: null };
   const items = await prisma.kpiItem.findMany({ where, orderBy: { sortOrder: "asc" } });
 
+  // 既存カテゴリ一覧（フォームの候補・色付け用）と、未分類の件数
+  const categories = Array.from(new Set(items.map((i) => i.category).filter((c): c is string => !!c)));
+  const catColor = (c: string | null) => (c ? CATEGORY_COLORS[categories.indexOf(c) % CATEGORY_COLORS.length] : "bg-muted text-muted-foreground");
+  const uncategorized = items.filter((i) => !i.category).length;
+
   // 上書きスコープで空のとき、コピー元の業態を推定
   let copyBusinessType: string | null = null;
   if (level === "store") copyBusinessType = stores.find((s) => s.id === key)?.businessType ?? null;
@@ -55,9 +72,25 @@ export default async function KpiTemplatesPage({
       <Card className="mb-4">
         <CardContent className="flex flex-wrap items-end gap-3 pt-5">
           <ScopeSelector basePath="/kpi-templates" options={options} current={`${level}:${key}`} />
-          <AddKpiToggle level={level} scopeKey={key} />
+          <AddKpiToggle level={level} scopeKey={key} categories={categories} />
           <BulkAddKpi level={level} scopeKey={key} />
+          {uncategorized > 0 && (
+            <form action={autoFillCategories}>
+              <input type="hidden" name="level" value={level} />
+              <input type="hidden" name="scopeKey" value={key} />
+              <Button type="submit" variant="outline" size="sm" title="「会員-〇〇」等の接頭辞から大枠カテゴリを自動で埋めます">
+                接頭辞からカテゴリ自動補完（未分類{uncategorized}件）
+              </Button>
+            </form>
+          )}
           <ClearScopeKpiButton level={level} scopeKey={key} count={items.length} />
+        </CardContent>
+      </Card>
+
+      <Card className="mb-4 border-dashed">
+        <CardContent className="pt-4 text-xs text-muted-foreground">
+          💡 <span className="font-medium">大枠カテゴリ（色分けの見出し）</span>は「編集」で設定できます。「会員-カルテ枚数」のように<span className="font-medium">「カテゴリ-項目名」</span>で名前を付けると、接頭辞（会員）が自動でカテゴリに入ります。
+          並び順は左の番号欄に順番を直接入力（例: 5 と入れて Enter で5番目へ）するか、▲▼ボタンで動かせます。報告フォームでは<span className="font-medium">同じカテゴリのKPIがまとまって</span>表示されます。
         </CardContent>
       </Card>
 
@@ -86,9 +119,21 @@ export default async function KpiTemplatesPage({
           ) : (
             items.map((item, idx) => (
               <div key={item.id} className="grid grid-cols-1 gap-2 rounded-md border p-3 md:grid-cols-[auto_1fr_auto] md:items-center">
-                <div className="flex items-center gap-1">
-                  <span className="w-6 text-center text-xs text-muted-foreground tabular-nums">{idx + 1}</span>
-                  <div className="grid grid-cols-2 gap-x-1">
+                <div className="flex items-center gap-1.5">
+                  {/* 位置番号を直接入力して移動（Enterで確定） */}
+                  <form action={reorderKpiItem} className="flex items-center">
+                    <input type="hidden" name="id" value={item.id} />
+                    <input
+                      type="number"
+                      name="pos"
+                      defaultValue={idx + 1}
+                      min={1}
+                      max={items.length}
+                      title="順番を直接入力してEnter"
+                      className="h-8 w-12 rounded-md border border-input bg-background text-center text-sm tabular-nums focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  </form>
+                  <div className="grid grid-cols-2 gap-x-0.5">
                     <form action={moveKpiItem}>
                       <input type="hidden" name="id" value={item.id} />
                       <input type="hidden" name="dir" value="top" />
@@ -122,6 +167,9 @@ export default async function KpiTemplatesPage({
 
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
+                    {item.category && (
+                      <span className={`rounded px-2 py-0.5 text-xs font-bold ${catColor(item.category)}`}>{item.category}</span>
+                    )}
                     <span className="font-medium">{item.name}</span>
                     <Badge variant="secondary">{item.unit}</Badge>
                     <Badge variant="outline">{label(INPUT_TYPES, item.inputType)}</Badge>
@@ -137,7 +185,7 @@ export default async function KpiTemplatesPage({
                 </div>
 
                 <div className="flex items-center gap-1">
-                  <EditKpiToggle level={level} scopeKey={key} item={item} />
+                  <EditKpiToggle level={level} scopeKey={key} item={item} categories={categories} />
                   <form action={deleteKpiItem}>
                     <input type="hidden" name="id" value={item.id} />
                     <Button type="submit" size="sm" variant="ghost" className="text-destructive hover:text-destructive">
