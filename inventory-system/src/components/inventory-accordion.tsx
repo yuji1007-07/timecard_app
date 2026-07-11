@@ -69,33 +69,48 @@ function BrandGroup({ group }: { group: Group }) {
       </button>
       {open && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full table-fixed text-sm" style={{ minWidth: 720 }}>
+            <colgroup>
+              <col style={{ width: "38%" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "14%" }} />
+              <col style={{ width: "14%" }} />
+            </colgroup>
             <thead className="text-xs text-muted-foreground">
-              <tr className="border-b">
-                <th className="px-3 py-2 text-left">商品名</th>
-                <th className="px-3 py-2 text-left">カテゴリ</th>
-                <th className="px-3 py-2 text-right">在庫</th>
-                <th className="px-3 py-2 text-right">最小</th>
-                <th className="px-3 py-2 text-right">通常(税抜/税込)</th>
-                <th className="px-3 py-2 text-right">卸(税抜/税込)</th>
-                <th className="px-3 py-2 text-right">在庫金額</th>
+              <tr className="border-b bg-secondary/20">
+                <th className="px-3 py-2 text-left font-medium">商品名</th>
+                <th className="px-3 py-2 text-right font-medium">在庫</th>
+                <th className="px-3 py-2 text-right font-medium">最小</th>
+                <th className="px-3 py-2 text-right font-medium">通常価格</th>
+                <th className="px-3 py-2 text-right font-medium">卸価格</th>
+                <th className="px-3 py-2 text-right font-medium">在庫金額</th>
               </tr>
             </thead>
             <tbody>
               {group.rows.map((r) => (
-                <tr key={r.productId} className={cn("border-b last:border-0", r.low && "bg-red-50")}>
-                  <td className="px-3 py-2 font-medium">
-                    {r.name}
-                    {r.size && <span className="ml-1 rounded bg-navy/10 px-1.5 py-0.5 text-xs text-navy">{r.size}</span>}
+                <tr key={r.productId} className={cn("border-b last:border-0 align-middle", r.low && "bg-red-50")}>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium leading-snug">{r.name}</span>
+                      {r.size && <span className="shrink-0 rounded bg-navy/10 px-1.5 py-0.5 text-xs text-navy">{r.size}</span>}
+                    </div>
+                    {r.category && <div className="mt-0.5 text-xs text-muted-foreground">{r.category}</div>}
                   </td>
-                  <td className="px-3 py-2 text-muted-foreground">{r.category ?? "-"}</td>
-                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", r.low ? "text-red-600" : "text-navy")}>
-                    {r.stock} {r.unit}
+                  <td className={cn("px-3 py-2.5 text-right font-semibold tabular-nums", r.low ? "text-red-600" : "text-navy")}>
+                    {r.stock}<span className="ml-0.5 text-xs font-normal text-muted-foreground">{r.unit}</span>
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.minStock}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{yen(r.normalExcl)} / {yen(r.normalIncl)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums">{yen(r.wholesaleExcl)} / {yen(r.wholesaleIncl)}</td>
-                  <td className="px-3 py-2 text-right font-medium tabular-nums">{yen(r.stockValueWholesale)}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{r.minStock || "—"}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <div className="font-medium">{yen(r.normalIncl)}</div>
+                    <div className="text-xs text-muted-foreground">税抜 {yen(r.normalExcl)}</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right tabular-nums">
+                    <div className="font-medium">{yen(r.wholesaleIncl)}</div>
+                    <div className="text-xs text-muted-foreground">税抜 {yen(r.wholesaleExcl)}</div>
+                  </td>
+                  <td className="px-3 py-2.5 text-right font-semibold tabular-nums text-navy">{yen(r.stockValueWholesale)}</td>
                 </tr>
               ))}
             </tbody>
