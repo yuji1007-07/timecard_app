@@ -595,6 +595,7 @@ app.jinja_env.filters["format_dt"] = format_dt
 app.jinja_env.filters["minutes_to_hours_text"] = minutes_to_hours_text
 app.jinja_env.filters["minutes_to_hhmm"] = minutes_to_hhmm
 app.jinja_env.filters["format_time_only"] = format_time_only
+app.jinja_env.filters["jp_weekday"] = jp_weekday
 
 
 # ---------- business logic ----------
