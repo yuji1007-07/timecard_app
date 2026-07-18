@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeKpiDiff, checkConsistency, checkKdiConsistency, type KpiDiffRow } from "@/lib/analysis";
 import { CONSISTENCY, label, KDI_STATUS, TREND } from "@/lib/constants";
+import { addMonthStr } from "@/lib/utils";
 
 export async function getReportAnalysis(reportId: string) {
   const report = await prisma.report.findUnique({
@@ -106,7 +107,29 @@ export async function getReportAnalysis(reportId: string) {
     unfinishedPrevActions,
   });
 
-  return { report, prev, sameMonthWeeklies, diffRows, progressResults, unmetKpiNames, kdiCheck };
+  // 先月の実績（KPI入力値に参考表示）。週次は先月最終週の現状、月次は先月の月次の実績。
+  const lastMonthActual = new Map<string, number | null>();
+  {
+    let src: { kpiValues: { kpiName: string; current: number | null }[] } | null = null;
+    if (report.reportType === "WEEKLY" && wm) {
+      const pm = addMonthStr(wm[1], -1);
+      src = await prisma.report.findFirst({
+        where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "WEEKLY", status: "SUBMITTED", targetWeek: { startsWith: `${pm}-W` } },
+        orderBy: { targetWeek: "desc" },
+        select: { kpiValues: { select: { kpiName: true, current: true } } },
+      });
+    } else if (report.reportType === "MONTHLY" && report.targetMonth) {
+      const pm = addMonthStr(report.targetMonth, -1);
+      src = await prisma.report.findFirst({
+        where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "MONTHLY", status: "SUBMITTED", targetMonth: pm },
+        orderBy: { submittedAt: "desc" },
+        select: { kpiValues: { select: { kpiName: true, current: true } } },
+      });
+    }
+    for (const v of src?.kpiValues ?? []) lastMonthActual.set(v.kpiName, v.current);
+  }
+
+  return { report, prev, sameMonthWeeklies, lastMonthActual, diffRows, progressResults, unmetKpiNames, kdiCheck };
 }
 
 export type ReportAnalysis = NonNullable<Awaited<ReturnType<typeof getReportAnalysis>>>;

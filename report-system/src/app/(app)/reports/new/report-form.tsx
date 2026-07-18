@@ -64,22 +64,32 @@ type ActionRow = { relatedKpiName: string; targetValue: string; content: string 
 
 // 振り返りは構造化して入力し、保存時は読みやすいテキストに整形する（DBはそのままTEXT列）
 type ReviewEntry = { kpi: string; text: string }; // 良かった点・悪かった点: 対象KPI＋詳細
-type IssueEntry = { kpi: string; issue: string; action: string }; // 数値から見た課題: 課題＋アクションプラン
+type TargetEntry = { kpi: string; after: string }; // 定量目標: 対象KPI（現在値は自動）＋変化後（手入力）
+type IssueEntry = { kpi: string; issue: string; action: string; targets: TargetEntry[] }; // 課題＋アクションプラン＋定量目標
 type NotDoneEntry = { what: string; why: string }; // 未実施: 何ができなかったか＋なぜできなかったか
 type ReviewState = { good: ReviewEntry[]; bad: ReviewEntry[]; done: string; issues: IssueEntry[]; notDone: NotDoneEntry[] };
 type ReviewStrings = { goodPoints: string; badPoints: string; dataIssues: string; doneThings: string; notDoneThings: string };
 
 const emptyEntry = (): ReviewEntry => ({ kpi: "", text: "" });
-const emptyIssue = (): IssueEntry => ({ kpi: "", issue: "", action: "" });
+const emptyTarget = (): TargetEntry => ({ kpi: "", after: "" });
+const emptyIssue = (): IssueEntry => ({ kpi: "", issue: "", action: "", targets: [] });
 const emptyNotDone = (): NotDoneEntry => ({ what: "", why: "" });
 
-// 保存形式: 【対象KPI】詳細（KPIなしは詳細のみ）／ 課題は「→ アクションプラン:」、未実施は「→ できなかった理由:」を続ける
-function serializeReview(r: ReviewState): ReviewStrings {
+// 保存形式: 【対象KPI】詳細（KPIなしは詳細のみ）／ 課題は「→ アクションプラン:」「→ 定量目標:」、未実施は「→ できなかった理由:」を続ける
+function serializeReview(r: ReviewState, landingOf: (kpi: string) => number | null): ReviewStrings {
   const pts = (es: ReviewEntry[]) =>
     es.filter((e) => e.text.trim() || e.kpi).map((e) => (e.kpi ? `【${e.kpi}】${e.text}` : e.text)).join("\n");
   const issues = r.issues
-    .filter((e) => e.issue.trim() || e.action.trim())
-    .map((e) => `${e.kpi ? `【${e.kpi}】` : ""}${e.issue}${e.action.trim() ? `\n→ アクションプラン: ${e.action}` : ""}`)
+    .filter((e) => e.issue.trim() || e.action.trim() || e.targets.some((t) => t.kpi && t.after.trim()))
+    .map((e) => {
+      let s = `${e.kpi ? `【${e.kpi}】` : ""}${e.issue}`;
+      if (e.action.trim()) s += `\n→ アクションプラン: ${e.action}`;
+      const ts = e.targets.filter((t) => t.kpi && t.after.trim());
+      if (ts.length) {
+        s += `\n→ 定量目標: ${ts.map((t) => `${t.kpi}: ${landingOf(t.kpi) ?? "-"} → ${t.after}`).join(" ／ ")}`;
+      }
+      return s;
+    })
     .join("\n");
   const notDone = r.notDone
     .filter((e) => e.what.trim() || e.why.trim())
@@ -104,8 +114,16 @@ function parseReview(s: ReviewStrings | undefined | null): ReviewState {
       if (!l.trim()) continue;
       const act = /^→ アクションプラン: (.*)$/.exec(l.trim());
       if (act && out.length > 0) { out[out.length - 1].action = act[1]; continue; }
+      const tgt = /^→ 定量目標: (.*)$/.exec(l.trim());
+      if (tgt && out.length > 0) {
+        out[out.length - 1].targets = tgt[1].split("／").map((seg) => {
+          const mm = /^\s*(.+?):\s*.*?→\s*([\d,.\-]+)\s*$/.exec(seg);
+          return mm ? { kpi: mm[1].trim(), after: mm[2].replace(/,/g, "") } : null;
+        }).filter((x): x is TargetEntry => !!x);
+        continue;
+      }
       const m = /^【(.+?)】(.*)$/.exec(l);
-      out.push(m ? { kpi: m[1], issue: m[2], action: "" } : { kpi: "", issue: l, action: "" });
+      out.push(m ? { kpi: m[1], issue: m[2], action: "", targets: [] } : { kpi: "", issue: l, action: "", targets: [] });
     }
     return out.length ? out : [emptyIssue()];
   };
@@ -290,8 +308,7 @@ export function ReportForm({
   const [progress, setProgress] = useState<Record<string, { status: string; comment: string }>>(() =>
     Object.fromEntries(previousActions.map((a) => [a.id, initial?.progressByActionId[a.id] ?? { status: "ONGOING", comment: "" }]))
   );
-  const [kdis, setKdis] = useState<KdiRow[]>(initial?.kdis ?? []);
-  const [actions, setActions] = useState<ActionRow[]>(initial?.actions && initial.actions.length > 0 ? initial.actions : [emptyAction()]);
+  // KDI・来週見込みKPIの入力は廃止。編集時に過去KDIを消さないよう initial を保持だけする。
 
   const kpiNameById = useMemo(() => new Map(kpiItems.map((k) => [k.name, k.id])), [kpiItems]);
 
@@ -307,6 +324,11 @@ export function ReportForm({
     const id = kpiNameById.get(kpiName);
     if (!id) return null;
     return numOrNull(kpi[id]?.forecast ?? "");
+  }
+  // 定量目標の「現在値」: 週次は着地（forecast）優先、無ければ実績/現状（current）
+  function landingOf(kpiName: string | null): number | null {
+    if (!kpiName) return null;
+    return forecastOf(kpiName) ?? currentOf(kpiName);
   }
   // 月初の目標・着地を反映（目標が月内で変わらない運用向け）
   function reflectMonthStart() {
@@ -355,18 +377,6 @@ export function ReportForm({
     });
   }
 
-  function addKdiFromTemplate(id: string) {
-    const t = kdiTemplates.find((x) => x.id === id);
-    if (!t) return;
-    setKdis((prev) => [
-      ...prev,
-      { kdiItemId: t.id, name: t.name, relatedKpiName: t.relatedKpiName ?? "", assignee: "", deadline: "", frequency: t.recommendedFrequency, count: "", targetPerson: "", status: "ONGOING", comment: "" },
-    ]);
-  }
-  function addBlankKdi() {
-    setKdis((prev) => [...prev, { kdiItemId: null, name: "", relatedKpiName: "", assignee: "", deadline: "", frequency: "WEEKLY1", count: "", targetPerson: "", status: "ONGOING", comment: "" }]);
-  }
-
   function handleSubmit(asDraft = false) {
     setError(null);
     setDraftPending(asDraft);
@@ -387,7 +397,7 @@ export function ReportForm({
       targetWeek: reportType === "WEEKLY" ? period : null,
       targetMonth: reportType === "MONTHLY" ? period : null,
       originalText,
-      review: serializeReview(review),
+      review: serializeReview(review, (k) => landingOf(k)),
       monthly: reportType === "MONTHLY" ? monthly : null,
       kpis: visibleKpis.map((k) => ({
         kpiItemId: k.id,
@@ -399,23 +409,24 @@ export function ReportForm({
         comment: kpi[k.id].comment,
       })),
       inflows: channels.map((c) => ({ channel: c, count: Number(inflow[c] || 0) })),
-      kdis: kdis.map((k) => ({ ...k, count: numOrNull(k.count) })),
-      actions: actions.map((a) => {
-        const base = forecastOf(a.relatedKpiName);
-        const target = numOrNull(a.targetValue);
-        const auto = a.relatedKpiName ? `${a.relatedKpiName}: 着地${base ?? "-"} → ${target ?? "-"} 予想` : "";
-        return {
-          content: a.content || auto,
-          relatedKpiName: a.relatedKpiName || null,
-          baseValue: base,
-          targetValue: target,
-          assignee: "",
-          deadline: "",
-          frequency: "",
-          expectedEffect: "",
-          successCondition: "",
-        };
-      }),
+      // KDIは廃止。編集時のみ既存の過去KDIを保持（消さない）、新規は空
+      kdis: (initial?.kdis ?? []).map((k) => ({ ...k, count: numOrNull(k.count) })),
+      // 「数値から見た課題」の定量目標を Action として保存（前回Action進捗チェック・推移で活用）
+      actions: review.issues.flatMap((e) =>
+        e.targets
+          .filter((t) => t.kpi && t.after.trim())
+          .map((t) => ({
+            content: e.action.trim() || e.issue.trim() || `${t.kpi}の改善`,
+            relatedKpiName: t.kpi,
+            baseValue: landingOf(t.kpi),
+            targetValue: numOrNull(t.after),
+            assignee: "",
+            deadline: "",
+            frequency: "",
+            expectedEffect: "",
+            successCondition: "",
+          }))
+      ),
       progresses: previousActions.map((a) => ({ previousActionId: a.id, status: progress[a.id].status, comment: progress[a.id].comment })),
       projections: isMonthly
         ? visibleKpis.flatMap((k) =>
@@ -768,10 +779,11 @@ export function ReportForm({
         </CardContent>
       </Card>
 
-      {/* 先週振り返り */}
+      {/* 先週振り返り（C: 振り返り／評価） */}
       <Card>
         <CardHeader>
-          <CardTitle>④ {reportType === "WEEKLY" ? "先週" : "先月"}の振り返り</CardTitle>
+          <CardTitle>④ {reportType === "WEEKLY" ? "先週" : "先月"}の振り返り【C：評価】</CardTitle>
+          <p className="text-sm text-muted-foreground">やってみてどうだったか（良かった点・悪かった点・実施したこと・できなかったこと）を振り返ります。</p>
         </CardHeader>
         <CardContent className="space-y-5">
           {/* 良かった点・悪かった点: 対象KPIを選んで詳細を書く */}
@@ -813,9 +825,43 @@ export function ReportForm({
             <Textarea rows={2} value={review.done} onChange={(e) => setReview((s) => ({ ...s, done: e.target.value }))} placeholder="今回やったことを入力" />
           </div>
 
-          {/* 数値から見た課題 → アクションプラン */}
+          {/* 未実施: 何が・なぜ */}
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">数値から見た課題（→ 必要なアクションプランまで書く）</Label>
+            <Label className="text-sm font-semibold">未実施だったこと（何が・なぜ）</Label>
+            {review.notDone.map((e, i) => (
+              <div key={i} className="space-y-2 rounded-md border p-3">
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={e.what}
+                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, what: ev.target.value } : x)) }))}
+                    placeholder="できていなかったこと"
+                  />
+                  {review.notDone.length > 1 && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: s.notDone.filter((_, xi) => xi !== i) }))}>✕</Button>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="shrink-0 text-xs font-medium text-navy">→ なぜできなかったのか</span>
+                  <Input
+                    value={e.why}
+                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, why: ev.target.value } : x)) }))}
+                    placeholder="理由（人員不足・時間が取れなかった 等）"
+                  />
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: [...s.notDone, emptyNotDone()] }))}>＋ 未実施項目を追加</Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* 改善アクション（A: 課題→アクションプラン→定量目標） */}
+      <Card className="border-navy/30">
+        <CardHeader>
+          <CardTitle>⑤ 数値から見た課題と改善アクション【A：改善】</CardTitle>
+          <p className="text-sm text-muted-foreground">数値から見えた課題ごとに、対策（アクションプラン）と「どの項目をどこまで変えるか」の定量目標を立てます。</p>
+        </CardHeader>
+        <CardContent className="space-y-3">
             {review.issues.map((e, i) => (
               <div key={i} className="space-y-2 rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -847,142 +893,67 @@ export function ReportForm({
                     placeholder="この課題に対して何をするか"
                   />
                 </div>
+
+                {/* 定量目標: 対象項目（KPI）＋現在値（自動）→ 変化後（手入力）。複数可 */}
+                <div className="space-y-1.5 rounded-md bg-muted/40 p-2">
+                  <div className="text-xs font-medium text-navy">→ 定量目標（どのくらい変化させるか）</div>
+                  {e.targets.map((t, ti) => {
+                    const cur = landingOf(t.kpi);
+                    return (
+                      <div key={ti} className="flex flex-wrap items-center gap-2">
+                        <select
+                          className={selectClass + " w-44 shrink-0"}
+                          value={t.kpi}
+                          onChange={(ev) =>
+                            setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, targets: x.targets.map((y, yi) => (yi === ti ? { ...y, kpi: ev.target.value } : y)) } : x)) }))
+                          }
+                        >
+                          <option value="">対象項目を選択</option>
+                          {visibleKpis.map((k) => (
+                            <option key={k.id} value={k.name}>{k.name}</option>
+                          ))}
+                        </select>
+                        <div className="flex h-10 min-w-[92px] items-center justify-end rounded-md border bg-background px-3 text-sm tabular-nums text-muted-foreground" title="現在の着地/実績（自動）">
+                          {cur != null ? cur.toLocaleString() : "—"}
+                        </div>
+                        <span className="text-sm text-muted-foreground">→</span>
+                        <Input
+                          type="number"
+                          step="any"
+                          inputMode="decimal"
+                          className="w-32"
+                          value={t.after}
+                          onChange={(ev) =>
+                            setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, targets: x.targets.map((y, yi) => (yi === ti ? { ...y, after: ev.target.value } : y)) } : x)) }))
+                          }
+                          placeholder="変化後"
+                        />
+                        <span className="text-xs text-muted-foreground">{t.kpi ? visibleKpis.find((k) => k.name === t.kpi)?.unit : ""}</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, targets: x.targets.filter((_, yi) => yi !== ti) } : x)) }))}
+                        >
+                          ✕
+                        </Button>
+                      </div>
+                    );
+                  })}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setReview((s) => ({ ...s, issues: s.issues.map((x, xi) => (xi === i ? { ...x, targets: [...x.targets, { kpi: x.kpi, after: "" }] } : x)) }))
+                    }
+                  >
+                    ＋ 対象項目を追加
+                  </Button>
+                </div>
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, issues: [...s.issues, emptyIssue()] }))}>＋ 課題を追加</Button>
-          </div>
-
-          {/* 未実施: 何が・なぜ */}
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">未実施だったこと（何が・なぜ）</Label>
-            {review.notDone.map((e, i) => (
-              <div key={i} className="space-y-2 rounded-md border p-3">
-                <div className="flex items-center gap-2">
-                  <Input
-                    value={e.what}
-                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, what: ev.target.value } : x)) }))}
-                    placeholder="できていなかったこと"
-                  />
-                  {review.notDone.length > 1 && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: s.notDone.filter((_, xi) => xi !== i) }))}>✕</Button>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="shrink-0 text-xs font-medium text-navy">→ なぜできなかったのか</span>
-                  <Input
-                    value={e.why}
-                    onChange={(ev) => setReview((s) => ({ ...s, notDone: s.notDone.map((x, xi) => (xi === i ? { ...x, why: ev.target.value } : x)) }))}
-                    placeholder="理由（人員不足・時間が取れなかった 等）"
-                  />
-                </div>
-              </div>
-            ))}
-            <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, notDone: [...s.notDone, emptyNotDone()] }))}>＋ 未実施項目を追加</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* KDI入力 */}
-      <Card>
-        <CardHeader>
-          <CardTitle>⑤ 今回のKDI入力</CardTitle>
-          <p className="text-sm text-muted-foreground">「関連KPI」を選び、それに対して何をするか（実行内容）を入力します。テンプレートからも追加できます。</p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="space-y-1.5">
-              <Label>テンプレートから追加</Label>
-              <select className={selectClass + " max-w-xs"} value="" onChange={(e) => e.target.value && addKdiFromTemplate(e.target.value)}>
-                <option value="">選択してください</option>
-                {kdiTemplates.map((t) => (
-                  <option key={t.id} value={t.id}>{t.category ? `[${t.category}] ` : ""}{t.name}</option>
-                ))}
-              </select>
-            </div>
-            <Button type="button" variant="outline" size="sm" onClick={addBlankKdi}>＋ 自由入力で追加</Button>
-          </div>
-
-          {kdis.length === 0 && <p className="text-sm text-muted-foreground">KDIが未追加です。テンプレートまたは自由入力で追加してください。</p>}
-          {kdis.map((row, i) => (
-            <div key={i} className="grid gap-2 rounded-md border p-3 md:grid-cols-3">
-              <Field label="関連KPI（選択）">
-                <select className={selectClass} value={row.relatedKpiName} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, relatedKpiName: e.target.value } : r)))}>
-                  <option value="">選択してください</option>
-                  {visibleKpis.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
-                </select>
-              </Field>
-              <Field label="実行内容（自由記入）" className="md:col-span-2"><Input value={row.name} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, name: e.target.value } : r)))} placeholder="例: 会員数増加のための問診ロープレを実施" /></Field>
-              <Field label="担当者"><Input value={row.assignee} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, assignee: e.target.value } : r)))} /></Field>
-              <Field label="期限"><Input type="date" value={row.deadline} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, deadline: e.target.value } : r)))} /></Field>
-              <Field label="実施頻度">
-                <select className={selectClass} value={row.frequency} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, frequency: e.target.value } : r)))}>
-                  {Object.entries(FREQUENCIES).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
-                </select>
-              </Field>
-              <Field label="実施回数"><Input type="number" inputMode="numeric" value={row.count} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, count: e.target.value } : r)))} /></Field>
-              <Field label="進捗ステータス">
-                <select className={selectClass} value={row.status} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, status: e.target.value } : r)))}>
-                  {Object.entries(KDI_STATUS).map(([k, v]) => (<option key={k} value={k}>{v}</option>))}
-                </select>
-              </Field>
-              <Field label="コメント" className="md:col-span-2"><Input value={row.comment} onChange={(e) => setKdis((s) => s.map((r, j) => (j === i ? { ...r, comment: e.target.value } : r)))} /></Field>
-              <div className="md:col-span-3">
-                <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => setKdis((s) => s.filter((_, j) => j !== i))}>削除</Button>
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* 来週の見込みKPI（着地 → 予想） */}
-      <Card>
-        <CardHeader>
-          <CardTitle>⑥ {reportType === "WEEKLY" ? "来週" : "来月"}の見込みKPI（着地 → 予想）</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            KPIを選ぶと「今回の着地」が自動で入ります。{reportType === "WEEKLY" ? "来週" : "来月"}どこまで伸ばすかの予想値を入力してください（例: 会員 着地55 → 60予想）。
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {actions.map((row, i) => {
-            const base = forecastOf(row.relatedKpiName);
-            const target = numOrNull(row.targetValue);
-            const diff = base != null && target != null ? Math.round((target - base) * 100) / 100 : null;
-            return (
-              <div key={i} className="grid items-end gap-2 rounded-md border p-3 md:grid-cols-[1.3fr_1fr_1fr_1.6fr_auto]">
-                <Field label="KPI（選択）">
-                  <select className={selectClass} value={row.relatedKpiName} onChange={(e) => setActions((s) => s.map((r, j) => (j === i ? { ...r, relatedKpiName: e.target.value } : r)))}>
-                    <option value="">選択してください</option>
-                    {visibleKpis.map((k) => (<option key={k.id} value={k.name}>{k.name}</option>))}
-                  </select>
-                </Field>
-                <Field label="今回の着地（自動）">
-                  <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm tabular-nums">
-                    {base ?? <span className="text-muted-foreground">—</span>}
-                  </div>
-                </Field>
-                <Field label={`${reportType === "WEEKLY" ? "来週" : "来月"}の予想`}>
-                  <Input type="number" step="any" inputMode="decimal" value={row.targetValue} onChange={(e) => setActions((s) => s.map((r, j) => (j === i ? { ...r, targetValue: e.target.value } : r)))} placeholder="予想値" />
-                </Field>
-                <Field label="メモ（自由記入）">
-                  <Input value={row.content} onChange={(e) => setActions((s) => s.map((r, j) => (j === i ? { ...r, content: e.target.value } : r)))} placeholder="補足があれば" />
-                </Field>
-                <div className="pb-1">
-                  {actions.length > 1 && (
-                    <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => setActions((s) => s.filter((_, j) => j !== i))}>削除</Button>
-                  )}
-                </div>
-                {row.relatedKpiName && (
-                  <div className="text-xs text-muted-foreground md:col-span-5">
-                    {row.relatedKpiName}: 着地 {base ?? "-"} → {target ?? "-"} 予想
-                    {diff != null && <span className={diff === 0 ? "" : diff > 0 ? " text-green-600" : " text-red-600"}>（{diff > 0 ? "+" : ""}{diff}）</span>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          <Button type="button" variant="outline" size="sm" onClick={() => setActions((s) => [...s, emptyAction()])}>
-            ＋ KPIを追加
-          </Button>
         </CardContent>
       </Card>
 
@@ -990,7 +961,7 @@ export function ReportForm({
       {reportType === "MONTHLY" && (
         <Card>
           <CardHeader>
-            <CardTitle>⑦ 月次 追加項目</CardTitle>
+            <CardTitle>⑤ 月次 追加項目</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-3 md:grid-cols-2">
             <Field label="月間総括" className="md:col-span-2"><Textarea rows={3} value={monthly.monthlySummary} onChange={(e) => setMonthly((s) => ({ ...s, monthlySummary: e.target.value }))} /></Field>

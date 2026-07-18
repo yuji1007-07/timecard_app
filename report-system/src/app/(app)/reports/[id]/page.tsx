@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendBadge } from "@/components/trend-badge";
 import { FeedbackPanel } from "./feedback-panel";
 import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
@@ -58,7 +57,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const analysis = await getReportAnalysis(id);
   if (!analysis) notFound();
 
-  const { report, diffRows, progressResults, unmetKpiNames, kdiCheck } = analysis;
+  const { report, progressResults, unmetKpiNames, kdiCheck } = analysis;
 
   // 権限チェック
   if (user.role !== "AREA_MANAGER") {
@@ -116,41 +115,6 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
       {/* 週次: 今月の推移（第1週→月末、対 目標） */}
       {!isMonthly && <WeeklyProgress report={report} weeks={analysis.sameMonthWeeklies} />}
-
-      {/* KPI差分比較（週次は同じ月の前週とだけ比較。第1週は比較対象がないため非表示） */}
-      {analysis.prev && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>{isMonthly ? "前回（前月）との差分" : "前週との差分（同じ月内）"}</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>KPI名</TableHead>
-                  <TableHead className="text-right">{isMonthly ? "前回" : "前週"}</TableHead>
-                  <TableHead className="text-right">今回</TableHead>
-                  <TableHead className="text-right">差分</TableHead>
-                  <TableHead className="text-right">増減率</TableHead>
-                  <TableHead>判定</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {diffRows.map((r) => (
-                  <TableRow key={r.kpiName}>
-                    <TableCell className="font-medium">{r.kpiName}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(r.prev)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{fmt(r.curr)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.diff == null ? "-" : `${r.diff > 0 ? "+" : ""}${r.diff}`}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.rate == null ? "-" : `${r.rate}%`}</TableCell>
-                    <TableCell><TrendBadge trend={r.trend} /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      )}
 
       {/* 前回KDIと結果の接続チェック */}
       {progressResults.length > 0 && (
@@ -228,6 +192,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
               <TableHeader>
                 <TableRow>
                   <TableHead>KPI</TableHead>
+                  <TableHead className="text-right text-muted-foreground">先月実績</TableHead>
                   <TableHead className="text-right">{isMonthly ? "予算" : "目標"}</TableHead>
                   <TableHead className="text-right">{isMonthly ? "実績" : "現状"}</TableHead>
                   {!isMonthly && <TableHead className="text-right">着地</TableHead>}
@@ -238,7 +203,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                 {groupKpiValuesByCategory(report.kpiValues).map((g, gi) => (
                   <Fragment key={g.category}>
                     <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell colSpan={isMonthly ? 4 : 5} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                      <TableCell colSpan={isMonthly ? 5 : 6} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
                         {g.category}
                       </TableCell>
                     </TableRow>
@@ -247,6 +212,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                         <TableCell className="font-medium">
                           カルテ枚数<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
                         </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
                         <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
                         <TableCell className="text-right tabular-nums font-semibold">{fmt(karteVal)}</TableCell>
                         {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
@@ -261,9 +227,11 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                         v.target != null && judgeVal != null && (dir === "UP" ? judgeVal < v.target : judgeVal > v.target);
                       const rate =
                         v.target != null && v.target !== 0 && judgeVal != null ? Math.round((judgeVal / v.target) * 100) : null;
+                      const lastM = analysis.lastMonthActual.get(v.kpiName) ?? null;
                       return (
                         <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
                           <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{lastM == null ? "—" : fmt(lastM)}</TableCell>
                           <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
                           <TableCell className={`text-right tabular-nums ${isMonthly && isUnder ? "font-semibold text-red-600" : ""}`}>
                             {fmt(v.current)}{isMonthly && isUnder && <span className="ml-1 text-[10px]">未達</span>}
@@ -289,10 +257,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         {/* 月次：ローリング予測（先月実績＋当月＋来月以降） */}
         {report.reportType === "MONTHLY" && <RollingForecast report={report} prev={analysis.prev} />}
 
-        {/* 振り返り + 流入 */}
+        {/* 振り返り（C: 評価）+ 流入 */}
         <Card>
           <CardHeader>
-            <CardTitle>振り返り・流入経路</CardTitle>
+            <CardTitle>振り返り【C：評価】・流入経路</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {report.inflows.length > 0 && (
@@ -305,23 +273,32 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             <ReviewLine label="良かった点" value={report.goodPoints} />
             <ReviewLine label="悪かった点" value={report.badPoints} />
             <ReviewLine label="実施したこと" value={report.doneThings} />
-            <ReviewLine label="数値から見た課題（→ アクションプラン）" value={report.dataIssues} />
             <ReviewLine label="未実施だったこと（何が・なぜ）" value={report.notDoneThings} />
           </CardContent>
         </Card>
+
+        {/* 改善アクション（A: 課題→アクションプラン→定量目標） */}
+        {report.dataIssues && (
+          <Card className="border-navy/30">
+            <CardHeader>
+              <CardTitle>数値から見た課題と改善アクション【A：改善】</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm">
+              <div className="whitespace-pre-wrap leading-relaxed">{report.dataIssues}</div>
+            </CardContent>
+          </Card>
+        )}
       </div>
 
-      {/* 今回KDI / Action */}
+      {/* 今回KDI（過去データのみ） / 改善アクションの目標 */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>今回のKDI</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {report.kdis.length === 0 ? (
-              <p className="text-sm text-muted-foreground">KDIの入力はありません。</p>
-            ) : (
-              report.kdis.map((k) => (
+        {report.kdis.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>今回のKDI（過去データ）</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {report.kdis.map((k) => (
                 <div key={k.id} className="rounded-md border px-3 py-2 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">
@@ -335,20 +312,18 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                     {[k.assignee && `担当: ${k.assignee}`, k.deadline && `期限: ${k.deadline}`, k.count != null && `実施回数: ${k.count}`].filter(Boolean).join(" / ")}
                   </div>
                 </div>
-              ))
-            )}
-          </CardContent>
-        </Card>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>{report.reportType === "WEEKLY" ? "来週" : "来月"}の見込みKPI（着地 → 予想）</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {report.actions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">入力はありません。</p>
-            ) : (
-              report.actions.map((a) => {
+        {report.actions.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>改善アクションの目標（対象KPI 現在 → 目標）</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {report.actions.map((a) => {
                 const diff = a.baseValue != null && a.targetValue != null ? Math.round((a.targetValue - a.baseValue) * 100) / 100 : null;
                 return (
                   <div key={a.id} className="rounded-md border px-3 py-2 text-sm">
@@ -368,10 +343,10 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                     )}
                   </div>
                 );
-              })
-            )}
-          </CardContent>
-        </Card>
+              })}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* 月次追加項目 */}
