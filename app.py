@@ -594,6 +594,7 @@ def calculate_work_minutes(clock_in, clock_out, break_minutes):
 app.jinja_env.filters["format_dt"] = format_dt
 app.jinja_env.filters["minutes_to_hours_text"] = minutes_to_hours_text
 app.jinja_env.filters["minutes_to_hhmm"] = minutes_to_hhmm
+app.jinja_env.filters["format_time_only"] = format_time_only
 
 
 # ---------- business logic ----------
@@ -1342,6 +1343,87 @@ def edit_attendance(attendance_id):
         return redirect(url_for("admin_panel"))
 
     return render_template("edit_attendance.html", record=record)
+
+
+@app.route("/admin/bulk-edit", methods=["GET", "POST"])
+@login_required
+@store_manager_required
+def bulk_edit_attendance():
+    db = get_db()
+    month = request.args.get("month") or tokyo_today().strftime("%Y-%m")
+    requested_store_id = request.args.get("store_id") or None
+    selected_store_id, stores, scoped_store_ids = get_allowed_store_filter(requested_store_id)
+
+    if request.method == "POST":
+        accessible_ids = get_accessible_store_ids(g.user)
+        updated = 0
+        for rid in request.form.getlist("record_ids"):
+            try:
+                rid_int = int(rid)
+            except ValueError:
+                continue
+            record = db.execute("SELECT * FROM attendance WHERE id = ?", (rid_int,)).fetchone()
+            if not record:
+                continue
+            if accessible_ids is not None and record["store_id"] not in accessible_ids:
+                continue
+
+            clock_in = request.form.get(f"clock_in_{rid}") or None
+            break_start = request.form.get(f"break_start_{rid}") or None
+            break_end = request.form.get(f"break_end_{rid}") or None
+            clock_out = request.form.get(f"clock_out_{rid}") or None
+            note = request.form.get(f"note_{rid}") or None
+            try:
+                break_minutes = int(request.form.get(f"break_minutes_{rid}") or 0)
+            except ValueError:
+                break_minutes = int(record["break_minutes"] or 0)
+
+            current = (
+                (record["clock_in"] or "")[:16],
+                (record["break_start"] or "")[:16],
+                (record["break_end"] or "")[:16],
+                (record["clock_out"] or "")[:16],
+                int(record["break_minutes"] or 0),
+                record["note"] or "",
+            )
+            submitted = (
+                (clock_in or "")[:16],
+                (break_start or "")[:16],
+                (break_end or "")[:16],
+                (clock_out or "")[:16],
+                break_minutes,
+                note or "",
+            )
+            if current == submitted:
+                continue
+
+            work_minutes = calculate_work_minutes(clock_in, clock_out, break_minutes)
+            db.execute(
+                """
+                UPDATE attendance
+                SET clock_in = ?, break_start = ?, break_end = ?, clock_out = ?,
+                    break_minutes = ?, work_minutes = ?, note = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (clock_in, break_start, break_end, clock_out, break_minutes, work_minutes, note, rid_int),
+            )
+            updated += 1
+        db.commit()
+        if updated:
+            flash(f"{updated} 件の打刻をまとめて更新しました。", "success")
+        else:
+            flash("変更された行はありませんでした。", "success")
+        return redirect(url_for("bulk_edit_attendance", month=month, store_id=selected_store_id or ""))
+
+    records = query_attendance_records(month, scoped_store_ids, selected_store_id)
+    return render_template(
+        "bulk_edit.html",
+        records=records,
+        stores=stores,
+        selected_month=month,
+        selected_store_id=selected_store_id or "",
+        can_view_all=(g.user["role"] == "admin"),
+    )
 
 
 # ---------- 申込書アプリ用クラウド保存API を有効化 ----------
