@@ -2,7 +2,7 @@ import { Fragment } from "react";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
-import { getReportAnalysis, CONSISTENCY_VARIANT } from "@/lib/report-analysis";
+import { getReportAnalysis } from "@/lib/report-analysis";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,9 +11,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { FeedbackPanel } from "./feedback-panel";
 import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
-
-const KDI_CHECK_LABEL = { OK: "問題なし", WARN: "注意", FIX: "要修正" } as const;
-const KDI_CHECK_VARIANT = { OK: "good", WARN: "warn", FIX: "bad" } as const;
 
 // カテゴリ見出しの色
 const KPI_CATEGORY_COLORS = [
@@ -57,7 +54,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const analysis = await getReportAnalysis(id);
   if (!analysis) notFound();
 
-  const { report, progressResults, unmetKpiNames, kdiCheck } = analysis;
+  const { report } = analysis;
 
   // 権限チェック
   if (user.role !== "AREA_MANAGER") {
@@ -115,66 +112,6 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
       {/* 週次: 今月の推移（第1週→月末、対 目標） */}
       {!isMonthly && <WeeklyProgress report={report} weeks={analysis.sameMonthWeeklies} />}
-
-      {/* 前回KDIと結果の接続チェック */}
-      {progressResults.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>前回KDI/Actionの進捗と結果の接続チェック</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {progressResults.map(({ progress: p, consistency }) => (
-              <div key={p.id} className="rounded-md border p-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="font-medium">
-                    {p.previousAction.relatedKpiName && <span className="text-navy">{p.previousAction.relatedKpiName}-</span>}
-                    {p.previousAction.content}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="muted">{label(KDI_STATUS, p.status)}</Badge>
-                    <Badge variant={CONSISTENCY_VARIANT[consistency.judgement]}>{consistency.judgement}</Badge>
-                  </div>
-                </div>
-                <div className="mt-1 text-sm text-muted-foreground">
-                  {p.previousAction.relatedKpiName && (
-                    <span className="mr-2">
-                      関連KPI {p.previousAction.relatedKpiName}: {fmt(p.prevKpiValue)} → {fmt(p.currentKpiValue)}
-                      {p.diff != null && `（差分 ${p.diff > 0 ? "+" : ""}${p.diff}）`}
-                    </span>
-                  )}
-                </div>
-                <p className="mt-1 text-sm">{consistency.comment}</p>
-                {p.comment && <p className="mt-1 text-xs text-muted-foreground">現場コメント: {p.comment}</p>}
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* KDI整合性チェック */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            今回KDIの整合性チェック
-            <Badge variant={KDI_CHECK_VARIANT[kdiCheck.level]}>{KDI_CHECK_LABEL[kdiCheck.level]}</Badge>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {unmetKpiNames.length > 0 && (
-            <p className="mb-2 text-sm">
-              未達KPI: {unmetKpiNames.map((n) => <Badge key={n} variant="bad" className="mr-1">{n}</Badge>)}
-            </p>
-          )}
-          <ul className="space-y-1 text-sm">
-            {kdiCheck.messages.map((m, i) => (
-              <li key={i} className="flex gap-2">
-                <span className="text-muted-foreground">•</span>
-                {m}
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
 
       <div className="space-y-6">
         {/* KPI値（全幅で見やすく） */}
@@ -258,9 +195,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
         {report.reportType === "MONTHLY" && <RollingForecast report={report} prev={analysis.prev} />}
 
         {/* 振り返り（C: 評価）+ 流入 */}
-        <Card>
+        <Card className="border-l-4 border-l-blue-400 bg-blue-50/30">
           <CardHeader>
-            <CardTitle>振り返り【C：評価】・流入経路</CardTitle>
+            <CardTitle className="text-blue-900">
+              <span className="mr-2 rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">C</span>
+              振り返り（評価）・流入経路
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             {report.inflows.length > 0 && (
@@ -279,9 +219,12 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 
         {/* 改善アクション（A: 課題→アクションプラン→定量目標） */}
         {report.dataIssues && (
-          <Card className="border-navy/30">
+          <Card className="border-l-4 border-l-amber-400 bg-amber-50/30">
             <CardHeader>
-              <CardTitle>数値から見た課題と改善アクション【A：改善】</CardTitle>
+              <CardTitle className="text-amber-900">
+                <span className="mr-2 rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">A</span>
+                数値から見た課題と改善アクション
+              </CardTitle>
             </CardHeader>
             <CardContent className="text-sm">
               <div className="whitespace-pre-wrap leading-relaxed">{report.dataIssues}</div>

@@ -305,9 +305,6 @@ export function ReportForm({
   const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
   const [review, setReview] = useState<ReviewState>(() => parseReview(initial?.review));
   const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
-  const [progress, setProgress] = useState<Record<string, { status: string; comment: string }>>(() =>
-    Object.fromEntries(previousActions.map((a) => [a.id, initial?.progressByActionId[a.id] ?? { status: "ONGOING", comment: "" }]))
-  );
   // KDI・来週見込みKPIの入力は廃止。編集時に過去KDIを消さないよう initial を保持だけする。
 
   const kpiNameById = useMemo(() => new Map(kpiItems.map((k) => [k.name, k.id])), [kpiItems]);
@@ -427,7 +424,7 @@ export function ReportForm({
             successCondition: "",
           }))
       ),
-      progresses: previousActions.map((a) => ({ previousActionId: a.id, status: progress[a.id].status, comment: progress[a.id].comment })),
+      progresses: [],
       projections: isMonthly
         ? visibleKpis.flatMap((k) =>
             forwardMonths.map((m) => ({
@@ -475,71 +472,6 @@ export function ReportForm({
           />
         </CardContent>
       </Card>
-
-      {/* 前回KDI進捗チェック（最重要） */}
-      {previousActions.length > 0 && (
-        <Card className="border-navy/30">
-          <CardHeader>
-            <CardTitle>① 前回Action（KDI）進捗チェック</CardTitle>
-            <p className="text-sm text-muted-foreground">前回立てたActionの進捗を入力してください。関連KPIの前回値→今回値の差分は自動計算されます。</p>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {previousActions.map((a) => {
-              const curr = currentOf(a.relatedKpiName);
-              const diff = a.prevKpiValue != null && curr != null ? Math.round((curr - a.prevKpiValue) * 100) / 100 : null;
-              return (
-                <div key={a.id} className="rounded-md border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">
-                      {a.relatedKpiName && <span className="text-navy">{a.relatedKpiName}-</span>}
-                      {a.content}
-                    </span>
-                    {a.assignee && <Badge variant="secondary">担当: {a.assignee}</Badge>}
-                  </div>
-                  <div className="mt-2 grid gap-3 md:grid-cols-2">
-                    <div className="space-y-1.5">
-                      <Label>進捗ステータス</Label>
-                      <select
-                        className={selectClass}
-                        value={progress[a.id].status}
-                        onChange={(e) => setProgress((p) => ({ ...p, [a.id]: { ...p[a.id], status: e.target.value } }))}
-                      >
-                        {Object.entries(KDI_STATUS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>関連KPIの変化（自動）</Label>
-                      <div className="flex h-10 items-center rounded-md border bg-muted/40 px-3 text-sm tabular-nums">
-                        {a.relatedKpiName ? (
-                          <>
-                            {a.prevKpiValue ?? "-"} → {curr ?? "（今回値を入力）"}
-                            {diff != null && (
-                              <span className={`ml-2 ${diff === 0 ? "text-muted-foreground" : ""}`}>（差分 {diff > 0 ? "+" : ""}{diff}）</span>
-                            )}
-                          </>
-                        ) : (
-                          <span className="text-muted-foreground">関連KPIなし</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="mt-2 space-y-1.5">
-                    <Label>進捗コメント</Label>
-                    <Textarea
-                      rows={2}
-                      value={progress[a.id].comment}
-                      onChange={(e) => setProgress((p) => ({ ...p, [a.id]: { ...p[a.id], comment: e.target.value } }))}
-                      placeholder="実施状況・できなかった理由など"
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </CardContent>
-        </Card>
-      )}
 
       {/* スプレッドシートPDFから自動入力（週次・月次共通） */}
       <PdfImportCard
@@ -780,9 +712,12 @@ export function ReportForm({
       </Card>
 
       {/* 先週振り返り（C: 振り返り／評価） */}
-      <Card>
+      <Card className="border-l-4 border-l-blue-400 bg-blue-50/30">
         <CardHeader>
-          <CardTitle>④ {reportType === "WEEKLY" ? "先週" : "先月"}の振り返り【C：評価】</CardTitle>
+          <CardTitle className="text-blue-900">
+            <span className="mr-2 rounded bg-blue-600 px-2 py-0.5 text-xs font-bold text-white">C</span>
+            ④ {reportType === "WEEKLY" ? "先週" : "先月"}の振り返り（評価）
+          </CardTitle>
           <p className="text-sm text-muted-foreground">やってみてどうだったか（良かった点・悪かった点・実施したこと・できなかったこと）を振り返ります。</p>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -856,9 +791,12 @@ export function ReportForm({
       </Card>
 
       {/* 改善アクション（A: 課題→アクションプラン→定量目標） */}
-      <Card className="border-navy/30">
+      <Card className="border-l-4 border-l-amber-400 bg-amber-50/30">
         <CardHeader>
-          <CardTitle>⑤ 数値から見た課題と改善アクション【A：改善】</CardTitle>
+          <CardTitle className="text-amber-900">
+            <span className="mr-2 rounded bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">A</span>
+            ⑤ 数値から見た課題と改善アクション
+          </CardTitle>
           <p className="text-sm text-muted-foreground">数値から見えた課題ごとに、対策（アクションプラン）と「どの項目をどこまで変えるか」の定量目標を立てます。</p>
         </CardHeader>
         <CardContent className="space-y-3">
