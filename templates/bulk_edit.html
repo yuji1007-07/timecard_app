@@ -1,6 +1,30 @@
 {% extends 'base.html' %}
 {% block title %}打刻一括編集{% endblock %}
 {% block content %}
+<style>
+  /* この画面だけ横幅を広く使う */
+  .container { max-width: none; }
+
+  .bulk-table {
+    width: max-content;
+    min-width: 100%;
+    font-size: 13px;
+  }
+  .bulk-table th, .bulk-table td {
+    white-space: nowrap;
+    vertical-align: middle;
+    padding: 6px 8px;
+  }
+  .bulk-table input {
+    padding: 6px 8px;
+    font-size: 13px;
+    border-radius: 8px;
+  }
+  .bulk-table input[type="datetime-local"] { width: 180px; }
+  .bulk-table input[type="number"] { width: 64px; }
+  .bulk-table input[type="text"] { width: 160px; }
+  .bulk-table tbody tr:nth-child(even) { background: #f7fafd; }
+</style>
 <div class="card">
   <h2>打刻一括編集</h2>
   <form method="get" class="filter-row">
@@ -18,11 +42,14 @@
     <button type="submit">表示</button>
     <a class="button-link secondary" href="{{ url_for('admin_panel', month=selected_month, store_id=selected_store_id) }}">管理画面へ戻る</a>
   </form>
-  <p>時刻を修正して一番下の「まとめて保存」を押すと、変更した行だけが更新されます。休憩開始・終了を入力すると休憩(分)は自動計算されます。</p>
+  <p class="muted">時刻を修正して「まとめて保存」を押すと、変更した行だけが更新されます。休憩開始・終了を入力すると休憩(分)は自動計算されます。</p>
 
   <form method="post" action="{{ url_for('bulk_edit_attendance', month=selected_month, store_id=selected_store_id) }}">
+    {% if records %}
+    <p><button type="submit">まとめて保存</button></p>
+    {% endif %}
     <div style="overflow-x: auto;">
-      <table>
+      <table class="bulk-table">
         <thead>
           <tr>
             <th>日付</th><th>店舗</th><th>スタッフ</th><th>出勤</th><th>休憩開始</th><th>休憩終了</th><th>退勤</th><th>休憩(分)</th><th>備考</th>
@@ -31,15 +58,15 @@
         <tbody>
           {% for row in records %}
           <tr data-record>
-            <td>{{ row['work_date'] }}<input type="hidden" name="record_ids" value="{{ row['id'] }}"></td>
+            <td>{{ row['work_date'][5:] }}（{{ row['work_date']|jp_weekday }}）<input type="hidden" name="record_ids" value="{{ row['id'] }}"></td>
             <td>{{ row['display_name'] }}</td>
             <td>{{ row['full_name'] }}</td>
             <td><input type="datetime-local" name="clock_in_{{ row['id'] }}" value="{{ row['clock_in'][:16] if row['clock_in'] else '' }}"></td>
             <td><input type="datetime-local" name="break_start_{{ row['id'] }}" value="{{ row['break_start'][:16] if row['break_start'] else '' }}"></td>
             <td><input type="datetime-local" name="break_end_{{ row['id'] }}" value="{{ row['break_end'][:16] if row['break_end'] else '' }}"></td>
             <td><input type="datetime-local" name="clock_out_{{ row['id'] }}" value="{{ row['clock_out'][:16] if row['clock_out'] else '' }}"></td>
-            <td><input type="number" name="break_minutes_{{ row['id'] }}" value="{{ row['break_minutes'] or 0 }}" min="0" style="width: 5em;"></td>
-            <td><input type="text" name="note_{{ row['id'] }}" value="{{ row['note'] or '' }}" style="width: 10em;"></td>
+            <td><input type="number" name="break_minutes_{{ row['id'] }}" value="{{ row['break_minutes'] or 0 }}" min="0"></td>
+            <td><input type="text" name="note_{{ row['id'] }}" value="{{ row['note'] or '' }}"></td>
           </tr>
           {% else %}
           <tr><td colspan="9">該当データがありません。</td></tr>
@@ -48,7 +75,7 @@
       </table>
     </div>
     {% if records %}
-    <button type="submit">まとめて保存</button>
+    <p><button type="submit">まとめて保存</button></p>
     {% endif %}
   </form>
 </div>
