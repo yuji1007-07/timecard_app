@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+{% block title %}打刻一括編集{% endblock %}
+{% block content %}
+<div class="card">
+  <h2>打刻一括編集</h2>
+  <form method="get" class="filter-row">
+    <label>対象月
+      <input type="month" name="month" value="{{ selected_month }}">
+    </label>
+    <label>店舗
+      <select name="store_id">
+        <option value="">{% if can_view_all %}全店舗{% else %}担当全店舗{% endif %}</option>
+        {% for store in stores %}
+        <option value="{{ store['id'] }}" {% if selected_store_id == store['id']|string %}selected{% endif %}>{{ store['display_name'] }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit">表示</button>
+    <a class="button-link secondary" href="{{ url_for('admin_panel', month=selected_month, store_id=selected_store_id) }}">管理画面へ戻る</a>
+  </form>
+  <p>時刻を修正して一番下の「まとめて保存」を押すと、変更した行だけが更新されます。休憩開始・終了を入力すると休憩(分)は自動計算されます。</p>
+
+  <form method="post" action="{{ url_for('bulk_edit_attendance', month=selected_month, store_id=selected_store_id) }}">
+    <div style="overflow-x: auto;">
+      <table>
+        <thead>
+          <tr>
+            <th>日付</th><th>店舗</th><th>スタッフ</th><th>出勤</th><th>休憩開始</th><th>休憩終了</th><th>退勤</th><th>休憩(分)</th><th>備考</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in records %}
+          <tr data-record>
+            <td>{{ row['work_date'] }}<input type="hidden" name="record_ids" value="{{ row['id'] }}"></td>
+            <td>{{ row['display_name'] }}</td>
+            <td>{{ row['full_name'] }}</td>
+            <td><input type="datetime-local" name="clock_in_{{ row['id'] }}" value="{{ row['clock_in'][:16] if row['clock_in'] else '' }}"></td>
+            <td><input type="datetime-local" name="break_start_{{ row['id'] }}" value="{{ row['break_start'][:16] if row['break_start'] else '' }}"></td>
+            <td><input type="datetime-local" name="break_end_{{ row['id'] }}" value="{{ row['break_end'][:16] if row['break_end'] else '' }}"></td>
+            <td><input type="datetime-local" name="clock_out_{{ row['id'] }}" value="{{ row['clock_out'][:16] if row['clock_out'] else '' }}"></td>
+            <td><input type="number" name="break_minutes_{{ row['id'] }}" value="{{ row['break_minutes'] or 0 }}" min="0" style="width: 5em;"></td>
+            <td><input type="text" name="note_{{ row['id'] }}" value="{{ row['note'] or '' }}" style="width: 10em;"></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9">該当データがありません。</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if records %}
+    <button type="submit">まとめて保存</button>
+    {% endif %}
+  </form>
+</div>
+<script>
+document.querySelectorAll('tr[data-record]').forEach(function (row) {
+  var bs = row.querySelector('input[name^="break_start_"]');
+  var be = row.querySelector('input[name^="break_end_"]');
+  var bm = row.querySelector('input[name^="break_minutes_"]');
+  if (!bs || !be || !bm) return;
+  function update() {
+    if (bs.value && be.value) {
+      var diff = Math.round((new Date(be.value) - new Date(bs.value)) / 60000);
+      if (diff >= 0) bm.value = diff;
+    }
+  }
+  bs.addEventListener('change', update);
+  be.addEventListener('change', update);
+});
+</script>
+{% endblock %}
