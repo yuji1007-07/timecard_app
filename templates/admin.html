@@ -41,10 +41,11 @@
 
 <div class="card">
   <h2>打刻一覧</h2>
+  <p><a class="button-link" href="{{ url_for('bulk_edit_attendance', month=selected_month, store_id=selected_store_id) }}">一括編集画面を開く</a></p>
   <table>
     <thead>
       <tr>
-        <th>日付</th><th>ブランド</th><th>店舗</th><th>スタッフ</th><th>出勤</th><th>退勤</th><th>休憩</th><th>実働</th><th>編集</th>
+        <th>日付</th><th>ブランド</th><th>店舗</th><th>スタッフ</th><th>出勤</th><th>休憩開始</th><th>休憩終了</th><th>退勤</th><th>休憩</th><th>実働</th><th>編集</th>
       </tr>
     </thead>
     <tbody>
@@ -55,13 +56,15 @@
         <td>{{ row['display_name'] }}</td>
         <td>{{ row['full_name'] }}</td>
         <td>{{ row['clock_in']|format_dt if row['clock_in'] else '-' }}</td>
+        <td>{{ row['break_start']|format_time_only if row['break_start'] else '-' }}</td>
+        <td>{{ row['break_end']|format_time_only if row['break_end'] else '-' }}</td>
         <td>{{ row['clock_out']|format_dt if row['clock_out'] else '-' }}</td>
         <td>{{ row['break_minutes']|minutes_to_hhmm if row['break_minutes'] is not none else '-' }}</td>
         <td>{{ row['work_minutes']|minutes_to_hhmm if row['work_minutes'] is not none else '-' }}</td>
         <td><a href="{{ url_for('edit_attendance', attendance_id=row['id']) }}">編集</a></td>
       </tr>
       {% else %}
-      <tr><td colspan="9">該当データがありません。</td></tr>
+      <tr><td colspan="11">該当データがありません。</td></tr>
       {% endfor %}
     </tbody>
   </table>
