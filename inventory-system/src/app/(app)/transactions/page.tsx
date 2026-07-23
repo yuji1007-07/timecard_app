@@ -11,18 +11,24 @@ import { cancelTransaction } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-type SP = { store?: string; type?: string };
+type SP = { store?: string; type?: string; brand?: string };
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireUser();
   const sp = await searchParams;
   const isArea = user.role === "AREA_MANAGER";
 
-  const stores = await prisma.store.findMany({
-    where: { isHeadquarters: false },
-    select: { id: true, name: true },
-    orderBy: { sortOrder: "asc" },
-  });
+  const [stores, brands] = await Promise.all([
+    prisma.store.findMany({
+      where: { isHeadquarters: false },
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+    prisma.brand.findMany({
+      select: { id: true, name: true },
+      orderBy: { sortOrder: "asc" },
+    }),
+  ]);
 
   const storeFilter = isArea ? (sp.store || undefined) : (user.storeId ?? "__none__");
 
@@ -30,6 +36,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     where: {
       ...(storeFilter ? { storeId: storeFilter } : {}),
       ...(sp.type ? { type: sp.type } : {}),
+      ...(sp.brand ? { product: { brandId: sp.brand } } : {}),
     },
     include: { product: { include: { brand: true } }, store: true, toStore: true },
     orderBy: { date: "desc" },
@@ -68,6 +75,15 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
             <option value="">全て</option>
             {Object.entries(TX_TYPES).map(([k, v]) => (
               <option key={k} value={k}>{v}</option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">
+          ブランド
+          <select name="brand" defaultValue={sp.brand ?? ""} className={sel}>
+            <option value="">全ブランド</option>
+            {brands.map((b) => (
+              <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
         </label>

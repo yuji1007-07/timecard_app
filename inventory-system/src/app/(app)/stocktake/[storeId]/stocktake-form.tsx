@@ -14,6 +14,7 @@ import { confirmStocktake } from "../actions";
 type Row = {
   productId: string;
   name: string;
+  size: string | null; // サイズ（S/M/L等。無ければnull）
   brandName: string;
   brandColor: string;
   unit: string;
@@ -112,7 +113,10 @@ export function StocktakeForm({
               return (
                 <tr key={r.productId} className={cn("border-t", diff != null && diff !== 0 && "bg-red-50")}>
                   <td className="px-3 py-2"><BrandBadge name={r.brandName} color={r.brandColor} /></td>
-                  <td className="px-3 py-2 font-medium">{r.name}</td>
+                  <td className="px-3 py-2 font-medium">
+                    <span className="align-middle">{r.name}</span>
+                    {r.size && <span className="ml-1.5 rounded bg-navy/10 px-1.5 py-0.5 align-middle text-xs font-semibold text-navy">{r.size}</span>}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.theoretical} {r.unit}</td>
                   <td className="px-3 py-2 text-right">
                     <input

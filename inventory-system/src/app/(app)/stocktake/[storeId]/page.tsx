@@ -41,6 +41,7 @@ export default async function StocktakeEntryPage({
   const rows = inv.map((r) => ({
     productId: r.productId,
     name: r.name,
+    size: r.size,
     brandName: r.brandName,
     brandColor: r.brandColor,
     unit: r.unit,
