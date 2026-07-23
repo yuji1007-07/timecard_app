@@ -106,6 +106,22 @@ export function addMonthStr(ym: string, n: number): string {
   return `${y}-${String(mo).padStart(2, "0")}`;
 }
 
+/**
+ * メンバー区分カテゴリ（定額会員/新定額会員/プレミアム会員/ダイエットコース 等）の
+ * 明細項目名（"定額-入会数" のように接頭辞付き）から、その区分の「カルテ枚数（＝会員数）」に当たる
+ * KPI名を推定して返す。接頭辞から候補（定額会員数 / 定額会員 / ダイエットコース会員数 / 定額数）を作り、
+ * 実在するKPI名にヒットしたものを返す。該当なしは null。
+ */
+export function memberCountKpiName(groupItemNames: string[], allKpiNames: string[]): string | null {
+  const dash = groupItemNames.find((n) => n.includes("-"));
+  if (!dash) return null;
+  const prefix = dash.split("-")[0].trim();
+  if (!prefix) return null;
+  const cands = [`${prefix}会員数`, `${prefix}会員`, `${prefix}コース会員数`, `${prefix}数`];
+  for (const c of cands) if (allKpiNames.includes(c)) return c;
+  return null;
+}
+
 /** 年月文字列(YYYY-MM)を「6月」のような短い表記にする。年が baseYear と違えば「2027/1」。 */
 export function monthShort(ym: string, baseYear?: number): string {
   const m = /^(\d{4})-(\d{2})$/.exec(ym);

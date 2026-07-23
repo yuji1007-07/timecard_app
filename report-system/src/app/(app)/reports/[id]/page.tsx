@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FeedbackPanel } from "./feedback-panel";
-import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES } from "@/lib/utils";
+import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES, memberCountKpiName } from "@/lib/utils";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 // カテゴリ見出しの色
@@ -64,8 +64,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const isAdmin = user.role === "AREA_MANAGER";
   const isMonthly = report.reportType === "MONTHLY";
   const feedbackContent = report.feedback?.editedContent || report.feedback?.aiContent || "";
-  // カルテ枚数はダイエットコース欄にも自動反映（読み取り専用）で表示する
-  const karteVal = report.kpiValues.find((v) => v.kpiName === "カルテ枚数" || v.kpiName === "総カルテ枚数")?.current ?? null;
+  // 各メンバー区分カテゴリ（定額会員/新定額会員/プレミアム会員/ダイエットコース 等）に対応する
+  // 「会員数（カルテ枚数）」KPI名を接頭辞から特定し、各区分欄に自動反映して表示する。
+  const allKpiNames = report.kpiValues.map((v) => v.kpiName);
+  const memberCountNameByCategory = new Map<string, string>();
+  for (const g of groupKpiValuesByCategory(report.kpiValues)) {
+    const name = memberCountKpiName(g.items.map((i) => i.kpiName), allKpiNames);
+    if (name) memberCountNameByCategory.set(g.category, name);
+  }
+  const kpiCurrentByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.current]));
 
   return (
     <div>
@@ -144,18 +151,23 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                         {g.category}
                       </TableCell>
                     </TableRow>
-                    {g.category === "ダイエットコース" && karteVal != null && (
-                      <TableRow className="bg-muted/20">
-                        <TableCell className="font-medium">
-                          カルテ枚数<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
-                        <TableCell className="text-right tabular-nums font-semibold">{fmt(karteVal)}</TableCell>
-                        {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
-                        <TableCell className="text-right text-xs tabular-nums text-muted-foreground">—</TableCell>
-                      </TableRow>
-                    )}
+                    {memberCountNameByCategory.get(g.category) && (() => {
+                      const mcName = memberCountNameByCategory.get(g.category)!;
+                      const cur = kpiCurrentByName.get(mcName) ?? null;
+                      const lastM = analysis.lastMonthActual.get(mcName) ?? null;
+                      return (
+                        <TableRow className="bg-muted/20">
+                          <TableCell className="font-medium">
+                            カルテ枚数（{mcName}）<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">{lastM == null ? "—" : fmt(lastM)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right tabular-nums font-semibold">{fmt(cur)}</TableCell>
+                          {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
+                          <TableCell className="text-right text-xs tabular-nums text-muted-foreground">—</TableCell>
+                        </TableRow>
+                      );
+                    })()}
                     {g.items.map((v, ii) => {
                       const dir = v.kpiItem?.goodDirection ?? "UP";
                       // 月次は売上確定済み＝実績(current)で判定。週次は着地(forecast)で判定。

@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KDI_STATUS, FREQUENCIES, GOOD_DIRECTIONS, label } from "@/lib/constants";
-import { monthShort } from "@/lib/utils";
+import { monthShort, memberCountKpiName } from "@/lib/utils";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -347,8 +347,20 @@ export function ReportForm({
 
   const visibleKpis = useMemo(() => kpiItems.filter((k) => !hiddenSet.has(k.name)), [kpiItems, hiddenSet]);
   const groupedVisible = useMemo(() => groupByCategory(visibleKpis), [visibleKpis]);
-  // カルテ枚数は KPI 欄で1回だけ入力し、ダイエットコース等の欄には自動反映（読み取り専用）で表示する
-  const karteItem = useMemo(() => kpiItems.find((k) => k.name === "カルテ枚数" || k.name === "総カルテ枚数"), [kpiItems]);
+  // 各メンバー区分（定額会員/新定額会員/プレミアム会員/ダイエットコース 等）に対応する
+  // 「会員数（カルテ枚数）」KPI を接頭辞から特定。会員数は会員数・新規欄で1回入力し、各区分欄へ自動反映する。
+  const allKpiNames = useMemo(() => kpiItems.map((k) => k.name), [kpiItems]);
+  const memberCountItemByCategory = useMemo(() => {
+    const map = new Map<string, KpiItemDef>();
+    for (const g of groupByCategory(kpiItems)) {
+      const name = memberCountKpiName(g.items.map((k) => k.name), allKpiNames);
+      if (!name) continue;
+      const item = kpiItems.find((k) => k.name === name);
+      if (item) map.set(g.category, item);
+    }
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kpiItems, allKpiNames]);
 
   function groupByCategory(items: KpiItemDef[]) {
     const order: string[] = [];
@@ -585,14 +597,17 @@ export function ReportForm({
                   <div className={`rounded-md px-3 py-1.5 text-sm font-semibold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>
                     {g.category}
                   </div>
-                  {g.category === "ダイエットコース" && karteItem && (
-                    <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm">
-                      <span className="font-medium">カルテ枚数</span>
-                      <Badge variant="muted" className="text-[10px]">自動反映</Badge>
-                      <span className="tabular-nums font-semibold">{kpi[karteItem.id]?.current || "—"}</span>
-                      <span className="text-xs text-muted-foreground">（KPI欄の入力がそのまま反映されます）</span>
-                    </div>
-                  )}
+                  {memberCountItemByCategory.get(g.category) && (() => {
+                    const mc = memberCountItemByCategory.get(g.category)!;
+                    return (
+                      <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm">
+                        <span className="font-medium">カルテ枚数（{mc.name}）</span>
+                        <Badge variant="muted" className="text-[10px]">自動反映</Badge>
+                        <span className="tabular-nums font-semibold">{kpi[mc.id]?.current || "—"}</span>
+                        <span className="text-xs text-muted-foreground">（会員数欄の入力がそのまま反映されます）</span>
+                      </div>
+                    );
+                  })()}
                   {g.items.map((k) => {
                     const prevForecast = kpiPrev[k.name]?.forecast ?? null;
                     const target = numOrNull(kpi[k.id].target);
