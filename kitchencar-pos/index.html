@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="ボナペティ">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<title>ボナペティ レジ</title>
+</head>
+<body>
+
+<!-- ══ 起動中 ══ -->
+<div class="boot" id="boot">
+  <div class="spin"></div>
+  <div class="boot-text">読み込み中…</div>
+</div>
+
+<!-- ══ ログイン ══ -->
+<div class="gate hide" id="gate">
+  <div class="gate-box">
+    <div class="gate-logo">🍽</div>
+    <div class="gate-title">ボナペティ</div>
+    <div class="gate-sub">STAFF LOGIN</div>
+
+    <div class="pin-dots" id="pinDots"></div>
+
+    <div class="pin-pad" id="pinPad">
+      <button class="pin-key" data-k="1">1</button>
+      <button class="pin-key" data-k="2">2</button>
+      <button class="pin-key" data-k="3">3</button>
+      <button class="pin-key" data-k="4">4</button>
+      <button class="pin-key" data-k="5">5</button>
+      <button class="pin-key" data-k="6">6</button>
+      <button class="pin-key" data-k="7">7</button>
+      <button class="pin-key" data-k="8">8</button>
+      <button class="pin-key" data-k="9">9</button>
+      <button class="pin-key util" data-k="del">← 削除</button>
+      <button class="pin-key" data-k="0">0</button>
+      <button class="pin-key ok" data-k="ok">→</button>
+    </div>
+
+    <div class="gate-msg" id="gateMsg"></div>
+    <div class="gate-foot">この端末を共有する場合は、業務終了時に<br>設定タブからログアウトしてください。</div>
+  </div>
+</div>
+
+<!-- ══ アプリ本体 ══ -->
+<div id="app" hidden>
+
+  <div class="netbar" id="netbar">
+    <span class="netdot"></span><span id="netText">接続中…</span>
+  </div>
+
+  <header class="appbar">
+    <div class="appbar-in">
+      <div class="brand">
+        <span class="brand-name">ボナペティ</span>
+        <span class="brand-sub">POS</span>
+      </div>
+      <div class="appbar-date" id="dateLabel"></div>
+    </div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="k-label">本日売上</div>
+        <div class="k-value" id="kpiSales">¥0</div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">会計件数</div>
+        <div class="k-value"><span id="kpiOrders">0</span><small> 件</small></div>
+      </div>
+      <div class="kpi">
+        <div class="k-label">調理待ち</div>
+        <div class="k-value"><span id="kpiCooking">0</span><small> 件</small></div>
+      </div>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <div class="tabs-in">
+      <button class="tab active" data-tab="order">注文<span class="dot" id="dotPending"></span></button>
+      <button class="tab" data-tab="kitchen">キッチン<span class="dot" id="dotKitchen"></span></button>
+      <button class="tab" data-tab="history">履歴</button>
+      <button class="tab" data-tab="summary">集計</button>
+      <button class="tab" data-tab="settings">設定</button>
+    </div>
+  </nav>
+
+  <!-- ── 注文 ── -->
+  <section class="page active" id="page-order">
+    <div class="container">
+      <div id="pendingWrap" hidden>
+        <div class="sec-title">お客様からの注文（未確認）</div>
+        <div id="pendingList"></div>
+        <div class="spacer-lg"></div>
+      </div>
+
+      <div class="sec-title">メニュー</div>
+      <div class="menu-grid" id="menuGrid"></div>
+
+      <div class="spacer-lg"></div>
+      <div class="sec-title">カート</div>
+      <div id="cartList"></div>
+      <div class="total-bar">
+        <span class="t-label">合計</span>
+        <span class="t-value" id="cartTotal">¥0</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" id="btnClearCart" style="flex:0 0 34%">クリア</button>
+        <button class="btn btn-primary" id="btnConfirm" disabled>会計する</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── キッチン ── -->
+  <section class="page" id="page-kitchen">
+    <div class="container-wide">
+      <div class="sec-title">調理待ち・調理中</div>
+      <div class="kitchen-grid" id="kitchenGrid"></div>
+    </div>
+  </section>
+
+  <!-- ── 履歴 ── -->
+  <section class="page" id="page-history">
+    <div class="container">
+      <div class="sec-title">本日の会計履歴</div>
+      <div id="historyList"></div>
+    </div>
+  </section>
+
+  <!-- ── 集計 ── -->
+  <section class="page" id="page-summary">
+    <div class="container">
+      <div class="hero-total">
+        <div class="h-label">本日の売上合計</div>
+        <div class="h-value" id="sumTotal">¥0</div>
+        <div class="h-sub" id="sumSub">0件 · 0点</div>
+      </div>
+      <div class="card">
+        <h3>商品別 売上</h3>
+        <div id="sumByItem"></div>
+      </div>
+      <div class="card">
+        <h3>内訳</h3>
+        <div class="srow"><span>スタッフ入力</span><span class="s-amt" id="sumStaff">0件</span></div>
+        <div class="srow"><span>QR注文</span><span class="s-amt" id="sumQr">0件</span></div>
+        <div class="srow"><span>取消</span><span class="s-amt" id="sumCancel">0件</span></div>
+        <div class="srow"><span>平均客単価</span><span class="s-amt" id="sumAvg">¥0</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── 設定 ── -->
+  <section class="page" id="page-settings">
+    <div class="container">
+      <div class="sec-title">商品管理</div>
+      <div id="prodList"></div>
+      <button class="btn btn-ghost" id="btnAddProduct" style="margin-top:8px">＋ 商品を追加</button>
+
+      <div class="spacer-lg"></div>
+      <div class="sec-title">お客様のQR注文</div>
+      <div class="card">
+        <div class="switch-row" style="padding-top:0">
+          <span class="sw-label">QR注文を受け付ける</span>
+          <label class="switch"><input type="checkbox" id="swQr"><span class="sl"></span></label>
+        </div>
+        <div id="qrArea" hidden>
+          <div class="qr-holder" id="qrHolder"></div>
+          <div class="mono" id="qrUrl"></div>
+          <p class="note" style="margin-top:9px">このQRをお客様に読み取ってもらうと注文画面が開きます。届いた注文は「注文」タブで確認・確定してください。</p>
+        </div>
+      </div>
+
+      <div class="spacer-lg"></div>
+      <div class="sec-title">データ管理</div>
+      <button class="btn btn-danger-o" id="btnResetOrders" style="margin-bottom:9px">本日の売上・履歴をリセット</button>
+      <button class="btn btn-ghost" id="btnLogout">ログアウト</button>
+
+      <div class="spacer-lg"></div>
+      <p class="note" id="verNote"></p>
+    </div>
+  </section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ══ 汎用シート ══ -->
+<div class="sheet-wrap" id="sheetWrap">
+  <div class="sheet">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title" id="sheetTitle"></div>
+    <div class="sheet-desc" id="sheetDesc" hidden></div>
+    <div id="sheetBody"></div>
+    <div class="sheet-actions" id="sheetActions"></div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged,
+  setPersistence, browserLocalPersistence
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import {
+  getDatabase, ref, set, update, push, child, remove, onValue, runTransaction, goOnline
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import {
+  firebaseConfig, STAFF_EMAIL, pinToPassword, DEFAULT_MENU,
+  yen, todayKey, hhmm, esc
+} from "./app-config.js";
+
+const APP_VERSION = '2.0.0';
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+
+const $ = (id) => document.getElementById(id);
+
+/* ═══════════════ 状態 ═══════════════ */
+let menu = [];            // [{id,name,price,emoji,sort,active}]
+let cart = {};            // { productId: qty }
+let orders = [];          // 本日分
+let pending = [];         // お客様からの未確認注文
+let settings = { qrEnabled: false };
+let authed = false;
+let bootDone = false;
+
+/* ═══════════════ ログイン ═══════════════ */
+let pin = '';
+const PIN_MAX = 8, PIN_MIN = 4;
+
+function renderPinDots() {
+  const n = Math.max(pin.length, 4);
+  $('pinDots').innerHTML = Array.from({ length: n }, (_, i) =>
+    `<span class="pin-dot ${i < pin.length ? 'on' : ''}"></span>`).join('');
+}
+renderPinDots();
+
+$('pinPad').addEventListener('click', (e) => {
+  const btn = e.target.closest('.pin-key');
+  if (!btn || btn.disabled) return;
+  const k = btn.dataset.k;
+  if (k === 'del') { pin = pin.slice(0, -1); $('gateMsg').textContent = ''; }
+  else if (k === 'ok') { return submitPin(); }
+  else if (pin.length < PIN_MAX) { pin += k; $('gateMsg').textContent = ''; }
+  renderPinDots();
+  if (navigator.vibrate) navigator.vibrate(8);
+});
+
+document.addEventListener('keydown', (e) => {
+  if ($('gate').classList.contains('hide')) return;
+  if (/^[0-9]$/.test(e.key) && pin.length < PIN_MAX) { pin += e.key; renderPinDots(); $('gateMsg').textContent = ''; }
+  else if (e.key === 'Backspace') { pin = pin.slice(0, -1); renderPinDots(); }
+  else if (e.key === 'Enter') submitPin();
+});
+
+function setPadDisabled(v) {
+  $('pinPad').querySelectorAll('.pin-key').forEach(b => b.disabled = v);
+}
+
+async function submitPin() {
+  if (pin.length < PIN_MIN) return failPin(`暗証番号は${PIN_MIN}桁以上です`);
+  setPadDisabled(true);
+  $('gateMsg').style.color = 'var(--muted)';
+  $('gateMsg').textContent = '確認中…';
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    await signInWithEmailAndPassword(auth, STAFF_EMAIL, pinToPassword(pin));
+    pin = ''; renderPinDots();
+    $('gateMsg').textContent = '';
+  } catch (err) {
+    const code = err?.code || '';
+    let msg = '暗証番号が違います';
+    if (code === 'auth/too-many-requests') msg = '試行が多すぎます。しばらく待ってください';
+    else if (code === 'auth/network-request-failed') msg = '通信できません。電波を確認してください';
+    else if (code === 'auth/invalid-email' || code === 'auth/operation-not-allowed') msg = '初期設定が未完了です（手順書を確認）';
+    failPin(msg);
+  } finally {
+    setPadDisabled(false);
+  }
+}
+
+function failPin(msg) {
+  pin = ''; renderPinDots();
+  $('gateMsg').style.color = 'var(--red)';
+  $('gateMsg').textContent = msg;
+  $('gate').querySelector('.gate-box').classList.remove('shake');
+  void $('gate').offsetWidth;
+  $('gate').querySelector('.gate-box').classList.add('shake');
+  if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+}
+
+onAuthStateChanged(auth, (user) => {
+  $('boot').classList.add('hide');
+  bootDone = true;
+  if (user && !user.isAnonymous) {
+    authed = true;
+    $('gate').classList.add('hide');
+    $('app').hidden = false;
+    startListeners();
+    flushOutbox();
+  } else {
+    authed = false;
+    $('gate').classList.remove('hide');
+    $('app').hidden = true;
+  }
+});
+
+/* ═══════════════ オフライン送信キュー ═══════════════ */
+const OUTBOX = 'bp_outbox_v2';
+function loadOutbox() { try { return JSON.parse(localStorage.getItem(OUTBOX) || '[]'); } catch { return []; } }
+function saveOutbox(a) { try { localStorage.setItem(OUTBOX, JSON.stringify(a)); } catch {} }
+
+function outboxAdd(entry) { const a = loadOutbox(); a.push(entry); saveOutbox(a); }
+function outboxDrop(tmpId) { saveOutbox(loadOutbox().filter(e => e.order.tmpId !== tmpId)); }
+
+// 起動時／再接続時：まだサーバに届いていない注文を送り直す
+function flushOutbox() {
+  const box = loadOutbox();
+  if (!box.length) return;
+  const known = new Set(orders.map(o => o.tmpId).filter(Boolean));
+  let sent = 0;
+  box.forEach(({ order }) => {
+    if (known.has(order.tmpId)) { outboxDrop(order.tmpId); return; }
+    const r = push(ref(db, 'orders'));
+    set(r, order).then(() => outboxDrop(order.tmpId)).catch(() => {});
+    sent++;
+  });
+  if (sent) toast(`未送信だった注文 ${sent}件を送信しました`);
+}
+
+/* ═══════════════ Firebase 購読 ═══════════════ */
+let listenersOn = false;
+function startListeners() {
+  if (listenersOn) return;
+  listenersOn = true;
+  goOnline(db);
+
+  onValue(ref(db, '.info/connected'), (s) => {
+    const online = s.val() === true;
+    $('netbar').classList.toggle('offline', !online);
+    $('netText').textContent = online ? 'オンライン・自動保存中' : 'オフライン（入力は端末に保存され、復帰時に自動送信）';
+    if (online) setTimeout(flushOutbox, 800);
+  });
+
+  onValue(ref(db, 'menu'), (s) => {
+    const data = s.val();
+    if (data && Object.keys(data).length) {
+      menu = Object.values(data).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+    } else {
+      menu = [...DEFAULT_MENU];
+      set(ref(db, 'menu'), keyById(DEFAULT_MENU)).catch(() => {});
+    }
+    renderMenu(); renderCart(); renderProducts();
+  }, onDbError);
+
+  onValue(ref(db, 'orders'), (s) => {
+    const data = s.val() || {};
+    const today = todayKey();
+    orders = Object.entries(data)
+      .map(([key, v]) => ({ ...v, key }))
+      .filter(o => (o.date || today) === today)
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    renderAllOrderViews();
+  }, onDbError);
+
+  onValue(ref(db, 'pending'), (s) => {
+    const data = s.val() || {};
+    pending = Object.entries(data).map(([key, v]) => ({ ...v, key }))
+      .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    renderPending();
+  }, onDbError);
+
+  onValue(ref(db, 'settings'), (s) => {
+    settings = { qrEnabled: false, ...(s.val() || {}) };
+    $('swQr').checked = !!settings.qrEnabled;
+    $('qrArea').hidden = !settings.qrEnabled;
+    if (settings.qrEnabled) renderQr();
+  }, onDbError);
+}
+
+function onDbError(err) {
+  console.error(err);
+  toast('データを読み込めません。設定を確認してください', true);
+}
+
+function keyById(arr) { return arr.reduce((a, x) => (a[x.id] = x, a), {}); }
+
+/* ═══════════════ 画面切替 ═══════════════ */
+$('tabs').addEventListener('click', (e) => {
+  const t = e.target.closest('.tab');
+  if (!t) return;
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x === t));
+  document.querySelectorAll('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + t.dataset.tab));
+  window.scrollTo(0, 0);
+});
+
+function setDate() {
+  const d = new Date(), w = ['日', '月', '火', '水', '木', '金', '土'];
+  $('dateLabel').textContent = `${d.getMonth() + 1}/${d.getDate()}(${w[d.getDay()]})`;
+}
+setDate();
+setInterval(setDate, 60000);
+
+/* ═══════════════ メニュー・カート ═══════════════ */
+function renderMenu() {
+  const active = menu.filter(m => m.active !== false);
+  $('menuGrid').innerHTML = active.length ? active.map(m => `
+    <button class="menu-btn" data-add="${esc(m.id)}">
+      <span class="m-emoji">${esc(m.emoji || '🍽')}</span>
+      <span class="m-name">${esc(m.name)}</span>
+      <span class="m-price">${yen(m.price)}</span>
+      <span class="m-badge" data-badge="${esc(m.id)}"></span>
+    </button>`).join('')
+    : `<div class="empty" style="grid-column:1/-1">商品がありません。<br>設定タブから追加してください。</div>`;
+  syncBadges();
+}
+
+$('menuGrid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-add]');
+  if (!b) return;
+  const id = b.dataset.add;
+  cart[id] = (cart[id] || 0) + 1;
+  syncBadges(); renderCart();
+  if (navigator.vibrate) navigator.vibrate(12);
+});
+
+function syncBadges() {
+  document.querySelectorAll('[data-badge]').forEach(el => {
+    const q = cart[el.dataset.badge] || 0;
+    el.textContent = q; el.classList.toggle('show', q > 0);
+  });
+}
+
+// ※ 関数宣言にすること（リスナーから初期化前に呼ばれても壊れないため）
+function cartLines() {
+  return Object.entries(cart)
+    .filter(([, q]) => q > 0)
+    .map(([id, qty]) => { const m = menu.find(x => String(x.id) === String(id)); return m ? { ...m, qty } : null; })
+    .filter(Boolean);
+}
+
+function renderCart() {
+  const lines = cartLines();
+  const total = lines.reduce((s, i) => s + i.price * i.qty, 0);
+  $('cartList').innerHTML = lines.length ? lines.map(i => `
+    <div class="cart-row">
+      <div class="c-main">
+        <div class="c-name">${esc(i.emoji || '')} ${esc(i.name)}</div>
+        <div class="c-calc">${yen(i.price)} × ${i.qty} = ${yen(i.price * i.qty)}</div>
+      </div>
+      <div class="stepper">
+        <button class="step-btn" data-q="${esc(i.id)}" data-d="-1">−</button>
+        <span class="step-qty">${i.qty}</span>
+        <button class="step-btn plus" data-q="${esc(i.id)}" data-d="1">＋</button>
+      </div>
+    </div>`).join('')
+    : '<div class="empty">上のメニューをタップして追加</div>';
+  $('cartTotal').textContent = yen(total);
+  $('btnConfirm').disabled = lines.length === 0;
+  $('btnConfirm').textContent = lines.length ? `会計する（${yen(total)}）` : '会計する';
+}
+
+$('cartList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-q]');
+  if (!b) return;
+  const id = b.dataset.q;
+  cart[id] = Math.max(0, (cart[id] || 0) + Number(b.dataset.d));
+  if (!cart[id]) delete cart[id];
+  syncBadges(); renderCart();
+});
+
+$('btnClearCart').addEventListener('click', () => {
+  if (!cartLines().length) return;
+  cart = {}; syncBadges(); renderCart();
+});
+
+/* ═══════════════ 会計確定 ═══════════════ */
+async function nextOrderNo() {
+  // 既に存在する注文番号の最大値。カウンタが未作成／消えていても番号が重複しない
+  const maxUsed = orders.reduce((m, o) => Math.max(m, o.no || 0), 0);
+  try {
+    const t = await runTransaction(
+      ref(db, `meta/${todayKey()}/lastNo`),
+      (cur) => Math.max(cur || 0, maxUsed) + 1
+    );
+    if (t.committed && typeof t.snapshot.val() === 'number') return t.snapshot.val();
+  } catch {}
+  return maxUsed + 1;
+}
+
+async function placeOrder(lines, source = 'staff', note = '') {
+  const total = lines.reduce((s, i) => s + i.price * i.qty, 0);
+  const no = await nextOrderNo();
+  const order = {
+    no, total, source,
+    time: hhmm(), date: todayKey(), timestamp: Date.now(),
+    status: 'cooking',
+    tmpId: 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
+    items: lines.map(i => ({ id: i.id, name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
+  };
+  if (note) order.note = note;
+
+  outboxAdd({ order });                       // ① まず端末に保存（電波が無くても消えない）
+  const r = push(ref(db, 'orders'));
+  set(r, order).then(() => outboxDrop(order.tmpId)).catch(() => {});  // ② サーバへ
+  return order;
+}
+
+$('btnConfirm').addEventListener('click', async () => {
+  const lines = cartLines();
+  if (!lines.length) return;
+  $('btnConfirm').disabled = true;
+  const o = await placeOrder(lines, 'staff');
+  cart = {}; syncBadges(); renderCart();
+  toast(`No.${o.no}　${yen(o.total)}　会計完了`);
+});
+
+/* ═══════════════ 未確認（QR）注文 ═══════════════ */
+function renderPending() {
+  const has = pending.length > 0;
+  $('pendingWrap').hidden = !has;
+  $('dotPending').textContent = pending.length;
+  $('dotPending').classList.toggle('show', has);
+  if (!has) return;
+
+  $('pendingList').innerHTML = pending.map(p => `
+    <div class="pending-card">
+      <div class="pending-head">
+        <span class="pending-tag">お客様からの注文</span>
+        <span class="pending-time">${esc(p.time || '')}</span>
+      </div>
+      <div class="pending-items">${(p.items || []).map(i =>
+        `${esc(i.emoji || '')} ${esc(i.name)} <b>×${i.qty}</b>`).join('　')}</div>
+      <div class="pending-total">${yen(p.total)}</div>
+      ${p.note ? `<div class="pending-note">📝 ${esc(p.note)}</div>` : ''}
+      <div class="btn-row">
+        <button class="btn btn-ghost btn-sm" data-rej="${esc(p.key)}" style="flex:0 0 34%">却下</button>
+        <button class="btn btn-primary btn-sm" data-acc="${esc(p.key)}">確定する</button>
+      </div>
+    </div>`).join('');
+}
+
+$('pendingList').addEventListener('click', async (e) => {
+  const acc = e.target.closest('[data-acc]');
+  const rej = e.target.closest('[data-rej]');
+  if (acc) {
+    const p = pending.find(x => x.key === acc.dataset.acc);
+    if (!p) return;
+    acc.disabled = true;
+    const lines = (p.items || []).map(i => ({ id: i.id, name: i.name, emoji: i.emoji, price: i.price, qty: i.qty }));
+    const o = await placeOrder(lines, 'customer', p.note || '');
+    await remove(ref(db, 'pending/' + p.key)).catch(() => {});
+    toast(`No.${o.no} を確定しました`);
+  }
+  if (rej) {
+    confirmSheet('この注文を却下しますか？', 'お客様の注文は取り消され、記録には残りません。', '却下する', async () => {
+      await remove(ref(db, 'pending/' + rej.dataset.rej)).catch(() => {});
+      toast('却下しました');
+    });
+  }
+});
+
+/* ═══════════════ キッチン ═══════════════ */
+function renderKitchen() {
+  const live = orders.filter(o => !o.cancelled && o.status !== 'done');
+  $('dotKitchen').textContent = live.length;
+  $('dotKitchen').classList.toggle('show', live.length > 0);
+  $('kpiCooking').textContent = live.length;
+
+  $('kitchenGrid').innerHTML = live.length ? live.map(o => {
+    const mins = Math.floor((Date.now() - (o.timestamp || Date.now())) / 60000);
+    const late = mins >= 10;
+    return `
+    <div class="ticket ${late ? 'late' : 'cooking'}">
+      <div class="ticket-head">
+        <span class="ticket-no">No.${o.no || '–'}</span>
+        <span class="ticket-elapsed">${mins}分経過</span>
+      </div>
+      ${(o.items || []).map(i => `
+        <div class="ticket-line">
+          <span class="tl-name">${esc(i.emoji || '')} ${esc(i.name)}</span>
+          <span class="tl-qty">×${i.qty}</span>
+        </div>`).join('')}
+      ${o.note ? `<div class="pending-note" style="margin:9px 0 0">📝 ${esc(o.note)}</div>` : ''}
+      <div class="ticket-actions">
+        <button class="btn btn-primary" data-done="${esc(o.key)}">受け渡し完了</button>
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty empty-lg" style="grid-column:1/-1">調理待ちの注文はありません 🍳</div>';
+}
+setInterval(() => { if (authed) renderKitchen(); }, 30000);
+
+$('kitchenGrid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-done]');
+  if (!b) return;
+  b.disabled = true;
+  update(ref(db, 'orders/' + b.dataset.done), { status: 'done', doneAt: Date.now() }).catch(() => {});
+  if (navigator.vibrate) navigator.vibrate(20);
+});
+
+/* ═══════════════ 履歴（修正・取消） ═══════════════ */
+function renderHistory() {
+  const list = [...orders].reverse();
+  $('historyList').innerHTML = list.length ? list.map(o => `
+    <div class="order-card ${o.cancelled ? 'is-cancelled' : ''}">
+      <div class="order-head">
+        <span class="order-no">No.${o.no || '–'}</span>
+        <span class="order-time">${esc(o.time || '')}</span>
+        ${o.source === 'customer' ? '<span class="chip chip-qr">QR</span>' : ''}
+        ${o.cancelled ? '<span class="chip chip-cancel">取消</span>'
+          : o.status === 'done' ? '<span class="chip chip-done">受渡済</span>'
+          : '<span class="chip chip-cook">調理中</span>'}
+      </div>
+      <div class="order-items">${(o.items || []).map(i =>
+        `${esc(i.emoji || '')} ${esc(i.name)} ×${i.qty}`).join('　')}</div>
+      ${o.note ? `<div class="order-items" style="color:var(--muted)">📝 ${esc(o.note)}</div>` : ''}
+      <div class="order-foot">
+        ${o.cancelled ? '<span></span>' : `<button class="link-btn" data-edit="${esc(o.key)}">修正・取消</button>`}
+        <span class="order-total">${yen(o.total)}</span>
+      </div>
+    </div>`).join('') : '<div class="empty empty-lg">本日の会計はまだありません</div>';
+}
+
+$('historyList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-edit]');
+  if (b) openEditOrder(b.dataset.edit);
+});
+
+function openEditOrder(key) {
+  const o = orders.find(x => x.key === key);
+  if (!o) return;
+  const draft = (o.items || []).map(i => ({ ...i }));
+
+  const body = () => {
+    const total = draft.reduce((s, i) => s + i.price * i.qty, 0);
+    return `
+      ${draft.length ? draft.map((i, idx) => `
+        <div class="cart-row">
+          <div class="c-main">
+            <div class="c-name">${esc(i.emoji || '')} ${esc(i.name)}</div>
+            <div class="c-calc">${yen(i.price)} × ${i.qty} = ${yen(i.price * i.qty)}</div>
+          </div>
+          <div class="stepper">
+            <button class="step-btn" data-ei="${idx}" data-d="-1">−</button>
+            <span class="step-qty">${i.qty}</span>
+            <button class="step-btn plus" data-ei="${idx}" data-d="1">＋</button>
+          </div>
+        </div>`).join('') : '<div class="empty">商品がありません。取消してください。</div>'}
+      <div class="total-bar" style="margin-bottom:0">
+        <span class="t-label">修正後の合計</span>
+        <span class="t-value">${yen(total)}</span>
+      </div>`;
+  };
+
+  openSheet({
+    title: `No.${o.no} を修正`,
+    desc: '数量を変更するか、注文そのものを取り消せます。',
+    html: body(),
+    actions: [
+      { label: '注文を取消', cls: 'btn btn-danger-o', onClick: () => {
+          closeSheet();
+          confirmSheet(`No.${o.no} を取り消しますか？`, '売上・集計から除外されます。履歴には「取消」として残ります。', '取消する', async () => {
+            await update(ref(db, 'orders/' + key), { cancelled: true, status: 'done', cancelledAt: Date.now() }).catch(() => {});
+            toast(`No.${o.no} を取り消しました`);
+          });
+        } },
+      { label: '保存', cls: 'btn btn-primary', onClick: async () => {
+          const items = draft.filter(i => i.qty > 0);
+          if (!items.length) { toast('商品が0件です。取消をご利用ください', true); return; }
+          const total = items.reduce((s, i) => s + i.price * i.qty, 0);
+          await update(ref(db, 'orders/' + key), { items, total, editedAt: Date.now() }).catch(() => {});
+          closeSheet(); toast('修正しました');
+        } },
+    ],
+    onBody: (el) => {
+      el.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-ei]');
+        if (!b) return;
+        const i = draft[Number(b.dataset.ei)];
+        i.qty = Math.max(0, i.qty + Number(b.dataset.d));
+        el.innerHTML = body();
+      });
+    }
+  });
+}
+
+/* ═══════════════ 集計 ═══════════════ */
+function renderSummary() {
+  const valid = orders.filter(o => !o.cancelled);
+  const total = valid.reduce((s, o) => s + (o.total || 0), 0);
+  const pieces = valid.reduce((s, o) => s + (o.items || []).reduce((a, i) => a + i.qty, 0), 0);
+
+  $('kpiSales').textContent = yen(total);
+  $('kpiOrders').textContent = valid.length;
+  $('sumTotal').textContent = yen(total);
+  $('sumSub').textContent = `${valid.length}件 · ${pieces}点`;
+
+  const by = {};
+  valid.forEach(o => (o.items || []).forEach(i => {
+    const k = i.name;
+    if (!by[k]) by[k] = { emoji: i.emoji, qty: 0, amt: 0 };
+    by[k].qty += i.qty; by[k].amt += i.price * i.qty;
+  }));
+  const rows = Object.entries(by).sort((a, b) => b[1].amt - a[1].amt);
+  $('sumByItem').innerHTML = rows.length ? rows.map(([name, d]) => `
+    <div class="srow">
+      <span>${esc(d.emoji || '')} ${esc(name)}<span class="s-qty">${d.qty}個</span></span>
+      <span class="s-amt">${yen(d.amt)}</span>
+    </div>`).join('') : '<div class="empty">データなし</div>';
+
+  $('sumStaff').textContent = valid.filter(o => o.source !== 'customer').length + '件';
+  $('sumQr').textContent = valid.filter(o => o.source === 'customer').length + '件';
+  $('sumCancel').textContent = orders.filter(o => o.cancelled).length + '件';
+  $('sumAvg').textContent = yen(valid.length ? Math.round(total / valid.length) : 0);
+}
+
+function renderAllOrderViews() { renderSummary(); renderHistory(); renderKitchen(); }
+
+/* ═══════════════ 商品管理 ═══════════════ */
+function renderProducts() {
+  $('prodList').innerHTML = menu.length ? menu.map((m, idx) => `
+    <div class="prod-row">
+      <span class="prod-emoji">${esc(m.emoji || '🍽')}</span>
+      <span class="prod-info">
+        <span class="prod-name ${m.active === false ? 'off' : ''}">${esc(m.name)}</span>
+        <span class="prod-price">${yen(m.price)}${m.active === false ? '　（非表示）' : ''}</span>
+      </span>
+      <span class="prod-tools">
+        <button class="icon-btn" data-up="${idx}" ${idx === 0 ? 'disabled' : ''}>↑</button>
+        <button class="icon-btn" data-down="${idx}" ${idx === menu.length - 1 ? 'disabled' : ''}>↓</button>
+        <button class="icon-btn" data-pedit="${esc(m.id)}">✏️</button>
+      </span>
+    </div>`).join('') : '<div class="empty">商品がまだありません</div>';
+}
+
+$('prodList').addEventListener('click', (e) => {
+  const up = e.target.closest('[data-up]'), dn = e.target.closest('[data-down]'), ed = e.target.closest('[data-pedit]');
+  if (ed) return openProductSheet(menu.find(m => String(m.id) === ed.dataset.pedit));
+  if (up || dn) {
+    const i = Number((up || dn).dataset[up ? 'up' : 'down']);
+    const j = up ? i - 1 : i + 1;
+    if (j < 0 || j >= menu.length) return;
+    const arr = [...menu];
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+    arr.forEach((m, k) => m.sort = k + 1);
+    menu = arr; renderProducts(); renderMenu();
+    set(ref(db, 'menu'), keyById(arr)).catch(() => toast('保存できませんでした', true));
+  }
+});
+
+$('btnAddProduct').addEventListener('click', () => openProductSheet(null));
+
+function openProductSheet(item) {
+  const isNew = !item;
+  const d = item || { id: 'p' + Date.now().toString(36), name: '', price: '', emoji: '🍽', active: true, sort: menu.length + 1 };
+
+  openSheet({
+    title: isNew ? '商品を追加' : '商品を編集',
+    html: `
+      <div class="row-2">
+        <div class="field w-emoji">
+          <label>絵文字</label>
+          <input class="input input-emoji" id="fEmoji" maxlength="4" value="${esc(d.emoji || '')}">
+        </div>
+        <div class="field">
+          <label>商品名</label>
+          <input class="input" id="fName" placeholder="例：クレープ" value="${esc(d.name)}">
+        </div>
+      </div>
+      <div class="field">
+        <label>価格（円）</label>
+        <input class="input" id="fPrice" type="number" inputmode="numeric" min="0" step="10" placeholder="500" value="${d.price}">
+      </div>
+      <div class="switch-row">
+        <span class="sw-label">メニューに表示する</span>
+        <label class="switch"><input type="checkbox" id="fActive" ${d.active !== false ? 'checked' : ''}><span class="sl"></span></label>
+      </div>
+      ${isNew ? '' : '<button class="btn btn-danger-o" id="fDelete" style="margin-top:6px">この商品を削除</button>'}`,
+    actions: [
+      { label: 'キャンセル', cls: 'btn btn-ghost', onClick: closeSheet },
+      { label: '保存', cls: 'btn btn-primary', onClick: async () => {
+          const name = $('fName').value.trim();
+          const price = parseInt($('fPrice').value, 10);
+          if (!name) return toast('商品名を入力してください', true);
+          if (!Number.isFinite(price) || price < 0) return toast('価格を正しく入力してください', true);
+          const rec = {
+            id: d.id, name, price,
+            emoji: $('fEmoji').value.trim() || '🍽',
+            active: $('fActive').checked,
+            sort: d.sort ?? menu.length + 1,
+          };
+          await set(ref(db, 'menu/' + rec.id), rec).catch(() => toast('保存できませんでした', true));
+          closeSheet(); toast(isNew ? '商品を追加しました' : '商品を更新しました');
+        } },
+    ],
+    onBody: () => {
+      const del = $('fDelete');
+      if (del) del.addEventListener('click', () => {
+        closeSheet();
+        confirmSheet(`「${d.name}」を削除しますか？`, '過去の売上記録は残ります。メニューからのみ消えます。', '削除する', async () => {
+          delete cart[d.id];
+          await remove(ref(db, 'menu/' + d.id)).catch(() => {});
+          syncBadges(); renderCart(); toast('削除しました');
+        });
+      });
+    }
+  });
+}
+
+/* ═══════════════ QR注文設定 ═══════════════ */
+function customerUrl() { return new URL('order.html', location.href).href; }
+
+$('swQr').addEventListener('change', async (e) => {
+  const on = e.target.checked;
+  $('qrArea').hidden = !on;
+  await set(ref(db, 'settings/qrEnabled'), on).catch(() => toast('保存できませんでした', true));
+  if (on) renderQr();
+});
+
+function renderQr() {
+  const url = customerUrl();
+  $('qrUrl').textContent = url;
+  const holder = $('qrHolder');
+  if (holder.dataset.url === url) return;
+  holder.dataset.url = url;
+  holder.innerHTML = '<div class="note">QRコードを生成中…</div>';
+  loadQrLib().then(() => {
+    holder.innerHTML = '';
+    new window.QRCode(holder, { text: url, width: 190, height: 190, correctLevel: window.QRCode.CorrectLevel.M });
+  }).catch(() => {
+    holder.innerHTML = '<div class="note">QRコードを表示できませんでした。<br>下のURLをお客様に共有してください。</div>';
+  });
+}
+
+let qrLibPromise = null;
+function loadQrLib() {
+  if (window.QRCode) return Promise.resolve();
+  if (qrLibPromise) return qrLibPromise;
+  qrLibPromise = new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js';
+    s.onload = res; s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return qrLibPromise;
+}
+
+/* ═══════════════ データ管理 ═══════════════ */
+$('btnResetOrders').addEventListener('click', () => {
+  confirmSheet('本日の売上・履歴をリセット', '会計履歴・キッチンの表示・集計がすべて消えます。商品メニューは残ります。営業終了後にお使いください。', 'リセットする', async () => {
+    await Promise.all([
+      remove(ref(db, 'orders')),
+      remove(ref(db, 'pending')),
+      remove(ref(db, 'meta')),
+    ]).catch(() => {});
+    saveOutbox([]);
+    cart = {}; syncBadges(); renderCart();
+    toast('リセットしました');
+  });
+});
+
+$('btnLogout').addEventListener('click', () => {
+  confirmSheet('ログアウトしますか？', '次回また暗証番号の入力が必要になります。', 'ログアウト', async () => {
+    await signOut(auth).catch(() => {});
+    location.reload();
+  });
+});
+
+$('verNote').innerHTML = `ボナペティ POS v${APP_VERSION}<br>データはFirebaseに自動保存され、複数端末でリアルタイム共有されます。`;
+
+/* ═══════════════ UI部品 ═══════════════ */
+let toastTimer;
+function toast(msg, isErr = false) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.toggle('err', isErr);
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+function openSheet({ title, desc, html, actions = [], onBody }) {
+  $('sheetTitle').textContent = title || '';
+  $('sheetDesc').textContent = desc || '';
+  $('sheetDesc').hidden = !desc;
+  $('sheetBody').innerHTML = html || '';
+  $('sheetActions').innerHTML = '';
+  actions.forEach(a => {
+    const b = document.createElement('button');
+    b.className = a.cls || 'btn btn-ghost';
+    b.textContent = a.label;
+    b.addEventListener('click', a.onClick);
+    $('sheetActions').appendChild(b);
+  });
+  if (onBody) onBody($('sheetBody'));
+  $('sheetWrap').classList.add('show');
+}
+function closeSheet() { $('sheetWrap').classList.remove('show'); }
+$('sheetWrap').addEventListener('click', (e) => { if (e.target === $('sheetWrap')) closeSheet(); });
+
+function confirmSheet(title, desc, okLabel, onOk) {
+  openSheet({
+    title, desc, html: '',
+    actions: [
+      { label: 'キャンセル', cls: 'btn btn-ghost', onClick: closeSheet },
+      { label: okLabel, cls: 'btn btn-danger', onClick: async () => { closeSheet(); await onOk(); } },
+    ]
+  });
+}
+
+/* ═══════════════ PWA ═══════════════ */
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+
+// 起動が極端に遅い環境でも画面が止まらないように
+setTimeout(() => { if (!bootDone) $('boot').classList.add('hide'), $('gate').classList.remove('hide'); }, 6000);
+</script>
+</body>
+</html>

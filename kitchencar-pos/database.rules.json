@@ -1,0 +1,65 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "menu": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'",
+      "$id": {
+        ".validate": "newData.hasChildren(['id','name','price'])",
+        "name":  { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
+        "price": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+        "emoji": { ".validate": "newData.isString() && newData.val().length <= 8" },
+        "sort":  { ".validate": "newData.isNumber()" },
+        "active":{ ".validate": "newData.isBoolean()" },
+        "id":    { ".validate": "newData.isString() && newData.val() == $id" },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "orders": {
+      ".read":  "auth != null && auth.token.email == 'staff@bonappetit-pos.local'",
+      ".write": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'",
+      ".indexOn": ["date"]
+    },
+
+    "meta": {
+      ".read":  "auth != null && auth.token.email == 'staff@bonappetit-pos.local'",
+      ".write": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'"
+    },
+
+    "settings": {
+      ".read": "auth != null",
+      ".write": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'"
+    },
+
+    "pending": {
+      ".read": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'",
+
+      "$oid": {
+        ".write": "auth != null && (auth.token.email == 'staff@bonappetit-pos.local' || (!data.exists() && newData.exists() && root.child('settings/qrEnabled').val() == true))",
+
+        ".validate": "newData.hasChildren(['items','total','timestamp'])",
+        "total":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
+        "timestamp": { ".validate": "newData.isNumber()" },
+        "time":      { ".validate": "newData.isString() && newData.val().length <= 8" },
+        "date":      { ".validate": "newData.isString() && newData.val().length <= 10" },
+        "note":      { ".validate": "newData.isString() && newData.val().length <= 60" },
+        "items": {
+          ".validate": "newData.hasChildren()",
+          "$i": {
+            ".validate": "newData.hasChildren(['name','price','qty'])",
+            "name":  { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "price": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+            "qty":   { ".validate": "newData.isNumber() && newData.val() > 0 && newData.val() <= 99" },
+            "emoji": { ".validate": "newData.isString() && newData.val().length <= 8" },
+            "id":    { ".validate": "newData.isString() && newData.val().length <= 40" },
+            "$other": { ".validate": false }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}

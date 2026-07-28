@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<meta name="robots" content="noindex, nofollow">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<link rel="stylesheet" href="style.css">
+<title>ボナペティ｜ご注文</title>
+<style>
+  .hero {
+    background: var(--surface); border-bottom: 1px solid var(--line);
+    padding: 22px 16px 18px; text-align: center;
+  }
+  .hero .h-logo { font-size: 32px; }
+  .hero .h-name { font-size: 23px; font-weight: 800; letter-spacing: .02em; margin-top: 2px; }
+  .hero .h-msg { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-top: 4px; }
+  .sticky-foot {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: rgba(255,255,255,.94); backdrop-filter: blur(10px);
+    border-top: 1px solid var(--line);
+    padding: 11px 16px calc(11px + env(safe-area-inset-bottom));
+  }
+  .sticky-in { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 11px; }
+  .sticky-in .s-total { flex: none; }
+  .sticky-in .s-total .l { font-size: 10.5px; color: var(--muted); font-weight: 700; }
+  .sticky-in .s-total .v { font-size: 21px; font-weight: 800; color: var(--accent); line-height: 1.15; }
+  .sticky-in .btn { flex: 1; }
+  .done-wrap { text-align: center; padding: 60px 20px; }
+  .done-mark {
+    width: 74px; height: 74px; border-radius: 50%; background: var(--green-soft); color: var(--green);
+    font-size: 38px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+  }
+  .done-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .done-no { font-size: 46px; font-weight: 800; color: var(--accent); letter-spacing: -.02em; margin: 14px 0 4px; }
+  .closed { text-align: center; padding: 70px 24px; }
+  .closed .c-icon { font-size: 44px; margin-bottom: 14px; }
+  .closed .c-title { font-size: 19px; font-weight: 800; margin-bottom: 8px; }
+</style>
+</head>
+<body>
+
+<div class="boot" id="boot">
+  <div class="spin"></div>
+  <div class="boot-text">メニューを読み込み中…</div>
+</div>
+
+<!-- 受付停止中 -->
+<div id="closedView" hidden>
+  <div class="closed">
+    <div class="c-icon">🙇</div>
+    <div class="c-title">ただいま QR注文を<br>受け付けておりません</div>
+    <p class="note">お手数ですが、スタッフに直接ご注文ください。</p>
+  </div>
+</div>
+
+<!-- 注文フォーム -->
+<div id="orderView" hidden>
+  <div class="hero">
+    <div class="h-logo">🍽</div>
+    <div class="h-name">ボナペティ</div>
+    <div class="h-msg">ご注文をお選びください</div>
+  </div>
+
+  <div class="netbar" id="netbar"><span class="netdot"></span><span id="netText">オンライン</span></div>
+
+  <div class="container" style="padding-top:16px; padding-bottom:120px">
+    <div class="sec-title">メニュー</div>
+    <div class="menu-grid" id="menuGrid"></div>
+
+    <div class="spacer-lg"></div>
+    <div class="sec-title">ご注文内容</div>
+    <div id="cartList"></div>
+
+    <div class="spacer-lg"></div>
+    <div class="field">
+      <label>ご要望（任意）</label>
+      <input class="input" id="fNote" maxlength="60" placeholder="例：ケチャップ抜きでお願いします">
+    </div>
+
+    <p class="note">※ 送信後、スタッフが内容を確認して確定します。<br>※ お会計はスタッフへお願いいたします。</p>
+  </div>
+
+  <div class="sticky-foot">
+    <div class="sticky-in">
+      <div class="s-total">
+        <div class="l">合計</div>
+        <div class="v" id="cartTotal">¥0</div>
+      </div>
+      <button class="btn btn-primary" id="btnSend" disabled>注文を送る</button>
+    </div>
+  </div>
+</div>
+
+<!-- 送信完了 -->
+<div id="doneView" hidden>
+  <div class="done-wrap">
+    <div class="done-mark">✓</div>
+    <div class="done-title">ご注文を送信しました</div>
+    <p class="note">スタッフが確認しております。<br>お呼びするまで少々お待ちください。</p>
+    <div class="done-no" id="doneTotal"></div>
+    <p class="note" id="doneItems" style="margin-bottom:26px"></p>
+    <div class="container">
+      <button class="btn btn-ghost" id="btnAgain">続けて注文する</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+import { firebaseConfig, yen, todayKey, hhmm, esc } from "./app-config.js";
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getDatabase(app);
+const $ = (id) => document.getElementById(id);
+
+let menu = [];
+let cart = {};
+let ready = false;
+
+/* ── 匿名ログイン（お客様は読み取りと注文送信のみ許可） ── */
+let started = false;
+
+onAuthStateChanged(auth, (user) => {
+  if (!user || started) return;
+  started = true;
+  onValue(ref(db, '.info/connected'), (s) => {
+    const on = s.val() === true;
+    $('netbar').classList.toggle('offline', !on);
+    $('netText').textContent = on ? 'オンライン' : '通信が不安定です';
+  });
+
+  onValue(ref(db, 'settings/qrEnabled'), (s) => {
+    const enabled = s.val() === true;
+    $('boot').classList.add('hide');
+    ready = enabled;
+    $('closedView').hidden = enabled;
+    if (!enabled) { $('orderView').hidden = true; $('doneView').hidden = true; }
+    else if ($('doneView').hidden) $('orderView').hidden = false;
+  }, () => {
+    $('boot').classList.add('hide');
+    $('closedView').hidden = false;
+  });
+
+  onValue(ref(db, 'menu'), (s) => {
+    const data = s.val() || {};
+    menu = Object.values(data).filter(m => m.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+    renderMenu(); renderCart();
+  });
+});
+
+// 匿名ログインを開始（Firebaseで「匿名」が無効なら受付停止画面を出す）
+signInAnonymously(auth).catch(() => {
+  $('boot').classList.add('hide');
+  $('closedView').hidden = false;
+});
+
+/* ── メニュー ── */
+function renderMenu() {
+  $('menuGrid').innerHTML = menu.length ? menu.map(m => `
+    <button class="menu-btn" data-add="${esc(m.id)}">
+      <span class="m-emoji">${esc(m.emoji || '🍽')}</span>
+      <span class="m-name">${esc(m.name)}</span>
+      <span class="m-price">${yen(m.price)}</span>
+      <span class="m-badge" data-badge="${esc(m.id)}"></span>
+    </button>`).join('')
+    : '<div class="empty" style="grid-column:1/-1">ただいま準備中です</div>';
+  syncBadges();
+}
+
+$('menuGrid').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-add]');
+  if (!b) return;
+  const id = b.dataset.add;
+  cart[id] = (cart[id] || 0) + 1;
+  syncBadges(); renderCart();
+  if (navigator.vibrate) navigator.vibrate(12);
+});
+
+function syncBadges() {
+  document.querySelectorAll('[data-badge]').forEach(el => {
+    const q = cart[el.dataset.badge] || 0;
+    el.textContent = q; el.classList.toggle('show', q > 0);
+  });
+}
+
+// ※ 関数宣言にすること（リスナーから初期化前に呼ばれても壊れないため）
+function lines() {
+  return Object.entries(cart)
+    .filter(([, q]) => q > 0)
+    .map(([id, qty]) => { const m = menu.find(x => String(x.id) === String(id)); return m ? { ...m, qty } : null; })
+    .filter(Boolean);
+}
+
+function renderCart() {
+  const l = lines();
+  const total = l.reduce((s, i) => s + i.price * i.qty, 0);
+  $('cartList').innerHTML = l.length ? l.map(i => `
+    <div class="cart-row">
+      <div class="c-main">
+        <div class="c-name">${esc(i.emoji || '')} ${esc(i.name)}</div>
+        <div class="c-calc">${yen(i.price)} × ${i.qty} = ${yen(i.price * i.qty)}</div>
+      </div>
+      <div class="stepper">
+        <button class="step-btn" data-q="${esc(i.id)}" data-d="-1">−</button>
+        <span class="step-qty">${i.qty}</span>
+        <button class="step-btn plus" data-q="${esc(i.id)}" data-d="1">＋</button>
+      </div>
+    </div>`).join('') : '<div class="empty">メニューをタップして追加してください</div>';
+  $('cartTotal').textContent = yen(total);
+  $('btnSend').disabled = l.length === 0;
+}
+
+$('cartList').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-q]');
+  if (!b) return;
+  const id = b.dataset.q;
+  cart[id] = Math.max(0, (cart[id] || 0) + Number(b.dataset.d));
+  if (!cart[id]) delete cart[id];
+  syncBadges(); renderCart();
+});
+
+/* ── 送信 ── */
+$('btnSend').addEventListener('click', async () => {
+  const l = lines();
+  if (!l.length || !ready) return;
+  $('btnSend').disabled = true;
+  $('btnSend').textContent = '送信中…';
+
+  const total = l.reduce((s, i) => s + i.price * i.qty, 0);
+  const payload = {
+    items: l.map(i => ({ id: i.id, name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
+    total, time: hhmm(), date: todayKey(), timestamp: Date.now(),
+  };
+  const note = $('fNote').value.trim();
+  if (note) payload.note = note;
+
+  try {
+    await set(push(ref(db, 'pending')), payload);
+    $('doneTotal').textContent = yen(total);
+    $('doneItems').innerHTML = l.map(i => `${esc(i.emoji || '')} ${esc(i.name)} ×${i.qty}`).join('　');
+    $('orderView').hidden = true;
+    $('doneView').hidden = false;
+    cart = {}; $('fNote').value = '';
+    window.scrollTo(0, 0);
+  } catch (err) {
+    toast('送信できませんでした。電波の良い場所でもう一度お試しください', true);
+  } finally {
+    $('btnSend').disabled = false;
+    $('btnSend').textContent = '注文を送る';
+    renderCart();
+  }
+});
+
+$('btnAgain').addEventListener('click', () => {
+  $('doneView').hidden = true;
+  $('orderView').hidden = false;
+  syncBadges(); renderCart();
+  window.scrollTo(0, 0);
+});
+
+let tt;
+function toast(msg, isErr = false) {
+  const t = $('toast');
+  t.textContent = msg; t.classList.toggle('err', isErr); t.classList.add('show');
+  clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+setTimeout(() => $('boot').classList.add('hide'), 6000);
+</script>
+</body>
+</html>

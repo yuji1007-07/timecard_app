@@ -1,0 +1,26 @@
+{
+  "name": "ボナペティ POS",
+  "short_name": "ボナペティ",
+  "description": "キッチンカー ボナペティ の注文・会計アプリ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f4f1",
+  "theme_color": "#ffffff",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
