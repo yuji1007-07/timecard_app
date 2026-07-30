@@ -41,6 +41,7 @@
         ".write": "auth != null && (auth.token.email == 'staff@bonappetit-pos.local' || (!data.exists() && newData.exists() && root.child('settings/qrEnabled').val() == true))",
 
         ".validate": "newData.hasChildren(['items','total','timestamp'])",
+        "cid":       { ".validate": "newData.isString() && newData.val().length <= 40" },
         "total":     { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
         "timestamp": { ".validate": "newData.isNumber()" },
         "time":      { ".validate": "newData.isString() && newData.val().length <= 8" },
@@ -59,6 +60,13 @@
           }
         },
         "$other": { ".validate": false }
+      }
+    },
+
+    "tickets": {
+      "$cid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.token.email == 'staff@bonappetit-pos.local'"
       }
     }
   }

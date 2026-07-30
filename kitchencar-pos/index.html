@@ -498,7 +498,13 @@ async function nextOrderNo() {
   return maxUsed + 1;
 }
 
-async function placeOrder(lines, source = 'staff', note = '') {
+// お客様のスマホに番号と状況を知らせる（QR注文のみ）
+function pushTicket(cid, data) {
+  if (!cid) return Promise.resolve();
+  return update(ref(db, 'tickets/' + cid), data).catch(() => {});
+}
+
+async function placeOrder(lines, source = 'staff', note = '', cid = '') {
   const total = lines.reduce((s, i) => s + i.price * i.qty, 0);
   const no = await nextOrderNo();
   const order = {
@@ -509,10 +515,13 @@ async function placeOrder(lines, source = 'staff', note = '') {
     items: lines.map(i => ({ id: String(i.id), name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
   };
   if (note) order.note = note;
+  if (cid) order.cid = cid;
 
   outboxAdd({ order });                       // ① まず端末に保存（電波が無くても消えない）
   const r = push(ref(db, 'orders'));
   set(r, order).then(() => outboxDrop(order.tmpId)).catch(() => {});  // ② サーバへ
+
+  pushTicket(cid, { no, status: 'cooking', updatedAt: Date.now() });  // ③ お客様へ番号を通知
   return order;
 }
 
@@ -558,12 +567,14 @@ $('pendingList').addEventListener('click', async (e) => {
     if (!p) return;
     acc.disabled = true;
     const lines = (p.items || []).map(i => ({ id: i.id, name: i.name, emoji: i.emoji, price: i.price, qty: i.qty }));
-    const o = await placeOrder(lines, 'customer', p.note || '');
+    const o = await placeOrder(lines, 'customer', p.note || '', p.cid || '');
     await remove(ref(db, 'pending/' + p.key)).catch(() => {});
     toast(`No.${o.no} を確定しました`);
   }
   if (rej) {
-    confirmSheet('この注文を却下しますか？', 'お客様の注文は取り消され、記録には残りません。', '却下する', async () => {
+    const p = pending.find(x => x.key === rej.dataset.rej);
+    confirmSheet('この注文を却下しますか？', 'お客様の画面に「お受けできませんでした」と表示されます。', '却下する', async () => {
+      await pushTicket(p?.cid, { status: 'rejected', updatedAt: Date.now() });
       await remove(ref(db, 'pending/' + rej.dataset.rej)).catch(() => {});
       toast('却下しました');
     });
@@ -583,7 +594,7 @@ function renderKitchen() {
     return `
     <div class="ticket ${late ? 'late' : 'cooking'}">
       <div class="ticket-head">
-        <span class="ticket-no">No.${o.no || '–'}</span>
+        <span class="ticket-no">No.${o.no || '–'}${o.cid ? ' <span class="chip chip-qr">QR</span>' : ''}</span>
         <span class="ticket-elapsed">${mins}分経過</span>
       </div>
       ${(o.items || []).map(i => `
@@ -604,7 +615,9 @@ $('kitchenGrid').addEventListener('click', (e) => {
   const b = e.target.closest('[data-done]');
   if (!b) return;
   b.disabled = true;
+  const o = orders.find(x => x.key === b.dataset.done);
   update(ref(db, 'orders/' + b.dataset.done), { status: 'done', doneAt: Date.now() }).catch(() => {});
+  pushTicket(o?.cid, { status: 'done', updatedAt: Date.now() });   // お客様のスマホを呼び出す
   if (navigator.vibrate) navigator.vibrate(20);
 });
 
@@ -671,6 +684,7 @@ function openEditOrder(key) {
           closeSheet();
           confirmSheet(`No.${o.no} を取り消しますか？`, '売上・集計から除外されます。履歴には「取消」として残ります。', '取消する', async () => {
             await update(ref(db, 'orders/' + key), { cancelled: true, status: 'done', cancelledAt: Date.now() }).catch(() => {});
+            await pushTicket(o.cid, { status: 'cancelled', updatedAt: Date.now() });
             toast(`No.${o.no} を取り消しました`);
           });
         } },
@@ -862,6 +876,7 @@ $('btnResetOrders').addEventListener('click', () => {
       remove(ref(db, 'orders')),
       remove(ref(db, 'pending')),
       remove(ref(db, 'meta')),
+      remove(ref(db, 'tickets')),
     ]).catch(() => {});
     saveOutbox([]);
     cart = {}; syncBadges(); renderCart();

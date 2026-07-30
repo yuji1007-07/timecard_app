@@ -28,13 +28,58 @@
   .sticky-in .s-total .l { font-size: 10.5px; color: var(--muted); font-weight: 700; }
   .sticky-in .s-total .v { font-size: 21px; font-weight: 800; color: var(--accent); line-height: 1.15; }
   .sticky-in .btn { flex: 1; }
-  .done-wrap { text-align: center; padding: 60px 20px; }
-  .done-mark {
-    width: 74px; height: 74px; border-radius: 50%; background: var(--green-soft); color: var(--green);
-    font-size: 38px; display: flex; align-items: center; justify-content: center; margin: 0 auto 18px;
+  /* ── お呼び出し番号の待機画面 ── */
+  .wait {
+    min-height: 100dvh; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    padding: 40px 22px calc(30px + env(safe-area-inset-bottom));
+    transition: background .4s;
   }
-  .done-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
-  .done-no { font-size: 46px; font-weight: 800; color: var(--accent); letter-spacing: -.02em; margin: 14px 0 4px; }
+  .wait.is-ready { background: var(--green-soft); }
+
+  .wait-chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 800; letter-spacing: .04em;
+    padding: 7px 16px; border-radius: 30px;
+    background: var(--card, #fff); border: 1px solid var(--line);
+    color: var(--muted); margin-bottom: 26px;
+  }
+  .wait-chip.cooking { background: var(--accent-soft); border-color: #f3cbad; color: var(--accent-ink); }
+  .wait-chip.ready   { background: var(--green); border-color: var(--green); color: #fff; }
+  .wait-chip.stop    { background: #f3f1ee; border-color: var(--line-strong); color: var(--muted); }
+  .wait-chip .sp {
+    width: 13px; height: 13px; border: 2px solid currentColor; border-right-color: transparent;
+    border-radius: 50%; animation: spin .8s linear infinite; opacity: .7;
+  }
+
+  .wait-cap { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .1em; }
+  .wait-no {
+    font-size: clamp(84px, 30vw, 128px); font-weight: 800; line-height: 1;
+    letter-spacing: -.04em; color: var(--accent); margin: 2px 0 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .wait.is-ready .wait-no { color: var(--green); }
+  .wait-no.pulse { animation: pop .5s ease-out; }
+  @keyframes pop { 0% { transform: scale(.7); opacity: 0 } 60% { transform: scale(1.08) } 100% { transform: scale(1) } }
+
+  .wait-head { font-size: 23px; font-weight: 800; line-height: 1.4; text-wrap: balance; margin-bottom: 8px; }
+  .wait-sub  { font-size: 15px; color: var(--muted); line-height: 1.7; max-width: 22em; }
+  .wait-items {
+    font-size: 15px; color: #55504a; line-height: 1.9;
+    background: #fff; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px 18px; margin: 24px 0 0; min-width: 62%;
+  }
+  .wait-foot { margin-top: 34px; width: 100%; max-width: 300px; }
+  .btn-quiet {
+    background: transparent; border: none; color: var(--muted);
+    font-size: 14px; font-weight: 700; text-decoration: underline; text-underline-offset: 4px;
+    padding: 12px; width: 100%;
+  }
+  .wait-hint { font-size: 13px; color: var(--muted); margin-top: 18px; line-height: 1.7; }
+  @media (prefers-reduced-motion: reduce) {
+    .wait-no.pulse { animation: none; }
+    .wait-chip .sp { animation-duration: 2s; }
+  }
   .closed { text-align: center; padding: 70px 24px; }
   .closed .c-icon { font-size: 44px; margin-bottom: 14px; }
   .closed .c-title { font-size: 19px; font-weight: 800; margin-bottom: 8px; }
@@ -94,16 +139,25 @@
   </div>
 </div>
 
-<!-- 送信完了 -->
-<div id="doneView" hidden>
-  <div class="done-wrap">
-    <div class="done-mark">✓</div>
-    <div class="done-title">ご注文を送信しました</div>
-    <p class="note">スタッフが確認しております。<br>お呼びするまで少々お待ちください。</p>
-    <div class="done-no" id="doneTotal"></div>
-    <p class="note" id="doneItems" style="margin-bottom:26px"></p>
-    <div class="container">
-      <button class="btn btn-ghost" id="btnAgain">続けて注文する</button>
+<!-- 送信後：お呼び出し番号の待機画面 -->
+<div id="waitView" hidden>
+  <div class="wait" id="waitBox">
+    <div class="wait-chip" id="waitChip"><span class="sp"></span><span id="waitChipText">確認中</span></div>
+
+    <div id="waitNoWrap" hidden>
+      <div class="wait-cap">お呼び出し番号</div>
+      <div class="wait-no" id="waitNo">–</div>
+    </div>
+
+    <div class="wait-head" id="waitHead">ご注文を送信しました</div>
+    <div class="wait-sub" id="waitSub">スタッフが確認しております。<br>そのままお待ちください。</div>
+
+    <div class="wait-items" id="waitItems"></div>
+
+    <div class="wait-hint" id="waitHint" hidden></div>
+
+    <div class="wait-foot">
+      <button class="btn-quiet" id="btnAgain">別の注文をする</button>
     </div>
   </div>
 </div>
@@ -125,6 +179,26 @@ let menu = [];
 let cart = {};
 let ready = false;
 
+/* ── 自分の注文の控え（お呼び出し番号を受け取るため） ── */
+const TICKET_KEY = 'bp_my_ticket';
+let watching = null;      // 現在監視中のチケットID
+let unwatch = null;       // 監視の解除関数
+let lastStatus = null;
+let wakeLock = null;
+
+function newCid() {
+  return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+function saveTicket(t) { try { localStorage.setItem(TICKET_KEY, JSON.stringify(t)); } catch {} }
+function loadTicket() {
+  try {
+    const t = JSON.parse(localStorage.getItem(TICKET_KEY) || 'null');
+    // 日付が変わっていたら破棄する
+    return t && t.date === todayKey() ? t : null;
+  } catch { return null; }
+}
+function clearTicket() { try { localStorage.removeItem(TICKET_KEY); } catch {} }
+
 /* ── 匿名ログイン（お客様は読み取りと注文送信のみ許可） ── */
 let started = false;
 
@@ -142,12 +216,16 @@ onAuthStateChanged(auth, (user) => {
     $('boot').classList.add('hide');
     ready = enabled;
     $('closedView').hidden = enabled;
-    if (!enabled) { $('orderView').hidden = true; $('doneView').hidden = true; }
-    else if ($('doneView').hidden) $('orderView').hidden = false;
+    if (!enabled) { $('orderView').hidden = true; $('waitView').hidden = true; }
+    else if ($('waitView').hidden) $('orderView').hidden = false;
   }, () => {
     $('boot').classList.add('hide');
     $('closedView').hidden = false;
   });
+
+  // 画面を閉じてしまった／再読み込みした場合も、番号の待機に戻す
+  const prev = loadTicket();
+  if (prev) watchTicket(prev);
 
   onValue(ref(db, 'menu'), (s) => {
     const data = s.val() || {};
@@ -239,7 +317,9 @@ $('btnSend').addEventListener('click', async () => {
   $('btnSend').textContent = '送信中…';
 
   const total = l.reduce((s, i) => s + i.price * i.qty, 0);
+  const cid = newCid();
   const payload = {
+    cid,
     items: l.map(i => ({ id: String(i.id), name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
     total, time: hhmm(), date: todayKey(), timestamp: Date.now(),
   };
@@ -248,12 +328,13 @@ $('btnSend').addEventListener('click', async () => {
 
   try {
     await set(push(ref(db, 'pending')), payload);
-    $('doneTotal').textContent = yen(total);
-    $('doneItems').innerHTML = l.map(i => `${esc(i.emoji || '')} ${esc(i.name)} ×${i.qty}`).join('　');
-    $('orderView').hidden = true;
-    $('doneView').hidden = false;
+    const ticket = {
+      cid, total, date: todayKey(),
+      items: l.map(i => ({ name: i.name, emoji: i.emoji || '', qty: i.qty })),
+    };
+    saveTicket(ticket);
     cart = {}; $('fNote').value = '';
-    window.scrollTo(0, 0);
+    watchTicket(ticket);
   } catch (err) {
     toast('送信できませんでした。電波の良い場所でもう一度お試しください', true);
   } finally {
@@ -263,8 +344,110 @@ $('btnSend').addEventListener('click', async () => {
   }
 });
 
+/* ── お呼び出し番号の待機 ── */
+function watchTicket(ticket) {
+  if (unwatch) { unwatch(); unwatch = null; }
+  watching = ticket.cid;
+  lastStatus = null;
+
+  $('orderView').hidden = true;
+  $('waitView').hidden = false;
+  window.scrollTo(0, 0);
+
+  $('waitItems').innerHTML = (ticket.items || [])
+    .map(i => `${esc(i.emoji || '')} ${esc(i.name)} <b>×${i.qty}</b>`).join('　')
+    + `<div style="margin-top:6px;font-weight:800;color:var(--ink)">${yen(ticket.total)}</div>`;
+
+  paint(null);
+  requestWakeLock();
+
+  // 3分たっても確定されない場合の案内
+  clearTimeout(watchTicket._t);
+  watchTicket._t = setTimeout(() => {
+    if (lastStatus === null && watching === ticket.cid) {
+      $('waitHint').hidden = false;
+      $('waitHint').innerHTML = '混み合っている場合があります。<br>お急ぎのときはスタッフにお声がけください。';
+    }
+  }, 180000);
+
+  unwatch = onValue(ref(db, 'tickets/' + ticket.cid), (s) => {
+    const t = s.val();
+    if (!t) return;                       // まだスタッフが確認していない
+    if (t.no != null) {
+      $('waitNo').textContent = t.no;
+      if ($('waitNoWrap').hidden) {
+        $('waitNoWrap').hidden = false;
+        $('waitNo').classList.add('pulse');
+      }
+    }
+    paint(t.status || 'cooking');
+  }, () => {});
+}
+
+function paint(status) {
+  if (status === lastStatus) return;
+  const changed = lastStatus !== null;
+  lastStatus = status;
+
+  const box = $('waitBox'), chip = $('waitChip'), chipText = $('waitChipText');
+  const sp = chip.querySelector('.sp');
+  box.classList.toggle('is-ready', status === 'done');
+  chip.className = 'wait-chip';
+  $('waitHint').hidden = true;
+
+  if (status === null) {
+    chip.classList.add('cooking'); sp.hidden = false;
+    chipText.textContent = '確認中';
+    $('waitHead').textContent = 'ご注文を送信しました';
+    $('waitSub').innerHTML = 'スタッフが確認しております。<br>そのままお待ちください。';
+  } else if (status === 'cooking') {
+    chip.classList.add('cooking'); sp.hidden = false;
+    chipText.textContent = 'ただいま調理中';
+    $('waitHead').textContent = 'ご注文をお受けしました';
+    $('waitSub').innerHTML = 'お呼びしますので、この番号のまま<br>少々お待ちください。';
+  } else if (status === 'done') {
+    chip.classList.add('ready'); sp.hidden = true;
+    chipText.textContent = 'できあがりました';
+    $('waitHead').textContent = 'お受け取りください';
+    $('waitSub').innerHTML = 'カウンターまでお越しください。';
+    if (changed) {
+      if (navigator.vibrate) navigator.vibrate([200, 90, 200, 90, 300]);
+      window.scrollTo(0, 0);
+    }
+  } else if (status === 'rejected') {
+    chip.classList.add('stop'); sp.hidden = true;
+    chipText.textContent = '受付できません';
+    $('waitHead').textContent = '申し訳ございません';
+    $('waitSub').innerHTML = 'ご注文をお受けできませんでした。<br>スタッフにお声がけください。';
+    releaseWakeLock();
+  } else if (status === 'cancelled') {
+    chip.classList.add('stop'); sp.hidden = true;
+    chipText.textContent = '取消済み';
+    $('waitHead').textContent = 'ご注文は取り消されました';
+    $('waitSub').innerHTML = 'ご不明な点はスタッフまでお願いいたします。';
+    releaseWakeLock();
+  }
+}
+
+/* 待機中は画面が消えないようにする（対応端末のみ） */
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator && !wakeLock) wakeLock = await navigator.wakeLock.request('screen');
+  } catch {}
+}
+function releaseWakeLock() { try { wakeLock?.release(); } catch {} wakeLock = null; }
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && watching && lastStatus !== 'done') requestWakeLock();
+});
+
 $('btnAgain').addEventListener('click', () => {
-  $('doneView').hidden = true;
+  if (unwatch) { unwatch(); unwatch = null; }
+  watching = null; lastStatus = null;
+  clearTicket(); releaseWakeLock();
+  clearTimeout(watchTicket._t);
+  $('waitNoWrap').hidden = true;
+  $('waitNo').classList.remove('pulse');
+  $('waitView').hidden = true;
   $('orderView').hidden = false;
   syncBadges(); renderCart();
   window.scrollTo(0, 0);
