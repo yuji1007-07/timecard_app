@@ -151,7 +151,11 @@ onAuthStateChanged(auth, (user) => {
 
   onValue(ref(db, 'menu'), (s) => {
     const data = s.val() || {};
-    menu = Object.values(data).filter(m => m.active !== false).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+    // 旧バージョンが保存した数値IDが混ざっていても壊れないよう文字列に統一する
+    menu = Object.entries(data)
+      .map(([key, v]) => ({ ...v, id: String(v?.id ?? key) }))
+      .filter(m => m.active !== false)
+      .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
     renderMenu(); renderCart();
   });
 });
@@ -236,7 +240,7 @@ $('btnSend').addEventListener('click', async () => {
 
   const total = l.reduce((s, i) => s + i.price * i.qty, 0);
   const payload = {
-    items: l.map(i => ({ id: i.id, name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
+    items: l.map(i => ({ id: String(i.id), name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
     total, time: hhmm(), date: todayKey(), timestamp: Date.now(),
   };
   const note = $('fNote').value.trim();

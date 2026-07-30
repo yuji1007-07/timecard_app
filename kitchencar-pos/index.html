@@ -352,7 +352,10 @@ function startListeners() {
   onValue(ref(db, 'menu'), (s) => {
     const data = s.val();
     if (data && Object.keys(data).length) {
-      menu = Object.values(data).sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
+      // 旧バージョンが保存した数値IDが混ざっていても壊れないよう文字列に統一する
+      menu = Object.entries(data)
+        .map(([key, v]) => ({ ...v, id: String(v?.id ?? key) }))
+        .sort((a, b) => (a.sort ?? 0) - (b.sort ?? 0));
     } else {
       menu = [...DEFAULT_MENU];
       set(ref(db, 'menu'), keyById(DEFAULT_MENU)).catch(() => {});
@@ -503,7 +506,7 @@ async function placeOrder(lines, source = 'staff', note = '') {
     time: hhmm(), date: todayKey(), timestamp: Date.now(),
     status: 'cooking',
     tmpId: 't_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7),
-    items: lines.map(i => ({ id: i.id, name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
+    items: lines.map(i => ({ id: String(i.id), name: i.name, emoji: i.emoji || '', price: i.price, qty: i.qty })),
   };
   if (note) order.note = note;
 
