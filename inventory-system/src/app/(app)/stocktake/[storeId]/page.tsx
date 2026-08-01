@@ -29,14 +29,27 @@ export default async function StocktakeEntryPage({
   const store = await prisma.store.findUnique({ where: { id: storeId } });
   if (!store) notFound();
 
-  const inv = await getStoreInventory(storeId);
+  const [inv, existing, txPids, stPids] = await Promise.all([
+    getStoreInventory(storeId),
+    // 既存の同月棚卸（あれば実数を初期表示）
+    prisma.stocktake.findUnique({
+      where: { storeId_targetMonth: { storeId, targetMonth: month } },
+      include: { items: true },
+    }),
+    // この店舗で取引記録が一度でもある商品
+    prisma.transaction.findMany({ where: { storeId }, select: { productId: true }, distinct: ["productId"] }),
+    // この店舗で棚卸されたことがある商品
+    prisma.stocktakeItem.findMany({
+      where: { stocktake: { storeId } },
+      select: { productId: true },
+      distinct: ["productId"],
+    }),
+  ]);
 
-  // 既存の同月棚卸（あれば実数を初期表示）
-  const existing = await prisma.stocktake.findUnique({
-    where: { storeId_targetMonth: { storeId, targetMonth: month } },
-    include: { items: true },
-  });
   const prevMap = new Map((existing?.items ?? []).map((i) => [i.productId, i.actualQty]));
+
+  // 入荷も棚卸も一度も記録が無い商品＝「在庫0」ではなく「まだ登録しただけ」
+  const hasRecord = new Set([...txPids.map((t) => t.productId), ...stPids.map((s) => s.productId)]);
 
   const rows = inv.map((r) => ({
     productId: r.productId,
@@ -46,6 +59,7 @@ export default async function StocktakeEntryPage({
     brandColor: r.brandColor,
     unit: r.unit,
     theoretical: r.stock,
+    noRecord: !hasRecord.has(r.productId),
     prevActual: prevMap.has(r.productId) ? prevMap.get(r.productId)! : null,
   }));
 

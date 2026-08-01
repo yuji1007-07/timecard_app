@@ -19,6 +19,7 @@ type Row = {
   brandColor: string;
   unit: string;
   theoretical: number; // 理論在庫
+  noRecord: boolean; // この店舗で入荷・棚卸の記録が一度も無い（＝0は「売り切れ」ではなく「未登録」）
   prevActual: number | null; // 既存棚卸の実数（あれば初期値）
 };
 
@@ -117,7 +118,17 @@ export function StocktakeForm({
                     <span className="align-middle">{r.name}</span>
                     {r.size && <span className="ml-1.5 rounded bg-navy/10 px-1.5 py-0.5 align-middle text-xs font-semibold text-navy">{r.size}</span>}
                   </td>
-                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{r.theoretical} {r.unit}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                    <span className="align-middle">{r.theoretical} {r.unit}</span>
+                    {r.noRecord && (
+                      <span
+                        title="この店舗では入荷（発注）も過去の棚卸も記録がないため0になっています。実物がある場合は数量を入力すれば正しい在庫になります。"
+                        className="ml-1.5 whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 align-middle text-[10px] font-medium text-amber-700"
+                      >
+                        入荷記録なし
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <input
                       name={`actual_${r.productId}`}
@@ -148,6 +159,13 @@ export function StocktakeForm({
       </div>
       <p className="text-xs text-muted-foreground">
         ※ 確定すると、入力した実在庫がこの時点の在庫基準になります。以降の発注・消耗はこの実数に積み上がります。
+      </p>
+      <p className="text-xs text-muted-foreground">
+        ※ <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">入荷記録なし</span>{" "}
+        は「この店舗で入荷（発注）を一度も記録していないので0になっている」商品です。売り切れとは違います。実物があれば数量を入力すれば正しい在庫になります。
+      </p>
+      <p className="text-xs text-muted-foreground">
+        ※ 数量が空欄の商品は在庫を変更しません（数え忘れで在庫が消えるのを防ぐため）。0にしたい場合は「0」と入力してください。
       </p>
     </form>
   );
