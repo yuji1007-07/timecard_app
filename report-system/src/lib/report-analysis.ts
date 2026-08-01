@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { computeKpiDiff, checkConsistency, checkKdiConsistency, type KpiDiffRow } from "@/lib/analysis";
 import { CONSISTENCY, label, KDI_STATUS, TREND } from "@/lib/constants";
 import { addMonthStr } from "@/lib/utils";
+import { splitDataIssues } from "@/lib/deadline-actions";
 
 export async function getReportAnalysis(reportId: string) {
   const report = await prisma.report.findUnique({
@@ -129,7 +130,12 @@ export async function getReportAnalysis(reportId: string) {
     for (const v of src?.kpiValues ?? []) lastMonthActual.set(v.kpiName, v.current);
   }
 
-  return { report, prev, sameMonthWeeklies, lastMonthActual, diffRows, progressResults, unmetKpiNames, kdiCheck };
+  // 週次: 現在有効な月次アクションプランの進捗を自動追跡する。
+  // 「有効な月次計画」＝この週が属する月より前で、直近に提出された月次報告（＝今月に向けて立てた計画）。
+  // 手入力は一切なく、今週のKPI（着地予測 or 実績）から達成度を計算する。
+  const monthlyPlan = await buildMonthlyPlanProgress(report, wm);
+
+  return { report, prev, sameMonthWeeklies, lastMonthActual, diffRows, progressResults, unmetKpiNames, kdiCheck, monthlyPlan };
 }
 
 export type ReportAnalysis = NonNullable<Awaited<ReturnType<typeof getReportAnalysis>>>;
@@ -168,3 +174,108 @@ export const CONSISTENCY_VARIANT: Record<string, "good" | "warn" | "bad" | "mute
   [CONSISTENCY.NONE]: "bad",
   [CONSISTENCY.UNKNOWN]: "muted",
 };
+
+// ===== 月次アクションプランの週次自動追跡 =====
+// 月次報告で立てた定量目標（ReportAction）とデッドラインを、
+// その後の各週次報告のKPIから自動で進捗判定する。現場の追加入力は不要。
+
+export type MonthlyPlanTarget = {
+  content: string;
+  kpiName: string;
+  baseValue: number | null; // 計画時点の値
+  targetValue: number; // 目標値
+  currentValue: number | null; // 今週時点の値（着地予測 or 実績）
+  progressPct: number | null; // 計画時点→目標 のうち何%進んだか
+  achieved: boolean;
+  goodDirection: "UP" | "DOWN";
+};
+
+export type MonthlyPlanDeadline = {
+  kpiName: string;
+  threshold: number | null;
+  currentValue: number | null;
+  breached: boolean; // デッドラインを下回っているか
+  actions: string[];
+};
+
+export type MonthlyPlan = {
+  sourceMonth: string; // 計画を立てた月次報告の対象月
+  sourceReportId: string;
+  targets: MonthlyPlanTarget[];
+  deadlines: MonthlyPlanDeadline[];
+} | null;
+
+type ReportForPlan = {
+  id: string;
+  reportType: string;
+  storeId: string;
+  departmentId: string | null;
+  kpiValues: { kpiName: string; current: number | null; forecast: number | null; kpiItem?: { goodDirection: string } | null }[];
+};
+
+async function buildMonthlyPlanProgress(report: ReportForPlan, wm: RegExpExecArray | null): Promise<MonthlyPlan> {
+  // 週次報告でのみ追跡する（月次報告そのものは計画を立てる側）
+  if (report.reportType !== "WEEKLY" || !wm) return null;
+  const thisMonth = wm[1];
+
+  const source = await prisma.report.findFirst({
+    where: {
+      storeId: report.storeId,
+      departmentId: report.departmentId,
+      reportType: "MONTHLY",
+      status: "SUBMITTED",
+      targetMonth: { lt: thisMonth },
+    },
+    // 同じ月に複数提出されている場合は最後に提出されたものを採用する
+    orderBy: [{ targetMonth: "desc" }, { submittedAt: "desc" }],
+    include: { actions: true },
+  });
+  if (!source?.targetMonth) return null;
+
+  // 今週時点の値: 週次は着地予測を優先（月末見込み＝月次目標と比較できる）
+  const valueOf = (name: string): number | null => {
+    const v = report.kpiValues.find((x) => x.kpiName === name);
+    if (!v) return null;
+    return v.forecast ?? v.current;
+  };
+  const dirOf = (name: string): "UP" | "DOWN" =>
+    report.kpiValues.find((x) => x.kpiName === name)?.kpiItem?.goodDirection === "DOWN" ? "DOWN" : "UP";
+
+  const targets: MonthlyPlanTarget[] = source.actions
+    .filter((a) => a.relatedKpiName && a.targetValue != null)
+    .map((a) => {
+      const kpiName = a.relatedKpiName!;
+      const targetValue = a.targetValue!;
+      const currentValue = valueOf(kpiName);
+      const goodDirection = dirOf(kpiName);
+      const base = a.baseValue;
+      let progressPct: number | null = null;
+      if (currentValue != null) {
+        if (base != null && targetValue !== base) {
+          progressPct = Math.round(((currentValue - base) / (targetValue - base)) * 100);
+        } else if (targetValue !== 0) {
+          progressPct = Math.round((currentValue / targetValue) * 100);
+        }
+      }
+      const achieved =
+        currentValue != null && (goodDirection === "UP" ? currentValue >= targetValue : currentValue <= targetValue);
+      return { content: a.content, kpiName, baseValue: base, targetValue, currentValue, progressPct, achieved, goodDirection };
+    });
+
+  const { deadlines: parsed } = splitDataIssues(source.dataIssues);
+  const deadlines: MonthlyPlanDeadline[] = parsed.map((d) => {
+    const threshold = d.threshold.trim() === "" ? null : Number(d.threshold);
+    const th = threshold != null && Number.isFinite(threshold) ? threshold : null;
+    const currentValue = valueOf(d.kpi);
+    return {
+      kpiName: d.kpi,
+      threshold: th,
+      currentValue,
+      breached: currentValue != null && th != null && currentValue < th,
+      actions: d.actions.filter((a) => a.trim()),
+    };
+  });
+
+  if (targets.length === 0 && deadlines.length === 0) return null;
+  return { sourceMonth: source.targetMonth, sourceReportId: source.id, targets, deadlines };
+}

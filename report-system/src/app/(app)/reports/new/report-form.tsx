@@ -13,6 +13,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { KDI_STATUS, FREQUENCIES, GOOD_DIRECTIONS, label } from "@/lib/constants";
 import { monthShort, memberCountKpiName } from "@/lib/utils";
+import {
+  type DeadlineEntry,
+  emptyDeadline,
+  padActions,
+  joinDataIssues,
+  splitDataIssues,
+  defaultDeadlineKpis,
+} from "@/lib/deadline-actions";
 
 const selectClass =
   "flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -67,7 +75,7 @@ type ReviewEntry = { kpi: string; text: string }; // 良かった点・悪かっ
 type TargetEntry = { kpi: string; after: string }; // 定量目標: 対象KPI（現在値は自動）＋変化後（手入力）
 type IssueEntry = { kpi: string; issue: string; action: string; targets: TargetEntry[] }; // 課題＋アクションプラン＋定量目標
 type NotDoneEntry = { what: string; why: string }; // 未実施: 何ができなかったか＋なぜできなかったか
-type ReviewState = { good: ReviewEntry[]; bad: ReviewEntry[]; done: string; issues: IssueEntry[]; notDone: NotDoneEntry[] };
+type ReviewState = { good: ReviewEntry[]; bad: ReviewEntry[]; done: string; issues: IssueEntry[]; notDone: NotDoneEntry[]; deadlines: DeadlineEntry[] };
 type ReviewStrings = { goodPoints: string; badPoints: string; dataIssues: string; doneThings: string; notDoneThings: string };
 
 const emptyEntry = (): ReviewEntry => ({ kpi: "", text: "" });
@@ -95,7 +103,8 @@ function serializeReview(r: ReviewState, landingOf: (kpi: string) => number | nu
     .filter((e) => e.what.trim() || e.why.trim())
     .map((e) => `${e.what}${e.why.trim() ? `\n→ できなかった理由: ${e.why}` : ""}`)
     .join("\n");
-  return { goodPoints: pts(r.good), badPoints: pts(r.bad), dataIssues: issues, doneThings: r.done, notDoneThings: notDone };
+  // デッドライン割れ時のアクションは同じ dataIssues 列に見出し付きで追記する
+  return { goodPoints: pts(r.good), badPoints: pts(r.bad), dataIssues: joinDataIssues(issues, r.deadlines), doneThings: r.done, notDoneThings: notDone };
 }
 
 // 編集時: 保存済みテキストを行単位で構造に戻す（旧形式の自由文は詳細欄にそのまま入る）
@@ -138,12 +147,15 @@ function parseReview(s: ReviewStrings | undefined | null): ReviewState {
     }
     return out.length ? out : [emptyNotDone()];
   };
+  // dataIssues は「課題ブロック＋デッドライン」の複合なので先に分解する
+  const { issues: issuesText, deadlines } = splitDataIssues(s?.dataIssues);
   return {
     good: parsePts(s?.goodPoints),
     bad: parsePts(s?.badPoints),
     done: s?.doneThings ?? "",
-    issues: parseIssues(s?.dataIssues),
+    issues: parseIssues(issuesText),
     notDone: parseNotDone(s?.notDoneThings),
+    deadlines: deadlines.map((d) => ({ ...d, actions: padActions(d.actions) })),
   };
 }
 type MonthlyState = {
@@ -303,7 +315,14 @@ export function ReportForm({
     });
   }
   const [inflow, setInflow] = useState<Record<string, string>>(() => Object.fromEntries(channels.map((c) => [c, initial?.inflow[c] ?? ""])));
-  const [review, setReview] = useState<ReviewState>(() => parseReview(initial?.review));
+  const [review, setReview] = useState<ReviewState>(() => {
+    const parsed = parseReview(initial?.review);
+    // 新規作成時は 初診数 / 成約数 / 成約率 の枠をあらかじめ用意しておく
+    if (parsed.deadlines.length === 0) {
+      parsed.deadlines = defaultDeadlineKpis(kpiItems.map((k) => k.name)).map((name) => emptyDeadline(name));
+    }
+    return parsed;
+  });
   const [monthly, setMonthly] = useState<MonthlyState>(initial?.monthly ?? EMPTY_MONTHLY);
   // KDI・来週見込みKPIの入力は廃止。編集時に過去KDIを消さないよう initial を保持だけする。
 
@@ -907,6 +926,78 @@ export function ReportForm({
               </div>
             ))}
             <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, issues: [...s.issues, emptyIssue()] }))}>＋ 課題を追加</Button>
+
+          {/* デッドライン割れ時のアクションプラン（上の施策とは別に、最低ラインを割った時の動きを先に決めておく） */}
+          <div className="space-y-2 rounded-md border-2 border-red-200 bg-red-50/50 p-3">
+            <div>
+              <div className="text-sm font-bold text-red-800">⚠ デッドライン割れ時のアクションプラン</div>
+              <p className="text-xs text-muted-foreground">
+                上のアクションプランは「予算達成・さらに伸ばすため」の施策です。こちらは
+                <span className="font-medium text-red-700">最低ライン（デッドライン）を下回ってしまった時に何をするか</span>
+                を先に決めておく欄です。初診数・成約数・成約率など新規獲得の指標に設定しておくと、割れた週にすぐ動けます。
+              </p>
+            </div>
+
+            {review.deadlines.length === 0 && (
+              <p className="text-xs text-muted-foreground">項目が未設定です。「＋ デッドライン項目を追加」から設定してください。</p>
+            )}
+
+            {review.deadlines.map((d, di) => {
+              const cur = landingOf(d.kpi);
+              const th = numOrNull(d.threshold);
+              const below = cur != null && th != null && cur < th;
+              const unit = visibleKpis.find((k) => k.name === d.kpi)?.unit ?? "";
+              const upd = (fn: (x: DeadlineEntry) => DeadlineEntry) =>
+                setReview((s) => ({ ...s, deadlines: s.deadlines.map((x, xi) => (xi === di ? fn(x) : x)) }));
+              return (
+                <div key={di} className={`space-y-2 rounded-md border bg-background p-3 ${below ? "border-red-400" : ""}`}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <select className={selectClass + " w-44 shrink-0"} value={d.kpi} onChange={(e) => upd((x) => ({ ...x, kpi: e.target.value }))}>
+                      <option value="">対象項目を選択</option>
+                      {visibleKpis.map((k) => (
+                        <option key={k.id} value={k.name}>{k.name}</option>
+                      ))}
+                    </select>
+                    <span className="text-xs font-medium text-red-700">デッドライン</span>
+                    <Input
+                      type="number"
+                      step="any"
+                      inputMode="decimal"
+                      className="w-28"
+                      value={d.threshold}
+                      onChange={(e) => upd((x) => ({ ...x, threshold: e.target.value }))}
+                      placeholder="最低ライン"
+                    />
+                    <span className="text-xs text-muted-foreground">{unit}</span>
+                    <span className="text-xs text-muted-foreground">
+                      今回の着地 <span className="tabular-nums font-medium">{cur != null ? cur.toLocaleString() : "—"}</span>
+                    </span>
+                    {below && <Badge variant="bad">下回っています</Badge>}
+                    <Button type="button" variant="ghost" size="sm" className="ml-auto text-destructive" onClick={() => setReview((s) => ({ ...s, deadlines: s.deadlines.filter((_, xi) => xi !== di) }))}>
+                      ✕
+                    </Button>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-xs font-medium text-red-700">下回った際に行うこと（3つ）</div>
+                    {padActions(d.actions).map((a, ai) => (
+                      <div key={ai} className="flex items-center gap-2">
+                        <span className="w-4 shrink-0 text-xs text-muted-foreground">{ai + 1}.</span>
+                        <Input
+                          value={a}
+                          onChange={(e) => upd((x) => ({ ...x, actions: padActions(x.actions).map((y, yi) => (yi === ai ? e.target.value : y)) }))}
+                          placeholder={ai === 0 ? "例: 既存患者への紹介依頼を全員に実施" : "実施すること"}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <Button type="button" variant="outline" size="sm" onClick={() => setReview((s) => ({ ...s, deadlines: [...s.deadlines, emptyDeadline()] }))}>
+              ＋ デッドライン項目を追加
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

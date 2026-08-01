@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { FeedbackPanel } from "./feedback-panel";
 import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES, memberCountKpiName } from "@/lib/utils";
+import { splitDataIssues } from "@/lib/deadline-actions";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 // カテゴリ見出しの色
@@ -54,7 +55,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
   const analysis = await getReportAnalysis(id);
   if (!analysis) notFound();
 
-  const { report } = analysis;
+  const { report, monthlyPlan } = analysis;
+  // dataIssues は「課題ブロック＋デッドライン割れ時のアクション」の複合テキスト
+  const ownIssues = splitDataIssues(report.dataIssues);
 
   // 権限チェック
   if (user.role !== "AREA_MANAGER") {
@@ -238,12 +241,117 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                 数値から見た課題と改善アクション
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-sm">
-              <div className="whitespace-pre-wrap leading-relaxed">{report.dataIssues}</div>
+            <CardContent className="space-y-3 text-sm">
+              {ownIssues.issues && <div className="whitespace-pre-wrap leading-relaxed">{ownIssues.issues}</div>}
+              {ownIssues.deadlines.length > 0 && (
+                <div className="space-y-2 rounded-md border-2 border-red-200 bg-red-50/60 p-3">
+                  <div className="text-sm font-bold text-red-800">⚠ デッドライン割れ時のアクションプラン</div>
+                  {ownIssues.deadlines.map((d, i) => (
+                    <div key={i} className="rounded-md border bg-background px-3 py-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{d.kpi}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          デッドライン <span className="tabular-nums font-semibold text-red-700">{d.threshold || "-"}</span> を下回ったら
+                        </span>
+                      </div>
+                      <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm">
+                        {d.actions.map((a, ai) => (
+                          <li key={ai}>{a}</li>
+                        ))}
+                      </ol>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
       </div>
+
+      {/* 月次アクションプランの週次自動追跡（週次報告のみ・入力不要） */}
+      {monthlyPlan && (
+        <Card className="mt-6 border-l-4 border-l-amber-400">
+          <CardHeader>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              月次アクションプランの進捗
+              <Badge variant="muted">自動追跡</Badge>
+            </CardTitle>
+            <p className="text-xs text-muted-foreground">
+              {monthShort(monthlyPlan.sourceMonth, Number(monthlyPlan.sourceMonth.slice(0, 4)))}の月次報告で立てた定量目標に対して、
+              今週時点（着地予測）でどこまで進んだかを自動計算しています。入力は不要です。
+              <Link href={`/reports/${monthlyPlan.sourceReportId}`} className="ml-1 text-navy underline">元の月次報告を見る</Link>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {monthlyPlan.targets.length > 0 && (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>対象KPI / アクション</TableHead>
+                    <TableHead className="text-right">計画時</TableHead>
+                    <TableHead className="text-right">目標</TableHead>
+                    <TableHead className="text-right">今週着地</TableHead>
+                    <TableHead className="text-right">進捗</TableHead>
+                    <TableHead>判定</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {monthlyPlan.targets.map((t, i) => {
+                    const pct = t.progressPct;
+                    const late = !t.achieved && pct != null && pct < 70;
+                    return (
+                      <TableRow key={i}>
+                        <TableCell>
+                          <div className="font-medium">{t.kpiName}</div>
+                          <div className="text-xs text-muted-foreground">{t.content}</div>
+                        </TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(t.baseValue)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-medium">{fmt(t.targetValue)}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">{fmt(t.currentValue)}</TableCell>
+                        <TableCell className={`text-right tabular-nums ${t.achieved ? "text-emerald-600" : late ? "text-red-600" : ""}`}>
+                          {pct == null ? "—" : `${pct}%`}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={t.achieved ? "good" : late ? "bad" : "warn"}>
+                            {t.achieved ? "達成" : late ? "遅れ" : "進行中"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+
+            {monthlyPlan.deadlines.length > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-semibold">デッドラインの状況</div>
+                {monthlyPlan.deadlines.map((d, i) => (
+                  <div key={i} className={`rounded-md border px-3 py-2 ${d.breached ? "border-red-300 bg-red-50/70" : "bg-muted/20"}`}>
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <Badge variant="outline">{d.kpiName}</Badge>
+                      <span className="tabular-nums">
+                        デッドライン {fmt(d.threshold)} / 今週着地 <span className="font-semibold">{fmt(d.currentValue)}</span>
+                      </span>
+                      <Badge variant={d.breached ? "bad" : "good"}>{d.breached ? "下回っています" : "クリア"}</Badge>
+                    </div>
+                    {d.breached && d.actions.length > 0 && (
+                      <div className="mt-1.5">
+                        <div className="text-xs font-medium text-red-800">今すぐ実施するアクション</div>
+                        <ol className="mt-0.5 list-decimal space-y-0.5 pl-5 text-sm">
+                          {d.actions.map((a, ai) => (
+                            <li key={ai}>{a}</li>
+                          ))}
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* 今回KDI（過去データのみ） / 改善アクションの目標 */}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
