@@ -60,14 +60,23 @@ function matchRows(rows: PdfRow[], kpis: KpiItemDef[]): { row: PdfRow; kpi: KpiI
 // 列見出しから取り込み先を推測。
 // シートの運用: 「月末」列は週次では着地予想、月次では確定した実績が入る。
 // 「7月」など当月の列は前月に立てた予測＝予算（週次では目標）、翌月以降は着地予想。
+// 「8月予算」「9月着地」のように月＋種別が書かれている列は、その種別に振り分ける。
 function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forwardMonths: string[]): string {
   const h = norm(header);
-  if (h.includes("月末")) return isMonthly ? "current" : "forecast";
+  const isBudget = /予算|目標/.test(h);
+  const isForecast = /着地|予測|見込/.test(h);
   const hasMonth = (n: number) => new RegExp(`(?:^|[^0-9])${n}月`).test(h);
-  if (curMonthNum > 0 && hasMonth(curMonthNum)) return "target";
-  if (!isMonthly) return "";
-  for (const m of forwardMonths) {
-    if (hasMonth(Number(m.slice(5, 7)))) return `pf:${m}`;
+
+  // 翌月以降の月が書かれている列は、3ヶ月予測（②-2）に振り分ける
+  if (isMonthly) {
+    for (const m of forwardMonths) {
+      if (hasMonth(Number(m.slice(5, 7)))) return isBudget ? `pb:${m}` : `pf:${m}`;
+    }
+  }
+  if (h.includes("月末")) return isMonthly ? "current" : "forecast";
+  if (curMonthNum > 0 && hasMonth(curMonthNum)) {
+    if (isMonthly && isForecast) return "forecast";
+    return "target";
   }
   return "";
 }
@@ -111,23 +120,24 @@ export function PdfImportCard({
   const curMonthNum = isMonthly ? Number(period.slice(5, 7)) || 0 : new Date().getMonth() + 1;
   const curLabel = isMonthly ? (/^\d{4}-\d{2}$/.test(period) ? monthShort(period, baseYear) : "当月") : "今週";
 
-  async function handleFile(f: File) {
+  async function handleFiles(fs: File[]) {
     setError(null);
     setApplied(null);
     setData(null);
     setShowAdvanced(false);
-    if (f.size > 10 * 1024 * 1024) {
-      setError("ファイルが大きすぎます（10MBまで）。");
+    if (fs.length === 0) return;
+    if (fs.some((f) => f.size > 10 * 1024 * 1024)) {
+      setError("ファイルが大きすぎます（1件10MBまで）。");
       return;
     }
     setBusy(true);
     try {
       const fd = new FormData();
-      fd.append("file", f);
+      for (const f of fs) fd.append("file", f);
       const res = await fetch("/api/parse-report-pdf", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok || !json.ok) {
-        setError(json.error || "PDFの解析に失敗しました。");
+        setError(json.error || "ファイルの解析に失敗しました。");
         return;
       }
       const cols: PdfCol[] = json.columns;
@@ -155,6 +165,36 @@ export function PdfImportCard({
     });
   }, [data, isMonthly]);
   const currentWeekColIndex = Object.entries(colMap).find(([, r]) => r === "current")?.[0] ?? null;
+
+  // 月次: 「当月の予算/実績」＋「来月以降3ヶ月の予算/着地予想」の割り当て先スロット
+  const monthSlots = useMemo(() => {
+    if (!isMonthly) return [];
+    const slots = [
+      { role: "target", label: `${curLabel} の予算` },
+      { role: "current", label: `${curLabel} の実績` },
+    ];
+    for (const m of forwardMonths) {
+      const ml = monthShort(m, baseYear);
+      slots.push({ role: `pb:${m}`, label: `${ml} の予算` });
+      slots.push({ role: `pf:${m}`, label: `${ml} の着地予想` });
+    }
+    return slots;
+  }, [isMonthly, curLabel, forwardMonths, baseYear]);
+
+  const colOfRole = (role: string) => Object.entries(colMap).find(([, r]) => r === role)?.[0] ?? null;
+
+  // 1つの列は1つの役割にしか割り当てない（付け替えたら元の割り当ては外す）
+  function assignRole(role: string, index: number | null) {
+    setColMap((m) => {
+      const next = { ...m };
+      for (const [ci, r] of Object.entries(next)) {
+        if (r === role) delete next[ci];
+      }
+      if (index != null) next[String(index)] = role;
+      return next;
+    });
+    setApplied(null);
+  }
 
   function pickWeekCol(index: number) {
     setColMap((m) => {
@@ -231,13 +271,14 @@ export function PdfImportCard({
   return (
     <Card className="border-dashed border-navy/40">
       <CardHeader>
-        <CardTitle>📄 いつものシート（PDF）から自動入力</CardTitle>
+        <CardTitle>📄 いつものシート（PDF・画像）から自動入力</CardTitle>
         <div className="text-sm text-muted-foreground">
           手入力しなくても、いつものスプレッドシートから数値を取り込めます。
           <ol className="mt-1 list-decimal space-y-0.5 pl-5">
-            <li>スプレッドシートをPDFで保存（ファイル → ダウンロード → PDF）</li>
-            <li>下の「ファイルを選択」でそのPDFを選ぶ</li>
+            <li>スプレッドシートをPDFで保存（ファイル → ダウンロード → PDF）、または画面のスクリーンショットを撮る</li>
+            <li>下の「ファイルを選択」でそのPDF／画像を選ぶ（画像は複数枚まとめて選べます）</li>
             {!isMonthly && <li>「今週の数字はどの列？」で今週の列をタップ</li>}
+            {isMonthly && <li>「どの列がどの月？」で当月と来月以降3ヶ月ぶんの列をタップ</li>}
             <li>内容を確認して「反映する」を押す → あとは数値をチェックして提出するだけ</li>
           </ol>
         </div>
@@ -247,15 +288,13 @@ export function PdfImportCard({
           <input
             ref={fileRef}
             type="file"
-            accept=".pdf,application/pdf"
+            accept=".pdf,application/pdf,image/*"
+            multiple
             className="text-sm"
             disabled={busy}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) handleFile(f);
-            }}
+            onChange={(e) => handleFiles(Array.from(e.target.files ?? []))}
           />
-          {busy && <span className="text-sm text-muted-foreground">読み取り中...</span>}
+          {busy && <span className="text-sm text-muted-foreground">読み取り中...（画像は少し時間がかかります）</span>}
         </div>
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
@@ -299,6 +338,44 @@ export function PdfImportCard({
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* 月次: 当月＋来月以降3ヶ月ぶんの列を割り当てる */}
+            {isMonthly && data.columns.length > 0 && (
+              <div className="space-y-2 rounded-lg border-2 border-navy/20 bg-navy/5 p-3">
+                <p className="text-sm font-bold">👉 どの列がどの月？（タップで選択・3ヶ月先まで取り込めます）</p>
+                {monthSlots.map((slot) => (
+                  <div key={slot.role} className="flex flex-wrap items-center gap-2">
+                    <span className="w-40 shrink-0 text-xs font-medium">{slot.label}</span>
+                    <div className="flex flex-wrap gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => assignRole(slot.role, null)}
+                        className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                          colOfRole(slot.role) == null ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
+                        }`}
+                      >
+                        なし
+                      </button>
+                      {data.columns.map((c) => {
+                        const selected = colOfRole(slot.role) === String(c.index);
+                        return (
+                          <button
+                            key={c.index}
+                            type="button"
+                            onClick={() => assignRole(slot.role, c.index)}
+                            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                              selected ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
+                            }`}
+                          >
+                            {headerLabel(c)}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -410,7 +487,8 @@ export function PdfImportCard({
         )}
 
         <p className="text-[11px] text-muted-foreground">
-          ※ スプレッドシートから直接PDF出力したものが対象です（写真・スキャンは読み取れません）。反映後は必ず数値を確認してから提出してください。
+          ※ 一番正確なのはスプレッドシートから直接PDF出力したものです。画像（スクリーンショット・写真）はAIで読み取るため、
+          表全体が写った明るい画像をお使いください。いずれの場合も、反映後は必ず数値を確認してから提出してください。
         </p>
       </CardContent>
     </Card>

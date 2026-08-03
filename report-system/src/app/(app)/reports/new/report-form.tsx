@@ -206,6 +206,7 @@ export function ReportForm({
   forwardMonths = [],
   kpiCarry = {},
   projCarry = {},
+  carryFromMonth = null,
 }: {
   storeId: string;
   departmentId: string | null;
@@ -226,6 +227,7 @@ export function ReportForm({
   forwardMonths?: string[];
   kpiCarry?: Record<string, { budget: string; forecast: string }>;
   projCarry?: ProjMap;
+  carryFromMonth?: string | null; // 取り込み元になった月次報告の対象月（YYYY-MM）
 }) {
   const isMonthly = reportType === "MONTHLY";
   const baseYear = Number((period.match(/^(\d{4})/) || [])[1]) || new Date().getFullYear();
@@ -262,14 +264,18 @@ export function ReportForm({
     }
     return out;
   });
-  // 「前月から取り込む」：前月が立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
+  // 「前月から取り込む」：過去に立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
+  const [carryMsg, setCarryMsg] = useState<string | null>(null);
   function applyCarry() {
+    let n = 0;
     setKpi((prev) => {
       const next = { ...prev };
       for (const k of kpiItems) {
         const c = kpiCarry[k.name];
         if (!c) continue;
+        if (!c.budget && !c.forecast) continue;
         next[k.id] = { ...next[k.id], target: c.budget || next[k.id].target, forecast: c.forecast || next[k.id].forecast };
+        n++;
       }
       return next;
     });
@@ -279,13 +285,18 @@ export function ReportForm({
         next[k.name] = { ...(next[k.name] ?? {}) };
         for (const mo of forwardMonths) {
           const v = projCarry[k.name]?.[mo];
-          if (v && (v.budget || v.forecast)) next[k.name][mo] = { budget: v.budget, forecast: v.forecast };
+          if (v && (v.budget || v.forecast)) {
+            next[k.name][mo] = { budget: v.budget, forecast: v.forecast };
+            n++;
+          }
         }
       }
       return next;
     });
+    setCarryMsg(n > 0 ? `${carryLabel}の予測から${n}件を取り込みました。` : "取り込める予測がありませんでした。");
   }
   const hasCarry = Object.keys(kpiCarry).length > 0 || Object.keys(projCarry).length > 0;
+  const carryLabel = carryFromMonth && /^\d{4}-\d{2}$/.test(carryFromMonth) ? monthShort(carryFromMonth, baseYear) : "前月";
   // PDF自動入力の反映：読み取った数値をKPI欄と来月以降の予測欄に流し込む
   function applyPdfImport(kpiUpd: PdfKpiUpdates, projUpd: PdfProjUpdates) {
     setKpi((prev) => {
@@ -523,7 +534,7 @@ export function ReportForm({
             <div className="flex flex-wrap items-center gap-2">
               {isMonthly && hasCarry && !editVisibility && (
                 <Button type="button" variant="outline" size="sm" onClick={applyCarry}>
-                  前月から取り込む
+                  {carryLabel}の予測から取り込む
                 </Button>
               )}
               {hasMonthStart && !editVisibility && (
@@ -686,12 +697,18 @@ export function ReportForm({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <CardTitle>②-2 来月以降の予測（{forwardMonths.length}ヶ月先まで）</CardTitle>
               {hasCarry && (
-                <Button type="button" variant="outline" size="sm" onClick={applyCarry}>前月から取り込む</Button>
+                <Button type="button" variant="outline" size="sm" onClick={applyCarry}>{carryLabel}の予測から取り込む</Button>
               )}
             </div>
             <p className="text-sm text-muted-foreground">
               月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の「予算」と「着地予想」を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
             </p>
+            {carryMsg && <p className="text-sm font-medium text-emerald-700">{carryMsg}</p>}
+            {!hasCarry && (
+              <p className="text-xs text-muted-foreground">
+                ※ 過去の月次報告に「この月ぶんの予測」が無いため取り込みボタンは出ません。上の「シート／画像から自動入力」で3ヶ月分をまとめて取り込めます。
+              </p>
+            )}
           </CardHeader>
           <CardContent className="overflow-x-auto">
             <div style={{ minWidth: 560 + forwardMonths.length * 150 }}>

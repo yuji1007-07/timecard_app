@@ -74,7 +74,38 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       clusters.push({ center: e, count: 1 });
     }
   }
+  // 同じ列でも桁数（3,300,000 と 24）で右端がずれると別クラスタに割れてしまう。
+  // 実際の列は概ね等間隔なので、隣との間隔が「間隔の中央値の半分」に満たないものは同じ列として結合する。
+  if (clusters.length > 2) {
+    for (let pass = 0; pass < 3; pass++) {
+      const gaps = clusters.slice(1).map((c, i) => c.center - clusters[i].center);
+      const sortedGaps = [...gaps].sort((a, b) => a - b);
+      const median = sortedGaps[Math.floor(sortedGaps.length / 2)];
+      if (!median || median <= 0) break;
+      const merged: typeof clusters = [];
+      let changed = false;
+      for (const c of clusters) {
+        const last = merged[merged.length - 1];
+        if (last && c.center - last.center < median * 0.5) {
+          last.center = (last.center * last.count + c.center * c.count) / (last.count + c.count);
+          last.count += c.count;
+          changed = true;
+        } else {
+          merged.push({ ...c });
+        }
+      }
+      clusters.length = 0;
+      clusters.push(...merged);
+      if (!changed) break;
+    }
+  }
+
   const colCenters = clusters.map((c) => c.center);
+  // 結合後は列幅が広がるので、値の割り当て許容差も列間隔に合わせて広げる
+  const colSpan =
+    colCenters.length > 1
+      ? Math.max(COL_TOL, Math.min(...colCenters.slice(1).map((c, i) => c - colCenters[i])) * 0.6)
+      : COL_TOL * 1.5;
   const colIndexOf = (rightEdge: number): number => {
     let best = -1;
     let bestDist = Infinity;
@@ -82,12 +113,17 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       const d = Math.abs(c - rightEdge);
       if (d < bestDist) { bestDist = d; best = i; }
     });
-    return bestDist <= COL_TOL * 1.5 ? best : -1;
+    return bestDist <= colSpan ? best : -1;
   };
-  // ヘッダー文字（左寄せ）は「中心xより右で最初に来る列」に割り当てる
+  // ヘッダー文字は最も近い列に寄せる（左寄せ見出しも拾えるよう、右側の列をやや優先）
   const headerColOf = (centerX: number): number => {
-    for (let i = 0; i < colCenters.length; i++) if (colCenters[i] >= centerX) return i;
-    return colCenters.length - 1;
+    let best = 0;
+    let bestDist = Infinity;
+    colCenters.forEach((c, i) => {
+      const d = c >= centerX ? c - centerX : (centerX - c) * 1.6;
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    return best;
   };
 
   // 数値ゾーンの開始x（ラベルとの境界）

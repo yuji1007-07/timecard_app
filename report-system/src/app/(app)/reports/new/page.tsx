@@ -107,9 +107,16 @@ async function ResolvedForm({
         ...(type === "WEEKLY" ? { targetWeek: period } : { targetMonth: period }),
       },
     }),
+    // 「前回」は提出日ではなく対象期間で選ぶ。提出が前後しても、必ず対象より前の直近の報告になる。
     prisma.report.findFirst({
-      where: { storeId, departmentId: departmentId ?? null, reportType: type, status: "SUBMITTED" },
-      orderBy: { submittedAt: "desc" },
+      where: {
+        storeId,
+        departmentId: departmentId ?? null,
+        reportType: type,
+        status: "SUBMITTED",
+        ...(type === "WEEKLY" ? { targetWeek: { lt: period } } : { targetMonth: { lt: period } }),
+      },
+      orderBy: type === "WEEKLY" ? { targetWeek: "desc" } : { targetMonth: "desc" },
       include: { kpiValues: true, actions: true, projections: true },
     }),
     prisma.report.findFirst({
@@ -158,20 +165,44 @@ async function ResolvedForm({
     hiddenKpis = [];
   }
 
-  // 月次：来月以降3ヶ月＋前月予測の引き継ぎ
+  // 月次：来月以降3ヶ月＋過去に立てた予測の引き継ぎ
   const forwardMonths = type === "MONTHLY" ? [1, 2, 3].map((n) => addMonthStr(period, n)) : [];
   const kpiCarry: Record<string, { budget: string; forecast: string }> = {};
   const projCarry: Record<string, Record<string, { budget: string; forecast: string }>> = {};
+  let carryFromMonth: string | null = null;
   if (type === "MONTHLY") {
-    const sv = (n: number | null) => (n != null ? String(n) : "");
-    for (const p of prevReport?.projections ?? []) {
-      if (p.targetMonth === period) {
-        // 前月が立てた「今月の予測」→ 今月の予算・着地予測
-        kpiCarry[p.kpiName] = { budget: sv(p.budget), forecast: sv(p.forecast) };
-      }
-      if (forwardMonths.includes(p.targetMonth)) {
-        projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
-        projCarry[p.kpiName][p.targetMonth] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+    // 前月が未提出でも取り込めるように、対象月より前の月次報告を新しい順に遡り、
+    // 「対象月ぶんの予測」を持っている最初の報告を取り込み元にする。
+    const candidates = await prisma.report.findMany({
+      where: {
+        storeId,
+        departmentId: departmentId ?? null,
+        reportType: "MONTHLY",
+        status: "SUBMITTED",
+        targetMonth: { lt: period },
+      },
+      orderBy: { targetMonth: "desc" },
+      take: 6,
+      select: { targetMonth: true, projections: true },
+    });
+    const wanted = [period, ...forwardMonths];
+    const source =
+      candidates.find((c) => c.projections.some((p) => p.targetMonth === period)) ??
+      candidates.find((c) => c.projections.some((p) => wanted.includes(p.targetMonth))) ??
+      null;
+
+    if (source) {
+      carryFromMonth = source.targetMonth;
+      const sv = (n: number | null) => (n != null ? String(n) : "");
+      for (const p of source.projections) {
+        if (p.targetMonth === period) {
+          // 過去に立てた「対象月の予測」→ 対象月の予算・着地予測
+          kpiCarry[p.kpiName] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+        }
+        if (forwardMonths.includes(p.targetMonth)) {
+          projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
+          projCarry[p.kpiName][p.targetMonth] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+        }
       }
     }
   }
@@ -226,6 +257,7 @@ async function ResolvedForm({
         forwardMonths={forwardMonths}
         kpiCarry={kpiCarry}
         projCarry={projCarry}
+        carryFromMonth={carryFromMonth}
       />
     </div>
   );
