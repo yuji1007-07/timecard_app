@@ -115,15 +115,14 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     });
     return bestDist <= colSpan ? best : -1;
   };
-  // ヘッダー文字は最も近い列に寄せる（左寄せ見出しも拾えるよう、右側の列をやや優先）
-  const headerColOf = (centerX: number): number => {
-    let best = 0;
-    let bestDist = Infinity;
-    colCenters.forEach((c, i) => {
-      const d = c >= centerX ? c - centerX : (centerX - c) * 1.6;
-      if (d < bestDist) { bestDist = d; best = i; }
-    });
-    return best;
+  // 数値は右揃えなので、列 i が占める帯は「列 i-1 の右端 〜 列 i の右端」。
+  // 見出し文字はその帯の中に置かれるため、文字の左端がどの帯に入るかで列を決める。
+  // （中心や最近傍で判定すると、桁数の違いで1列ずれて別の月の見出しになってしまう）
+  const headerColOf = (leftX: number): number => {
+    for (let i = 0; i < colCenters.length; i++) {
+      if (leftX <= colCenters[i] + COL_TOL) return i;
+    }
+    return colCenters.length - 1;
   };
 
   // 数値ゾーンの開始x（ラベルとの境界）
@@ -163,7 +162,7 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       // ヘッダー行（列見出し）: 数値より文字が多い行。列名の材料として回収する
       if (textItems.length > numericItems.length) {
         for (const it of valueItems) {
-          const ci = headerColOf(it.x + it.w / 2);
+          const ci = headerColOf(it.x);
           if (ci >= 0) headerParts[ci].push(it.str.trim());
         }
         continue;

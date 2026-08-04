@@ -85,9 +85,10 @@ function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forw
 
 // 見出しの表示用（スペース除去・長すぎは省略）
 function headerLabel(c: PdfCol): string {
-  const h = c.header.replace(/\s+/g, "");
-  if (!h) return `列${c.index + 1}`;
-  return h.length > 12 ? `${h.slice(0, 12)}…` : h;
+  // 見出しが崩れて記号だけ（①②③ など）になることがあるので、その場合は列番号で示す
+  const h = c.header.replace(/\s+/g, "").replace(/^[①-⑳*※・\-]+/, "");
+  if (!h) return `左から${c.index + 1}列目`;
+  return h.length > 10 ? `${h.slice(0, 10)}…` : h;
 }
 
 export function PdfImportCard({
@@ -143,12 +144,29 @@ export function PdfImportCard({
         return;
       }
       const cols: PdfCol[] = json.columns;
-      setData({ columns: cols, rows: json.rows });
+      const rows: PdfRow[] = json.rows;
+      setData({ columns: cols, rows });
       // 列の取り込み先を自動判定（下の「上級者向け」で変更可能）
       const init: Record<string, string> = {};
       for (const c of cols) {
         const g = guessRole(c.header, isMonthly, curMonthNum, forwardMonths);
         if (g) init[String(c.index)] = g;
+      }
+
+      // 月次シートは見出しが結合セルで崩れやすく、月の判定に失敗することがある。
+      // その場合は並び順で補う：[当月予算][当月実績][差異][翌月][翌々月][3ヶ月後] という構成が多いので、
+      // 「数値が入っている列の右から3つ」を翌月以降に、左の2つを当月の予算・実績に割り当てる。
+      if (isMonthly && forwardMonths.length > 0 && !Object.values(init).some((r) => r.startsWith("pb:") || r.startsWith("pf:"))) {
+        const withData = cols.filter((c) => rows.some((r) => r.cells[String(c.index)] != null));
+        if (withData.length >= forwardMonths.length) {
+          const tail = withData.slice(-forwardMonths.length);
+          forwardMonths.forEach((m, i) => { init[String(tail[i].index)] = `pb:${m}`; });
+          const head = withData.slice(0, withData.length - forwardMonths.length);
+          if (head.length >= 2) {
+            if (!Object.values(init).includes("target")) init[String(head[0].index)] = "target";
+            if (!Object.values(init).includes("current")) init[String(head[1].index)] = "current";
+          }
+        }
       }
       setColMap(init);
     } catch {
@@ -172,8 +190,8 @@ export function PdfImportCard({
   const monthSlots = useMemo(() => {
     if (!isMonthly) return [];
     const slots = [
-      { role: "target", label: `${curLabel} の予算` },
-      { role: "current", label: `${curLabel} の実績` },
+      { role: "target", label: `${curLabel}（当月）の予算` },
+      { role: "current", label: `${curLabel}（当月）の実績` },
     ];
     // 来月以降は「予算」だけ割り当てる（着地予想は予算と同じ扱い。違う月だけフォームで直す運用）
     for (const m of forwardMonths) {
@@ -181,6 +199,18 @@ export function PdfImportCard({
     }
     return slots;
   }, [isMonthly, curLabel, forwardMonths, baseYear]);
+
+  // 列選択の目印にする行。「見出しが崩れていても数値を見れば分かる」ように、
+  // 値が一番多く入っている（＝どの列にも数字がある）行を代表として使う。
+  const sampleRow = useMemo(() => {
+    if (!data) return null;
+    let best: PdfRow | null = null;
+    for (const r of data.rows) {
+      if (!best || Object.keys(r.cells).length > Object.keys(best.cells).length) best = r;
+    }
+    return best;
+  }, [data]);
+  const sampleRowLabel = sampleRow ? `「${sampleRow.label}」` : null;
 
   const colOfRole = (role: string) => Object.entries(colMap).find(([, r]) => r === role)?.[0] ?? null;
 
@@ -345,32 +375,38 @@ export function PdfImportCard({
             {/* 月次: 当月＋来月以降3ヶ月ぶんの列を割り当てる */}
             {isMonthly && data.columns.length > 0 && (
               <div className="space-y-2 rounded-lg border-2 border-navy/20 bg-navy/5 p-3">
-                <p className="text-sm font-bold">👉 どの列がどの月？（タップで選択・3ヶ月先まで取り込めます）</p>
+                <p className="text-sm font-bold">👉 どの列がどの月？（行ごとに、当てはまる列を1つタップ）</p>
+                <p className="text-xs text-muted-foreground">
+                  シートの見出しは崩れて読み取られることがあります。<span className="font-medium">ボタンの下に出ている数値</span>（{sampleRowLabel ?? "先頭の項目"}の値）を見て、
+                  合っている列を選んでください。使わない列は選ばなくてOKです。
+                </p>
                 {monthSlots.map((slot) => (
-                  <div key={slot.role} className="flex flex-wrap items-center gap-2">
-                    <span className="w-40 shrink-0 text-xs font-medium">{slot.label}</span>
+                  <div key={slot.role} className="flex flex-wrap items-start gap-2 border-t pt-2 first:border-0 first:pt-0">
+                    <span className="w-32 shrink-0 pt-1.5 text-xs font-medium">{slot.label}</span>
                     <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
                         onClick={() => assignRole(slot.role, null)}
-                        className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                        className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                           colOfRole(slot.role) == null ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
                         }`}
                       >
-                        なし
+                        使わない
                       </button>
                       {data.columns.map((c) => {
                         const selected = colOfRole(slot.role) === String(c.index);
+                        const sample = sampleRow?.cells[String(c.index)];
                         return (
                           <button
                             key={c.index}
                             type="button"
                             onClick={() => assignRole(slot.role, c.index)}
-                            className={`rounded-full border px-3 py-1 text-xs transition-colors ${
+                            className={`rounded-md border px-3 py-1 text-xs leading-tight transition-colors ${
                               selected ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
                             }`}
                           >
-                            {headerLabel(c)}
+                            <div className={selected ? "" : "text-muted-foreground"}>{headerLabel(c)}</div>
+                            <div className="font-bold tabular-nums">{sample != null ? sample.toLocaleString() : "—"}</div>
                           </button>
                         );
                       })}
