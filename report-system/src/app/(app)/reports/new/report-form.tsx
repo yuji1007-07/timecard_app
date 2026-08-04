@@ -272,8 +272,6 @@ export function ReportForm({
     }
     return out;
   });
-  // 3ヶ月予測は「予算」だけ入力するのが基本。既定はOFFで、必要な時だけ着地予想欄を開く。
-  const [showProjForecast, setShowProjForecast] = useState(false);
   // 「前月から取り込む」：過去に立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
   const [carryMsg, setCarryMsg] = useState<string | null>(null);
   function applyCarry() {
@@ -483,10 +481,8 @@ export function ReportForm({
               kpiName: k.name,
               targetMonth: m,
               budget: numOrNull(proj[k.name]?.[m]?.budget ?? ""),
-              // 着地予想は「違う月がある」をONにした時だけ使う。OFF（既定）や未入力なら予算と同じ値で保存する。
-              forecast:
-                (showProjForecast ? numOrNull(proj[k.name]?.[m]?.forecast ?? "") : null) ??
-                numOrNull(proj[k.name]?.[m]?.budget ?? ""),
+              // 予測が未入力なら予算と同じ数値で保存する
+              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? "") ?? numOrNull(proj[k.name]?.[m]?.budget ?? ""),
             }))
           )
         : [],
@@ -714,13 +710,14 @@ export function ReportForm({
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の「予算」を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
-              着地予想は予算と同じものとして扱います。
+              月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の
+              <span className="font-medium">「予算」と「予測」の両方</span>を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
             </p>
-            <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
-              <input type="checkbox" className="h-4 w-4" checked={showProjForecast} onChange={(e) => setShowProjForecast(e.target.checked)} />
-              <span>予算と着地予想が違う月がある（着地予想も入力する）</span>
-            </label>
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-navy">予算</span>＝事前に決めた目標の数値　／　
+              <span className="font-medium text-navy">予測</span>＝現実的に届く見込みの数値。
+              予測が空欄の場合は予算と同じ数値として保存します。
+            </p>
             {carryMsg && <p className="text-sm font-medium text-emerald-700">{carryMsg}</p>}
             {!hasCarry && (
               <p className="text-xs text-muted-foreground">
@@ -733,7 +730,7 @@ export function ReportForm({
               <div className="grid gap-2 border-b pb-2 text-xs font-medium text-muted-foreground" style={{ gridTemplateColumns: `1.6fr ${forwardMonths.map(() => "1fr").join(" ")}` }}>
                 <div>KPI名</div>
                 {forwardMonths.map((m) => (
-                  <div key={m} className="text-center">{monthShort(m, baseYear)} の{showProjForecast ? "予測" : "予算"}</div>
+                  <div key={m} className="text-center">{monthShort(m, baseYear)}</div>
                 ))}
               </div>
               {groupedVisible.map((g, gi) => (
@@ -744,17 +741,15 @@ export function ReportForm({
                       <div className="text-sm font-medium">{k.name}<span className="ml-1 text-xs text-muted-foreground">({k.unit})</span></div>
                       {forwardMonths.map((m) => (
                         <div key={m} className="space-y-1">
+                          {/* 予算（事前に決めた数値）を上、予測（現実的な見込み）を下に */}
                           <div className="flex items-center gap-1">
-                            {showProjForecast && <span className="w-8 shrink-0 text-[10px] text-muted-foreground">予算</span>}
+                            <span className="w-8 shrink-0 text-[10px] font-medium text-muted-foreground">予算</span>
                             <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.budget ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), budget: e.target.value } } }))} placeholder="予算" />
                           </div>
-                          {/* 着地予想は「予算と違う月がある」場合だけ入力する。未入力なら保存時に予算と同じ値になる */}
-                          {showProjForecast && (
-                            <div className="flex items-center gap-1">
-                              <span className="w-8 shrink-0 text-[10px] text-muted-foreground">着地</span>
-                              <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="予算と同じなら空欄" />
-                            </div>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <span className="w-8 shrink-0 text-[10px] font-medium text-muted-foreground">予測</span>
+                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="予測" />
+                          </div>
                         </div>
                       ))}
                     </div>

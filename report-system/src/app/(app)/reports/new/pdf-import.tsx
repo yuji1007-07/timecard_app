@@ -193,9 +193,11 @@ export function PdfImportCard({
       { role: "target", label: `${curLabel}（当月）の予算` },
       { role: "current", label: `${curLabel}（当月）の実績` },
     ];
-    // 来月以降は「予算」だけ割り当てる（着地予想は予算と同じ扱い。違う月だけフォームで直す運用）
+    // 来月以降は「予算」と「予測」。シートに予測列が無ければ予算だけ選べばよい（予測は予算と同じ扱い）
     for (const m of forwardMonths) {
-      slots.push({ role: `pb:${m}`, label: `${monthShort(m, baseYear)} の予算` });
+      const ml = monthShort(m, baseYear);
+      slots.push({ role: `pb:${m}`, label: `${ml} の予算` });
+      slots.push({ role: `pf:${m}`, label: `${ml} の予測` });
     }
     return slots;
   }, [isMonthly, curLabel, forwardMonths, baseYear]);
@@ -284,7 +286,7 @@ export function PdfImportCard({
     if (role === "forecast") return "着地予測";
     const m = role.slice(3);
     const ml = /^\d{4}-\d{2}$/.test(m) ? monthShort(m, baseYear) : m;
-    return role.startsWith("pb:") ? `${ml}の予算` : `${ml}の着地予想`;
+    return role.startsWith("pb:") ? `${ml}の予算` : `${ml}の予測`;
   };
   const roleOrder = (role: string) => (role === "target" ? 0 : role === "current" ? 1 : role === "forecast" ? 2 : 10);
 
