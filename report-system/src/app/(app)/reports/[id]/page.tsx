@@ -27,6 +27,7 @@ const KPI_CATEGORY_COLORS = [
 
 type KpiValueRow = {
   id: string;
+  kpiItemId: string;
   kpiName: string;
   unit: string | null;
   target: number | null;
@@ -175,7 +176,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                     {memberCountNameByCategory.get(g.category) && (() => {
                       const mcName = memberCountNameByCategory.get(g.category)!;
                       const cur = kpiCurrentByName.get(mcName) ?? null;
-                      const lastM = analysis.lastMonthActual.get(mcName) ?? null;
+                      const lastM = analysis.lastMonthActual.get(mcName) ?? null; // 会員数は名前で特定するためそのまま
                       const mcUnit = report.kpiValues.find((x) => x.kpiName === mcName)?.unit ?? null;
                       return (
                         <TableRow className="bg-muted/20">
@@ -198,7 +199,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                         v.target != null && judgeVal != null && (dir === "UP" ? judgeVal < v.target : judgeVal > v.target);
                       const rate =
                         v.target != null && v.target !== 0 && judgeVal != null ? Math.round((judgeVal / v.target) * 100) : null;
-                      const lastM = analysis.lastMonthActual.get(v.kpiName) ?? null;
+                      const lastM = analysis.lastMonthActual.get(v.kpiItemId) ?? analysis.lastMonthActual.get(v.kpiName) ?? null;
                       return (
                         <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
                           <TableCell className="font-medium">{v.kpiName}</TableCell>

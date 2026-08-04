@@ -80,9 +80,12 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
     orderBy: { targetWeek: "asc" },
     include: { kpiValues: true },
   });
+  // 同名KPIの取り違えを防ぐため ID を主キーにし、名前は旧データ用のフォールバックとして併記する
   const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
   for (const v of monthStartReport?.kpiValues ?? []) {
-    kpiMonthStart[v.kpiName] = { target: v.target, forecast: v.forecast };
+    const val = { target: v.target, forecast: v.forecast };
+    kpiMonthStart[v.kpiItemId] = val;
+    if (!(v.kpiName in kpiMonthStart)) kpiMonthStart[v.kpiName] = val;
   }
 
   const prevKpiByName = new Map((prevReport?.kpiValues ?? []).map((v) => [v.kpiName, v.current]));
@@ -100,7 +103,9 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
 
   const kpiPrev: Record<string, { target: number | null; current: number | null; forecast: number | null }> = {};
   for (const v of prevReport?.kpiValues ?? []) {
-    kpiPrev[v.kpiName] = { target: v.target, current: v.current, forecast: v.forecast };
+    const val = { target: v.target, current: v.current, forecast: v.forecast };
+    kpiPrev[v.kpiItemId] = val;
+    if (!(v.kpiName in kpiPrev)) kpiPrev[v.kpiName] = val;
   }
 
   // 非表示KPI
@@ -114,9 +119,13 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   }
 
   // 既存値をフォーム初期値へ
+  // 保存値は KPI項目ID で引き当てる（同名KPIがあっても値・コメントが混ざらない）
+  const kpiById: ReportInitial["kpiById"] = {};
   const kpiByName: ReportInitial["kpiByName"] = {};
   for (const v of report.kpiValues) {
-    kpiByName[v.kpiName] = { target: s(v.target), current: s(v.current), forecast: s(v.forecast), comment: v.comment ?? "" };
+    const val = { target: s(v.target), current: s(v.current), forecast: s(v.forecast), comment: v.comment ?? "" };
+    kpiById[v.kpiItemId] = val;
+    if (!(v.kpiName in kpiByName)) kpiByName[v.kpiName] = val;
   }
   const inflow: Record<string, string> = Object.fromEntries(INFLOW_CHANNELS.map((c) => [c, ""]));
   for (const i of report.inflows) inflow[i.channel] = String(i.count);
@@ -190,6 +199,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
 
   const initial: ReportInitial = {
     originalText: report.originalText ?? "",
+    kpiById,
     kpiByName,
     inflow,
     review: {
@@ -307,6 +317,10 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
           kpiCarry={kpiCarry}
           projCarry={projCarry}
           carryFromMonth={carryFromMonth}
+          monthStartLabel={monthStartReport?.targetWeek ? weekLabel(monthStartReport.targetWeek, { short: true }) : null}
+          prevPeriodLabel={
+            type === "WEEKLY" && prevReport?.targetWeek ? weekLabel(prevReport.targetWeek, { short: true }) : null
+          }
         />
       )}
     </div>

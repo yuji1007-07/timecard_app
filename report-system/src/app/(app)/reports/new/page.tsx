@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
-import { reportingMonthWeek, reportingMonth, yearMonth, addMonthStr, jstNow } from "@/lib/utils";
+import { reportingMonthWeek, reportingMonth, yearMonth, addMonthStr, jstNow, weekLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReportSetup, type StoreOpt } from "./report-setup";
@@ -147,15 +147,20 @@ async function ResolvedForm({
   }));
 
   // 前回報告のKPI値（着地の変化色付け用）
+  // 同名KPIの取り違えを防ぐため ID を主キーにし、名前は旧データ用のフォールバックとして併記する
   const kpiPrev: Record<string, { target: number | null; current: number | null; forecast: number | null }> = {};
   for (const v of prevReport?.kpiValues ?? []) {
-    kpiPrev[v.kpiName] = { target: v.target, current: v.current, forecast: v.forecast };
+    const val = { target: v.target, current: v.current, forecast: v.forecast };
+    kpiPrev[v.kpiItemId] = val;
+    if (!(v.kpiName in kpiPrev)) kpiPrev[v.kpiName] = val;
   }
 
   // 当月の最初の報告（月初の目標・着地を反映ボタン用）
   const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
   for (const v of monthStartReport?.kpiValues ?? []) {
-    kpiMonthStart[v.kpiName] = { target: v.target, forecast: v.forecast };
+    const val = { target: v.target, forecast: v.forecast };
+    kpiMonthStart[v.kpiItemId] = val;
+    if (!(v.kpiName in kpiMonthStart)) kpiMonthStart[v.kpiName] = val;
   }
 
   const unitLabel = `${storeName}${dept ? ` ${dept.name}` : ""}・${label(BUSINESS_TYPES, dept?.businessType ?? businessType)}`;
@@ -263,6 +268,10 @@ async function ResolvedForm({
         kpiCarry={kpiCarry}
         projCarry={projCarry}
         carryFromMonth={carryFromMonth}
+        monthStartLabel={monthStartReport?.targetWeek ? weekLabel(monthStartReport.targetWeek, { short: true }) : null}
+        prevPeriodLabel={
+          type === "WEEKLY" && prevReport?.targetWeek ? weekLabel(prevReport.targetWeek, { short: true }) : null
+        }
       />
     </div>
   );

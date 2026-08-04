@@ -111,23 +111,27 @@ export async function getReportAnalysis(reportId: string) {
   // 先月の実績（KPI入力値に参考表示）。週次は先月最終週の現状、月次は先月の月次の実績。
   const lastMonthActual = new Map<string, number | null>();
   {
-    let src: { kpiValues: { kpiName: string; current: number | null }[] } | null = null;
+    let src: { kpiValues: { kpiItemId: string; kpiName: string; current: number | null }[] } | null = null;
     if (report.reportType === "WEEKLY" && wm) {
       const pm = addMonthStr(wm[1], -1);
       src = await prisma.report.findFirst({
         where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "WEEKLY", status: "SUBMITTED", targetWeek: { startsWith: `${pm}-W` } },
         orderBy: { targetWeek: "desc" },
-        select: { kpiValues: { select: { kpiName: true, current: true } } },
+        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true } } },
       });
     } else if (report.reportType === "MONTHLY" && report.targetMonth) {
       const pm = addMonthStr(report.targetMonth, -1);
       src = await prisma.report.findFirst({
         where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "MONTHLY", status: "SUBMITTED", targetMonth: pm },
         orderBy: { submittedAt: "desc" },
-        select: { kpiValues: { select: { kpiName: true, current: true } } },
+        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true } } },
       });
     }
-    for (const v of src?.kpiValues ?? []) lastMonthActual.set(v.kpiName, v.current);
+    // 同名KPIがあっても取り違えないよう ID を主キーにし、名前はフォールバックとして併記する
+    for (const v of src?.kpiValues ?? []) {
+      lastMonthActual.set(v.kpiItemId, v.current);
+      if (!lastMonthActual.has(v.kpiName)) lastMonthActual.set(v.kpiName, v.current);
+    }
   }
 
   // 週次: 現在有効な月次アクションプランの進捗を自動追跡する。

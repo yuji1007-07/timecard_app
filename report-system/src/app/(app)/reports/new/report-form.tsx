@@ -165,6 +165,9 @@ type MonthlyState = {
 // 編集モードでフォームに初期値を流し込むためのデータ
 export type ReportInitial = {
   originalText: string;
+  // 同じ名前のKPIが複数あっても取り違えないよう、KPI項目ID で保持する。
+  // kpiByName は旧データ（IDが一致しない場合）のフォールバック。
+  kpiById: Record<string, { target: string; current: string; forecast: string; comment: string }>;
   kpiByName: Record<string, { target: string; current: string; forecast: string; comment: string }>;
   inflow: Record<string, string>;
   review: ReviewStrings;
@@ -207,6 +210,8 @@ export function ReportForm({
   kpiCarry = {},
   projCarry = {},
   carryFromMonth = null,
+  monthStartLabel = null,
+  prevPeriodLabel = null,
 }: {
   storeId: string;
   departmentId: string | null;
@@ -228,6 +233,8 @@ export function ReportForm({
   kpiCarry?: Record<string, { budget: string; forecast: string }>;
   projCarry?: ProjMap;
   carryFromMonth?: string | null; // 取り込み元になった月次報告の対象月（YYYY-MM）
+  monthStartLabel?: string | null; // 「月初の目標・着地」の参照元（例: 7月 第1週）
+  prevPeriodLabel?: string | null; // 「前回」の参照元（例: 6月 第5週）
 }) {
   const isMonthly = reportType === "MONTHLY";
   const baseYear = Number((period.match(/^(\d{4})/) || [])[1]) || new Date().getFullYear();
@@ -243,7 +250,8 @@ export function ReportForm({
   const [kpi, setKpi] = useState<KpiState>(() =>
     Object.fromEntries(
       kpiItems.map((k) => {
-        if (initial?.kpiByName[k.name]) return [k.id, initial.kpiByName[k.name]];
+        const saved = initial?.kpiById[k.id] ?? initial?.kpiByName[k.name];
+        if (saved) return [k.id, saved];
         // 新規・月次：前月が立てた「今月の予測」を 予算(target)・着地予測(forecast) に引き継ぐ（実績は空）
         const carry = kpiCarry[k.name];
         if (carry) return [k.id, { target: carry.budget, current: "", forecast: carry.forecast, comment: "" }];
@@ -362,7 +370,7 @@ export function ReportForm({
     setKpi((prev) => {
       const next = { ...prev };
       for (const k of kpiItems) {
-        const ms = kpiMonthStart[k.name];
+        const ms = kpiMonthStart[k.id] ?? kpiMonthStart[k.name];
         if (!ms) continue;
         next[k.id] = {
           ...next[k.id],
@@ -373,7 +381,7 @@ export function ReportForm({
       return next;
     });
   }
-  const hasMonthStart = kpiItems.some((k) => kpiMonthStart[k.name]);
+  const hasMonthStart = kpiItems.some((k) => kpiMonthStart[k.id] ?? kpiMonthStart[k.name]);
 
   const visibleKpis = useMemo(() => kpiItems.filter((k) => !hiddenSet.has(k.name)), [kpiItems, hiddenSet]);
   const groupedVisible = useMemo(() => groupByCategory(visibleKpis), [visibleKpis]);
@@ -538,8 +546,8 @@ export function ReportForm({
                 </Button>
               )}
               {hasMonthStart && !editVisibility && (
-                <Button type="button" variant="outline" size="sm" onClick={reflectMonthStart}>
-                  月初の目標・着地を反映
+                <Button type="button" variant="outline" size="sm" onClick={reflectMonthStart} title={monthStartLabel ? `${monthStartLabel}の数値を反映します` : undefined}>
+                  {monthStartLabel ? `${monthStartLabel}の目標・着地を反映` : "月初の目標・着地を反映"}
                 </Button>
               )}
               <Button
@@ -639,7 +647,7 @@ export function ReportForm({
                     );
                   })()}
                   {g.items.map((k) => {
-                    const prevForecast = kpiPrev[k.name]?.forecast ?? null;
+                    const prevForecast = (kpiPrev[k.id] ?? kpiPrev[k.name])?.forecast ?? null;
                     const target = numOrNull(kpi[k.id].target);
                     const actual = numOrNull(kpi[k.id].current);
                     const curForecast = numOrNull(kpi[k.id].forecast);
@@ -674,7 +682,7 @@ export function ReportForm({
                               {isUnder ? (
                                 <div className="mt-0.5 text-[10px] font-medium text-red-600">着地未達（目標 {target}）</div>
                               ) : forecastChanged ? (
-                                <div className="mt-0.5 text-[10px] text-amber-600">先週: {prevForecast}</div>
+                                <div className="mt-0.5 text-[10px] text-amber-600">{prevPeriodLabel ?? "前回"}: {prevForecast}</div>
                               ) : null}
                             </div>
                           </>
