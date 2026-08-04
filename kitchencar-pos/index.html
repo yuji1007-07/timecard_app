@@ -825,6 +825,30 @@ $('btnAddProduct').addEventListener('click', () => openProductSheet(null));
 /* ── まとめて編集（1行＝1商品） ── */
 const SEP = /[\/／,、\t]+/;
 
+// ワンタップで読み込めるメニュー一式（お祭り用）
+const PRESET_MENU = `かき氷 / かき氷(いちご) / 300 / ①
+かき氷 / かき氷(ハスカップ) / 300 / ②
+かき氷 / かき氷(マンゴー) / 300 / ③
+かき氷 / かき氷(メロン) / 300 / ④
+かき氷 / かき氷(レモン) / 300 / ⑤
+かき氷 / かき氷(ブルーハワイ) / 300 / ⑥
+フード / チーズハットグ / 600 / ⑦
+ビール / 生ビール / 600 / 🍺
+サワー・ハイボール / レモンサワー / 500 / 🍋
+サワー・ハイボール / ハイボール / 500 / 🥃
+サワー・ハイボール / 翠ジンソーダ / 500 / 🍸
+サワー・ハイボール / 琉球ハブボール / 500 / 🍹
+お茶ハイ / 緑茶ハイ / 500 / 🍵
+お茶ハイ / 烏龍ハイ / 500 / 🍵
+お茶ハイ / ジャスミンハイ / 500 / 🍵
+お茶ハイ / JJ(茉莉花)ハイ / 500 / 🍵
+テキーラ / テキーラ(ショット) / 500 / 🥃
+ソフトドリンク / コーラ / 300 / 🥤
+ソフトドリンク / ジンジャーエール / 300 / 🥤
+ソフトドリンク / 緑茶 / 300 / 🍵
+ソフトドリンク / 烏龍茶 / 300 / 🍵
+ソフトドリンク / ジャスミン茶 / 300 / 🍵`;
+
 function menuToText(list) {
   return list.map(m => [catOf(m), m.name, m.price, m.emoji || ''].join(' / ')).join('\n');
 }
@@ -856,9 +880,16 @@ $('btnBulk').addEventListener('click', () => {
           style="font-size:14px; line-height:1.7; resize:vertical"
           placeholder="かき氷 / かき氷(いちご) / 300 / 🍧&#10;ドリンク / コーラ / 300 / 🥤">${esc(menuToText(menu))}</textarea>
       </div>
-      <p class="note">・同じ商品名があれば<strong>価格とカテゴリーを上書き</strong>します<br>
+      <button class="btn btn-ghost btn-sm" id="fPreset" style="width:100%">📋 お祭りメニュー（22品）を読み込む</button>
+      <p class="note" style="margin-top:12px">・同じ商品名があれば<strong>価格とカテゴリーを上書き</strong>します<br>
       ・書いた順番がメニューの並び順になります<br>
       ・ここに書かなかった商品は消えずに残ります（削除は ✏️ から）</p>`,
+    onBody: () => {
+      $('fPreset').addEventListener('click', () => {
+        $('fBulk').value = PRESET_MENU;
+        toast('読み込みました。内容を確認して「反映する」を押してください');
+      });
+    },
     actions: [
       { label: 'キャンセル', cls: 'btn btn-ghost', onClick: closeSheet },
       { label: '反映する', cls: 'btn btn-primary', onClick: async () => {
@@ -882,6 +913,12 @@ $('btnBulk').addEventListener('click', () => {
           // 書かれなかった商品は後ろに残す
           menu.filter(m => !used.has(m.name))
               .forEach((m, i) => next.push({ ...m, id: String(m.id), sort: rows.length + i + 1 }));
+
+          // 同じカテゴリーが離れ離れにならないよう並べ直す
+          const catOrder = [];
+          next.forEach(m => { const c = catOf(m); if (!catOrder.includes(c)) catOrder.push(c); });
+          next.sort((a, b) => (catOrder.indexOf(catOf(a)) - catOrder.indexOf(catOf(b))) || (a.sort - b.sort));
+          next.forEach((m, i) => m.sort = i + 1);
 
           await set(ref(db, 'menu'), keyById(next)).catch(() => toast('保存できませんでした', true));
           closeSheet();
