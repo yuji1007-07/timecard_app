@@ -90,10 +90,9 @@ async function ResolvedForm({
   storeName: string;
   businessType: string;
 }) {
-  // 当月の範囲（月初の目標・着地を反映ボタン用）※日本時間基準
-  const now = jstNow();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  // 「月初の目標・着地を反映」用: 提出日ではなく“対象期間”で判断する。
+  // 対象が2026-07なら、いつ提出されたかに関係なく 2026-07 の最初の週次報告を参照する。
+  const targetMonth = period.slice(0, 7);
 
   // 独立したクエリはまとめて並列実行（往復回数を減らして表示を速くする）
   const [kpiItems, kdiItems, existing, prevReport, monthStartReport, dept, store] = await Promise.all([
@@ -120,8 +119,14 @@ async function ResolvedForm({
       include: { kpiValues: true, actions: true, projections: true },
     }),
     prisma.report.findFirst({
-      where: { storeId, departmentId: departmentId ?? null, status: "SUBMITTED", submittedAt: { gte: monthStart, lt: monthEnd } },
-      orderBy: { submittedAt: "asc" },
+      where: {
+        storeId,
+        departmentId: departmentId ?? null,
+        status: "SUBMITTED",
+        reportType: "WEEKLY",
+        targetWeek: { startsWith: `${targetMonth}-W`, ...(type === "WEEKLY" ? { lt: period } : {}) },
+      },
+      orderBy: { targetWeek: "asc" },
       include: { kpiValues: true },
     }),
     departmentId ? prisma.department.findUnique({ where: { id: departmentId } }) : Promise.resolve(null),
