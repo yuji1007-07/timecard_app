@@ -272,13 +272,8 @@ export function ReportForm({
     }
     return out;
   });
-  // 3ヶ月予測は「予算」だけ入力するのが基本。予算と違う着地予想が保存されている場合は自動で開く。
-  const [showProjForecast, setShowProjForecast] = useState<boolean>(() => {
-    const src: ProjMap = initial?.projections ?? projCarry;
-    return Object.values(src).some((byMonth) =>
-      Object.values(byMonth ?? {}).some((v) => v?.forecast && v.forecast !== v.budget)
-    );
-  });
+  // 3ヶ月予測は「予算」だけ入力するのが基本。既定はOFFで、必要な時だけ着地予想欄を開く。
+  const [showProjForecast, setShowProjForecast] = useState(false);
   // 「前月から取り込む」：過去に立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
   const [carryMsg, setCarryMsg] = useState<string | null>(null);
   function applyCarry() {
@@ -488,8 +483,10 @@ export function ReportForm({
               kpiName: k.name,
               targetMonth: m,
               budget: numOrNull(proj[k.name]?.[m]?.budget ?? ""),
-              // 着地予想は未入力なら予算と同じ扱い（別の見込みがある月だけ入力する運用）
-              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? "") ?? numOrNull(proj[k.name]?.[m]?.budget ?? ""),
+              // 着地予想は「違う月がある」をONにした時だけ使う。OFF（既定）や未入力なら予算と同じ値で保存する。
+              forecast:
+                (showProjForecast ? numOrNull(proj[k.name]?.[m]?.forecast ?? "") : null) ??
+                numOrNull(proj[k.name]?.[m]?.budget ?? ""),
             }))
           )
         : [],
