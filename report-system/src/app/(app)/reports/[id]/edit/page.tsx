@@ -53,18 +53,37 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   ]);
 
   // このレポートより前の報告（前回Action・差分の色付け用）
+  // 提出日ではなく対象期間で選ぶ（提出が前後しても必ず対象より前の直近の報告になる）
   const prevReport = await prisma.report.findFirst({
     where: {
       storeId,
       departmentId: departmentId ?? null,
       reportType: type,
       status: "SUBMITTED",
-      submittedAt: { lt: report.submittedAt },
       id: { not: report.id },
+      ...(type === "WEEKLY" ? { targetWeek: { lt: period } } : { targetMonth: { lt: period } }),
     },
-    orderBy: { submittedAt: "desc" },
+    orderBy: type === "WEEKLY" ? { targetWeek: "desc" } : { targetMonth: "desc" },
     include: { kpiValues: true, actions: true, projections: true },
   });
+
+  // 「月初の目標・着地を反映」用: 対象月の最初の週次報告（自分自身は除く）
+  const monthStartReport = await prisma.report.findFirst({
+    where: {
+      storeId,
+      departmentId: departmentId ?? null,
+      status: "SUBMITTED",
+      reportType: "WEEKLY",
+      id: { not: report.id },
+      targetWeek: { startsWith: `${period.slice(0, 7)}-W`, ...(type === "WEEKLY" ? { lt: period } : {}) },
+    },
+    orderBy: { targetWeek: "asc" },
+    include: { kpiValues: true },
+  });
+  const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
+  for (const v of monthStartReport?.kpiValues ?? []) {
+    kpiMonthStart[v.kpiName] = { target: v.target, forecast: v.forecast };
+  }
 
   const prevKpiByName = new Map((prevReport?.kpiValues ?? []).map((v) => [v.kpiName, v.current]));
   const previousActions = (prevReport?.actions ?? []).map((a) => ({
@@ -136,12 +155,35 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   }
   const kpiCarry: Record<string, { budget: string; forecast: string }> = {};
   const projCarry: ProjMap = {};
+  let carryFromMonth: string | null = null;
   if (type === "MONTHLY") {
-    for (const p of prevReport?.projections ?? []) {
-      if (p.targetMonth === period) kpiCarry[p.kpiName] = { budget: s(p.budget), forecast: s(p.forecast) };
-      if (forwardMonths.includes(p.targetMonth)) {
-        projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
-        projCarry[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+    // 前月が未提出でも取り込めるように、対象月より前の月次報告を新しい順に遡って探す
+    const candidates = await prisma.report.findMany({
+      where: {
+        storeId,
+        departmentId: departmentId ?? null,
+        reportType: "MONTHLY",
+        status: "SUBMITTED",
+        id: { not: report.id },
+        targetMonth: { lt: period },
+      },
+      orderBy: { targetMonth: "desc" },
+      take: 6,
+      select: { targetMonth: true, projections: true },
+    });
+    const wanted = [period, ...forwardMonths];
+    const source =
+      candidates.find((c) => c.projections.some((p) => p.targetMonth === period)) ??
+      candidates.find((c) => c.projections.some((p) => wanted.includes(p.targetMonth))) ??
+      null;
+    if (source) {
+      carryFromMonth = source.targetMonth;
+      for (const p of source.projections) {
+        if (p.targetMonth === period) kpiCarry[p.kpiName] = { budget: s(p.budget), forecast: s(p.forecast) };
+        if (forwardMonths.includes(p.targetMonth)) {
+          projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
+          projCarry[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+        }
       }
     }
   }
@@ -259,11 +301,12 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
           previousActions={previousActions}
           channels={[...INFLOW_CHANNELS]}
           kpiPrev={kpiPrev}
-          kpiMonthStart={{}}
+          kpiMonthStart={kpiMonthStart}
           hiddenKpis={hiddenKpis}
           forwardMonths={forwardMonths}
           kpiCarry={kpiCarry}
           projCarry={projCarry}
+          carryFromMonth={carryFromMonth}
         />
       )}
     </div>
