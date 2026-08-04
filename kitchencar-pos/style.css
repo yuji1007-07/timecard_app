@@ -99,6 +99,28 @@ button { cursor: pointer; border: none; background: none; }
 .sec-title + .sec-title { margin-top: 22px; }
 .spacer-lg { height: 26px; }
 
+/* ── カテゴリー切替 ── */
+.cats {
+  display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none;
+  margin: 0 -16px 12px; padding: 2px 16px 6px;
+}
+.cats::-webkit-scrollbar { display: none; }
+.cat-chip {
+  flex: none; padding: 8px 16px; border-radius: 22px; white-space: nowrap;
+  font-size: 13.5px; font-weight: 700; color: var(--muted);
+  background: var(--surface); border: 1px solid var(--line);
+  transition: background .15s, color .15s, border-color .15s, transform .08s;
+}
+.cat-chip:active { transform: scale(.95); }
+.cat-chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.cat-chip .n { font-size: 11.5px; opacity: .65; margin-left: 4px; font-weight: 600; }
+
+.cat-label {
+  font-size: 11px; font-weight: 800; color: var(--muted); letter-spacing: .1em;
+  margin: 18px 0 8px 2px;
+}
+.cat-label:first-child { margin-top: 0; }
+
 /* ── メニューグリッド ── */
 .menu-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 9px; }
 .menu-btn {

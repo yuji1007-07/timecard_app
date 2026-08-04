@@ -11,6 +11,7 @@
         "name":  { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 40" },
         "price": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000000" },
         "emoji": { ".validate": "newData.isString() && newData.val().length <= 8" },
+        "cat":   { ".validate": "newData.isString() && newData.val().length <= 20" },
         "sort":  { ".validate": "newData.isNumber()" },
         "active":{ ".validate": "newData.isBoolean()" },
         "id":    { ".validate": "newData.isString() && newData.val() == $id" },

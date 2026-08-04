@@ -102,6 +102,7 @@
       </div>
 
       <div class="sec-title">メニュー</div>
+      <div class="cats" id="menuCats" hidden></div>
       <div class="menu-grid" id="menuGrid"></div>
 
       <div class="spacer-lg"></div>
@@ -161,7 +162,10 @@
     <div class="container">
       <div class="sec-title">商品管理</div>
       <div id="prodList"></div>
-      <button class="btn btn-ghost" id="btnAddProduct" style="margin-top:8px">＋ 商品を追加</button>
+      <div class="btn-row" style="margin-top:8px">
+        <button class="btn btn-ghost" id="btnAddProduct">＋ 商品を追加</button>
+        <button class="btn btn-ghost" id="btnBulk">まとめて編集</button>
+      </div>
 
       <div class="spacer-lg"></div>
       <div class="sec-title">お客様のQR注文</div>
@@ -223,8 +227,9 @@ const db = getDatabase(app);
 const $ = (id) => document.getElementById(id);
 
 /* ═══════════════ 状態 ═══════════════ */
-let menu = [];            // [{id,name,price,emoji,sort,active}]
+let menu = [];            // [{id,name,price,emoji,cat,sort,active}]
 let cart = {};            // { productId: qty }
+let activeCat = null;     // 表示中のカテゴリー（null = すべて）
 let orders = [];          // 本日分
 let pending = [];         // お客様からの未確認注文
 let settings = { qrEnabled: false };
@@ -412,9 +417,39 @@ setDate();
 setInterval(setDate, 60000);
 
 /* ═══════════════ メニュー・カート ═══════════════ */
+const UNCAT = 'その他';
+// ※ 関数宣言にすること（リスナーから初期化前に呼ばれても壊れないため）
+function catOf(m) { return ((m && m.cat) || '').trim() || 'その他'; }
+
+// 商品の並び順に沿ってカテゴリー一覧を作る
+function categoriesOf(list) {
+  const out = [];
+  list.forEach(m => { const c = catOf(m); if (!out.includes(c)) out.push(c); });
+  return out;
+}
+
 function renderMenu() {
   const active = menu.filter(m => m.active !== false);
-  $('menuGrid').innerHTML = active.length ? active.map(m => `
+  const cats = categoriesOf(active);
+
+  // カテゴリーが1種類しかないなら切替は出さない
+  const useCats = cats.length > 1;
+  $('menuCats').hidden = !useCats;
+  if (!useCats) activeCat = null;
+  else if (activeCat !== null && !cats.includes(activeCat)) activeCat = cats[0];
+  else if (activeCat === null && active.length > 8) activeCat = cats[0];
+
+  if (useCats) {
+    $('menuCats').innerHTML =
+      `<button class="cat-chip ${activeCat === null ? 'on' : ''}" data-cat="">すべて<span class="n">${active.length}</span></button>` +
+      cats.map(c => {
+        const n = active.filter(m => catOf(m) === c).length;
+        return `<button class="cat-chip ${activeCat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
+      }).join('');
+  }
+
+  const shown = activeCat === null ? active : active.filter(m => catOf(m) === activeCat);
+  $('menuGrid').innerHTML = shown.length ? shown.map(m => `
     <button class="menu-btn" data-add="${esc(m.id)}">
       <span class="m-emoji">${esc(m.emoji || '🍽')}</span>
       <span class="m-name">${esc(m.name)}</span>
@@ -424,6 +459,13 @@ function renderMenu() {
     : `<div class="empty" style="grid-column:1/-1">商品がありません。<br>設定タブから追加してください。</div>`;
   syncBadges();
 }
+
+$('menuCats').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  activeCat = b.dataset.cat || null;
+  renderMenu();
+});
 
 $('menuGrid').addEventListener('click', (e) => {
   const b = e.target.closest('[data-add]');
@@ -742,7 +784,12 @@ function renderAllOrderViews() { renderSummary(); renderHistory(); renderKitchen
 
 /* ═══════════════ 商品管理 ═══════════════ */
 function renderProducts() {
-  $('prodList').innerHTML = menu.length ? menu.map((m, idx) => `
+  let lastCat = null;
+  $('prodList').innerHTML = menu.length ? menu.map((m, idx) => {
+    const c = catOf(m);
+    const head = c !== lastCat ? `<div class="cat-label">${esc(c)}</div>` : '';
+    lastCat = c;
+    return head + `
     <div class="prod-row">
       <span class="prod-emoji">${esc(m.emoji || '🍽')}</span>
       <span class="prod-info">
@@ -754,7 +801,8 @@ function renderProducts() {
         <button class="icon-btn" data-down="${idx}" ${idx === menu.length - 1 ? 'disabled' : ''}>↓</button>
         <button class="icon-btn" data-pedit="${esc(m.id)}">✏️</button>
       </span>
-    </div>`).join('') : '<div class="empty">商品がまだありません</div>';
+    </div>`;
+  }).join('') : '<div class="empty">商品がまだありません</div>';
 }
 
 $('prodList').addEventListener('click', (e) => {
@@ -774,9 +822,79 @@ $('prodList').addEventListener('click', (e) => {
 
 $('btnAddProduct').addEventListener('click', () => openProductSheet(null));
 
+/* ── まとめて編集（1行＝1商品） ── */
+const SEP = /[\/／,、\t]+/;
+
+function menuToText(list) {
+  return list.map(m => [catOf(m), m.name, m.price, m.emoji || ''].join(' / ')).join('\n');
+}
+
+function parseMenuText(text) {
+  const rows = [], bad = [];
+  text.split(/\r?\n/).forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) return;
+    const p = line.split(SEP).map(x => x.trim());
+    let cat = '', name = '', price = '', emoji = '';
+    if (p.length >= 3) { [cat, name, price, emoji = ''] = p; }
+    else if (p.length === 2) { [name, price] = p; }
+    else { bad.push(`${i + 1}行目：${line}`); return; }
+    const n = parseInt(String(price).replace(/[^0-9]/g, ''), 10);
+    if (!name || !Number.isFinite(n)) { bad.push(`${i + 1}行目：${line}`); return; }
+    rows.push({ cat: cat.slice(0, 20), name: name.slice(0, 40), price: n, emoji: emoji.slice(0, 8) });
+  });
+  return { rows, bad };
+}
+
+$('btnBulk').addEventListener('click', () => {
+  openSheet({
+    title: 'メニューをまとめて編集',
+    desc: '1行に1商品。「カテゴリー / 商品名 / 価格 / 絵文字」の順で書きます。絵文字は省略できます。',
+    html: `
+      <div class="field">
+        <textarea class="input" id="fBulk" rows="12" spellcheck="false"
+          style="font-size:14px; line-height:1.7; resize:vertical"
+          placeholder="かき氷 / かき氷(いちご) / 300 / 🍧&#10;ドリンク / コーラ / 300 / 🥤">${esc(menuToText(menu))}</textarea>
+      </div>
+      <p class="note">・同じ商品名があれば<strong>価格とカテゴリーを上書き</strong>します<br>
+      ・書いた順番がメニューの並び順になります<br>
+      ・ここに書かなかった商品は消えずに残ります（削除は ✏️ から）</p>`,
+    actions: [
+      { label: 'キャンセル', cls: 'btn btn-ghost', onClick: closeSheet },
+      { label: '反映する', cls: 'btn btn-primary', onClick: async () => {
+          const { rows, bad } = parseMenuText($('fBulk').value);
+          if (bad.length) return toast(`読み取れない行があります（${bad[0]}）`, true);
+          if (!rows.length) return toast('商品が1件も書かれていません', true);
+
+          const byName = new Map(menu.map(m => [m.name, m]));
+          const used = new Set();
+          const next = rows.map((r, i) => {
+            const old = byName.get(r.name);
+            used.add(r.name);
+            return {
+              id: old ? String(old.id) : 'p' + Date.now().toString(36) + i,
+              name: r.name, price: r.price, cat: r.cat,
+              emoji: r.emoji || old?.emoji || '🍽',
+              active: old ? old.active !== false : true,
+              sort: i + 1,
+            };
+          });
+          // 書かれなかった商品は後ろに残す
+          menu.filter(m => !used.has(m.name))
+              .forEach((m, i) => next.push({ ...m, id: String(m.id), sort: rows.length + i + 1 }));
+
+          await set(ref(db, 'menu'), keyById(next)).catch(() => toast('保存できませんでした', true));
+          closeSheet();
+          toast(`${rows.length}件を反映しました`);
+        } },
+    ],
+  });
+});
+
 function openProductSheet(item) {
   const isNew = !item;
-  const d = item || { id: 'p' + Date.now().toString(36), name: '', price: '', emoji: '🍽', active: true, sort: menu.length + 1 };
+  const d = item || { id: 'p' + Date.now().toString(36), name: '', price: '', emoji: '🍽', cat: '', active: true, sort: menu.length + 1 };
+  const known = categoriesOf(menu).filter(c => c !== UNCAT);
 
   openSheet({
     title: isNew ? '商品を追加' : '商品を編集',
@@ -788,12 +906,19 @@ function openProductSheet(item) {
         </div>
         <div class="field">
           <label>商品名</label>
-          <input class="input" id="fName" placeholder="例：クレープ" value="${esc(d.name)}">
+          <input class="input" id="fName" placeholder="例：かき氷(いちご)" value="${esc(d.name)}">
         </div>
       </div>
-      <div class="field">
-        <label>価格（円）</label>
-        <input class="input" id="fPrice" type="number" inputmode="numeric" min="0" step="10" placeholder="500" value="${d.price}">
+      <div class="row-2">
+        <div class="field">
+          <label>カテゴリー</label>
+          <input class="input" id="fCat" list="catList" placeholder="例：かき氷" value="${esc(d.cat || '')}">
+          <datalist id="catList">${known.map(c => `<option value="${esc(c)}">`).join('')}</datalist>
+        </div>
+        <div class="field">
+          <label>価格（円）</label>
+          <input class="input" id="fPrice" type="number" inputmode="numeric" min="0" step="10" placeholder="300" value="${d.price}">
+        </div>
       </div>
       <div class="switch-row">
         <span class="sw-label">メニューに表示する</span>
@@ -810,6 +935,7 @@ function openProductSheet(item) {
           const rec = {
             id: d.id, name, price,
             emoji: $('fEmoji').value.trim() || '🍽',
+            cat: $('fCat').value.trim().slice(0, 20),
             active: $('fActive').checked,
             sort: d.sort ?? menu.length + 1,
           };

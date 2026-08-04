@@ -113,6 +113,7 @@
 
   <div class="container" style="padding-top:16px; padding-bottom:120px">
     <div class="sec-title">メニュー</div>
+    <div class="cats" id="menuCats" hidden></div>
     <div class="menu-grid" id="menuGrid"></div>
 
     <div class="spacer-lg"></div>
@@ -178,6 +179,7 @@ const $ = (id) => document.getElementById(id);
 let menu = [];
 let cart = {};
 let ready = false;
+let activeCat = null;   // 表示中のカテゴリー（null = すべて）
 
 /* ── 自分の注文の控え（お呼び出し番号を受け取るため） ── */
 const TICKET_KEY = 'bp_my_ticket';
@@ -245,8 +247,27 @@ signInAnonymously(auth).catch(() => {
 });
 
 /* ── メニュー ── */
+// ※ 関数宣言にすること（リスナーから初期化前に呼ばれても壊れないため）
+function catOf(m) { return ((m && m.cat) || '').trim() || 'その他'; }
+
 function renderMenu() {
-  $('menuGrid').innerHTML = menu.length ? menu.map(m => `
+  const cats = [];
+  menu.forEach(m => { const c = catOf(m); if (!cats.includes(c)) cats.push(c); });
+
+  const useCats = cats.length > 1;
+  $('menuCats').hidden = !useCats;
+  if (!useCats) activeCat = null;
+  else if (activeCat === null || !cats.includes(activeCat)) activeCat = cats[0];
+
+  if (useCats) {
+    $('menuCats').innerHTML = cats.map(c => {
+      const n = menu.filter(m => catOf(m) === c).length;
+      return `<button class="cat-chip ${activeCat === c ? 'on' : ''}" data-cat="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
+    }).join('');
+  }
+
+  const shown = activeCat === null ? menu : menu.filter(m => catOf(m) === activeCat);
+  $('menuGrid').innerHTML = shown.length ? shown.map(m => `
     <button class="menu-btn" data-add="${esc(m.id)}">
       <span class="m-emoji">${esc(m.emoji || '🍽')}</span>
       <span class="m-name">${esc(m.name)}</span>
@@ -256,6 +277,13 @@ function renderMenu() {
     : '<div class="empty" style="grid-column:1/-1">ただいま準備中です</div>';
   syncBadges();
 }
+
+$('menuCats').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cat]');
+  if (!b) return;
+  activeCat = b.dataset.cat;
+  renderMenu();
+});
 
 $('menuGrid').addEventListener('click', (e) => {
   const b = e.target.closest('[data-add]');
