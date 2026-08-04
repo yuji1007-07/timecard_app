@@ -70,7 +70,9 @@ function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forw
   // 翌月以降の月が書かれている列は、3ヶ月予測（②-2）に振り分ける
   if (isMonthly) {
     for (const m of forwardMonths) {
-      if (hasMonth(Number(m.slice(5, 7)))) return isBudget ? `pb:${m}` : `pf:${m}`;
+      // 「差異」列は取り込まない（予算と実績の差分なので予測ではない）
+      if (/差異|差分/.test(h)) return "";
+      if (hasMonth(Number(m.slice(5, 7)))) return isForecast ? `pf:${m}` : `pb:${m}`;
     }
   }
   if (h.includes("月末")) return isMonthly ? "current" : "forecast";
@@ -173,10 +175,9 @@ export function PdfImportCard({
       { role: "target", label: `${curLabel} の予算` },
       { role: "current", label: `${curLabel} の実績` },
     ];
+    // 来月以降は「予算」だけ割り当てる（着地予想は予算と同じ扱い。違う月だけフォームで直す運用）
     for (const m of forwardMonths) {
-      const ml = monthShort(m, baseYear);
-      slots.push({ role: `pb:${m}`, label: `${ml} の予算` });
-      slots.push({ role: `pf:${m}`, label: `${ml} の着地予想` });
+      slots.push({ role: `pb:${m}`, label: `${monthShort(m, baseYear)} の予算` });
     }
     return slots;
   }, [isMonthly, curLabel, forwardMonths, baseYear]);

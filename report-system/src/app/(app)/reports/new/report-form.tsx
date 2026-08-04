@@ -272,6 +272,13 @@ export function ReportForm({
     }
     return out;
   });
+  // 3ヶ月予測は「予算」だけ入力するのが基本。予算と違う着地予想が保存されている場合は自動で開く。
+  const [showProjForecast, setShowProjForecast] = useState<boolean>(() => {
+    const src: ProjMap = initial?.projections ?? projCarry;
+    return Object.values(src).some((byMonth) =>
+      Object.values(byMonth ?? {}).some((v) => v?.forecast && v.forecast !== v.budget)
+    );
+  });
   // 「前月から取り込む」：過去に立てた予測を、今月の予算・着地予測＋来月以降の予測に反映
   const [carryMsg, setCarryMsg] = useState<string | null>(null);
   function applyCarry() {
@@ -481,7 +488,8 @@ export function ReportForm({
               kpiName: k.name,
               targetMonth: m,
               budget: numOrNull(proj[k.name]?.[m]?.budget ?? ""),
-              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? ""),
+              // 着地予想は未入力なら予算と同じ扱い（別の見込みがある月だけ入力する運用）
+              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? "") ?? numOrNull(proj[k.name]?.[m]?.budget ?? ""),
             }))
           )
         : [],
@@ -709,8 +717,13 @@ export function ReportForm({
               )}
             </div>
             <p className="text-sm text-muted-foreground">
-              月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の「予算」と「着地予想」を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
+              月次報告は<span className="font-medium">来月以降の売上予測を明確にする</span>のが目的です。各月の「予算」を入力してください（{forwardMonths.map((m) => monthShort(m, baseYear)).join("・")}）。
+              着地予想は予算と同じものとして扱います。
             </p>
+            <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+              <input type="checkbox" className="h-4 w-4" checked={showProjForecast} onChange={(e) => setShowProjForecast(e.target.checked)} />
+              <span>予算と着地予想が違う月がある（着地予想も入力する）</span>
+            </label>
             {carryMsg && <p className="text-sm font-medium text-emerald-700">{carryMsg}</p>}
             {!hasCarry && (
               <p className="text-xs text-muted-foreground">
@@ -723,7 +736,7 @@ export function ReportForm({
               <div className="grid gap-2 border-b pb-2 text-xs font-medium text-muted-foreground" style={{ gridTemplateColumns: `1.6fr ${forwardMonths.map(() => "1fr").join(" ")}` }}>
                 <div>KPI名</div>
                 {forwardMonths.map((m) => (
-                  <div key={m} className="text-center">{monthShort(m, baseYear)} の予測</div>
+                  <div key={m} className="text-center">{monthShort(m, baseYear)} の{showProjForecast ? "予測" : "予算"}</div>
                 ))}
               </div>
               {groupedVisible.map((g, gi) => (
@@ -735,13 +748,16 @@ export function ReportForm({
                       {forwardMonths.map((m) => (
                         <div key={m} className="space-y-1">
                           <div className="flex items-center gap-1">
-                            <span className="w-8 shrink-0 text-[10px] text-muted-foreground">予算</span>
+                            {showProjForecast && <span className="w-8 shrink-0 text-[10px] text-muted-foreground">予算</span>}
                             <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.budget ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), budget: e.target.value } } }))} placeholder="予算" />
                           </div>
-                          <div className="flex items-center gap-1">
-                            <span className="w-8 shrink-0 text-[10px] text-muted-foreground">着地</span>
-                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="着地予想" />
-                          </div>
+                          {/* 着地予想は「予算と違う月がある」場合だけ入力する。未入力なら保存時に予算と同じ値になる */}
+                          {showProjForecast && (
+                            <div className="flex items-center gap-1">
+                              <span className="w-8 shrink-0 text-[10px] text-muted-foreground">着地</span>
+                              <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="予算と同じなら空欄" />
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
