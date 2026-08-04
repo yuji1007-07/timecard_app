@@ -35,6 +35,21 @@ type KpiValueRow = {
   kpiItem: { goodDirection: string; category: string | null } | null;
 };
 
+/**
+ * 数値＋単位。単位は数字より一段小さく薄く出して、数字自体の読みやすさを保つ。
+ * 「%」は数字に密着させ、「円・人・回」などは半角スペース分あけて表示する。
+ */
+function Num({ v, unit }: { v: number | null | undefined; unit?: string | null }) {
+  if (v === null || v === undefined || Number.isNaN(v)) return <span className="text-muted-foreground">—</span>;
+  const u = (unit ?? "").trim();
+  return (
+    <>
+      {fmt(v)}
+      {u && <span className={`text-[0.75em] font-normal text-muted-foreground ${u === "%" ? "" : "ml-0.5"}`}>{u}</span>}
+    </>
+  );
+}
+
 function groupKpiValuesByCategory(values: KpiValueRow[]) {
   const order: string[] = [];
   const map = new Map<string, KpiValueRow[]>();
@@ -76,6 +91,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     if (name) memberCountNameByCategory.set(g.category, name);
   }
   const kpiCurrentByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.current]));
+  // KPI名から単位を引く（アクション・デッドライン表示で数値に単位を添えるため）
+  const unitByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.unit]));
+  const unitOf = (name: string | null | undefined) => (name ? unitByName.get(name) ?? null : null);
 
   return (
     <div>
@@ -158,14 +176,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       const mcName = memberCountNameByCategory.get(g.category)!;
                       const cur = kpiCurrentByName.get(mcName) ?? null;
                       const lastM = analysis.lastMonthActual.get(mcName) ?? null;
+                      const mcUnit = report.kpiValues.find((x) => x.kpiName === mcName)?.unit ?? null;
                       return (
                         <TableRow className="bg-muted/20">
                           <TableCell className="font-medium">
                             カルテ枚数（{mcName}）<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">{lastM == null ? "—" : fmt(lastM)}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={lastM} unit={mcUnit} /></TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
-                          <TableCell className="text-right tabular-nums font-semibold">{fmt(cur)}</TableCell>
+                          <TableCell className="text-right tabular-nums font-semibold"><Num v={cur} unit={mcUnit} /></TableCell>
                           {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
                           <TableCell className="text-right text-xs tabular-nums text-muted-foreground">—</TableCell>
                         </TableRow>
@@ -182,15 +201,15 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       const lastM = analysis.lastMonthActual.get(v.kpiName) ?? null;
                       return (
                         <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
-                          <TableCell className="font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">{lastM == null ? "—" : fmt(lastM)}</TableCell>
-                          <TableCell className="text-right tabular-nums">{fmt(v.target)}</TableCell>
+                          <TableCell className="font-medium">{v.kpiName}</TableCell>
+                          <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={lastM} unit={v.unit} /></TableCell>
+                          <TableCell className="text-right tabular-nums"><Num v={v.target} unit={v.unit} /></TableCell>
                           <TableCell className={`text-right tabular-nums ${isMonthly && isUnder ? "font-semibold text-red-600" : ""}`}>
-                            {fmt(v.current)}{isMonthly && isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                            <Num v={v.current} unit={v.unit} />{isMonthly && isUnder && <span className="ml-1 text-[10px]">未達</span>}
                           </TableCell>
                           {!isMonthly && (
                             <TableCell className={`text-right tabular-nums ${isUnder ? "font-semibold text-red-600" : ""}`}>
-                              {fmt(v.forecast)}{isUnder && <span className="ml-1 text-[10px]">未達</span>}
+                              <Num v={v.forecast} unit={v.unit} />{isUnder && <span className="ml-1 text-[10px]">未達</span>}
                             </TableCell>
                           )}
                           <TableCell className={`text-right text-xs tabular-nums ${rate == null ? "text-muted-foreground" : isUnder ? "text-red-600" : "text-emerald-600"}`}>
@@ -305,9 +324,9 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                           <div className="font-medium">{t.kpiName}</div>
                           <div className="text-xs text-muted-foreground">{t.content}</div>
                         </TableCell>
-                        <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(t.baseValue)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-medium">{fmt(t.targetValue)}</TableCell>
-                        <TableCell className="text-right tabular-nums font-semibold">{fmt(t.currentValue)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={t.baseValue} unit={unitOf(t.kpiName)} /></TableCell>
+                        <TableCell className="text-right tabular-nums font-medium"><Num v={t.targetValue} unit={unitOf(t.kpiName)} /></TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold"><Num v={t.currentValue} unit={unitOf(t.kpiName)} /></TableCell>
                         <TableCell className={`text-right tabular-nums ${t.achieved ? "text-emerald-600" : late ? "text-red-600" : ""}`}>
                           {pct == null ? "—" : `${pct}%`}
                         </TableCell>
@@ -331,7 +350,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <Badge variant="outline">{d.kpiName}</Badge>
                       <span className="tabular-nums">
-                        デッドライン {fmt(d.threshold)} / 今週着地 <span className="font-semibold">{fmt(d.currentValue)}</span>
+                        デッドライン <Num v={d.threshold} unit={unitOf(d.kpiName)} /> / 今週着地 <span className="font-semibold"><Num v={d.currentValue} unit={unitOf(d.kpiName)} /></span>
                       </span>
                       <Badge variant={d.breached ? "bad" : "good"}>{d.breached ? "下回っています" : "クリア"}</Badge>
                     </div>
@@ -394,7 +413,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       {a.relatedKpiName && <Badge variant="outline">{a.relatedKpiName}</Badge>}
                       {a.targetValue != null ? (
                         <span className="font-medium tabular-nums">
-                          着地 {fmt(a.baseValue)} → {fmt(a.targetValue)} 予想
+                          着地 <Num v={a.baseValue} unit={unitOf(a.relatedKpiName)} /> → <Num v={a.targetValue} unit={unitOf(a.relatedKpiName)} /> 予想
                           {diff != null && <span className={diff > 0 ? "text-green-600" : diff < 0 ? "text-red-600" : ""}>（{diff > 0 ? "+" : ""}{diff}）</span>}
                         </span>
                       ) : (
@@ -505,10 +524,8 @@ function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null
                   </TableRow>
                   {g.items.map((v) => (
                     <TableRow key={v.id}>
-                      <TableCell className="whitespace-nowrap font-medium">
-                        {v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{fmt(v.target)}</TableCell>
+                      <TableCell className="whitespace-nowrap font-medium">{v.kpiName}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={v.target} unit={v.unit} /></TableCell>
                       {[1, 2, 3, 4, 5].map((n) => {
                         const val = valByWeek.get(n)?.get(v.kpiName) ?? null;
                         const rate = v.target != null && v.target !== 0 && val != null ? Math.round((val / v.target) * 100) : null;
@@ -518,7 +535,7 @@ function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null
                               <span className="text-muted-foreground/40">—</span>
                             ) : (
                               <>
-                                {fmt(val)}
+                                <Num v={val} unit={v.unit} />
                                 {rate != null && (
                                   <span className={`ml-1 text-[10px] ${rate >= 100 ? "font-semibold text-emerald-600" : "text-muted-foreground"}`}>({rate}%)</span>
                                 )}
@@ -560,12 +577,12 @@ type PrevReport = {
 } | null;
 
 // 予算/実績 を縦に並べたセル（先月・当月＝売上確定済みなので着地は出さない）
-function ActualCell({ budget, actual, good }: { budget: number | null; actual: number | null; good: string }) {
+function ActualCell({ budget, actual, good, unit }: { budget: number | null; actual: number | null; good: string; unit?: string | null }) {
   const under = budget != null && actual != null && (good === "UP" ? actual < budget : actual > budget);
   return (
     <TableCell className="text-right text-sm tabular-nums">
-      <div className="text-muted-foreground">予算 {fmt(budget)}</div>
-      <div className={under ? "font-semibold text-red-600" : "font-semibold"}>実績 {fmt(actual)}</div>
+      <div className="text-muted-foreground">予算 <Num v={budget} unit={unit} /></div>
+      <div className={under ? "font-semibold text-red-600" : "font-semibold"}>実績 <Num v={actual} unit={unit} /></div>
     </TableCell>
   );
 }
@@ -616,15 +633,15 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                     const pv = prevMap.get(v.kpiName);
                     return (
                       <TableRow key={v.id}>
-                        <TableCell className="whitespace-nowrap text-sm font-medium">{v.kpiName}<span className="ml-1 text-xs text-muted-foreground">{v.unit}</span></TableCell>
-                        {hasPrev && <ActualCell budget={pv?.target ?? null} actual={pv?.current ?? null} good={dir} />}
-                        <ActualCell budget={v.target} actual={v.current} good={dir} />
+                        <TableCell className="whitespace-nowrap text-sm font-medium">{v.kpiName}</TableCell>
+                        {hasPrev && <ActualCell budget={pv?.target ?? null} actual={pv?.current ?? null} good={dir} unit={v.unit} />}
+                        <ActualCell budget={v.target} actual={v.current} good={dir} unit={v.unit} />
                         {fwd.map((m) => {
                           const p = projMap.get(`${v.kpiName}__${m}`);
                           return (
                             <TableCell key={m} className="text-right text-sm tabular-nums">
-                              <div className="text-muted-foreground">予算 {fmt(p?.budget ?? null)}</div>
-                              <div>着地 {fmt(p?.forecast ?? null)}</div>
+                              <div className="text-muted-foreground">予算 <Num v={p?.budget ?? null} unit={v.unit} /></div>
+                              <div>着地 <Num v={p?.forecast ?? null} unit={v.unit} /></div>
                             </TableCell>
                           );
                         })}

@@ -176,14 +176,11 @@ export default async function PrintPage({
                             v.target != null && v.target !== 0 && v.forecast != null ? Math.round((v.forecast / v.target) * 100) : null;
                           return (
                             <tr key={v.id} className={ii % 2 === 1 ? "bg-gray-50" : ""}>
-                              <td className="py-0.5">
-                                {v.kpiName}
-                                <span className="ml-1 text-xs text-gray-400">{v.unit}</span>
-                              </td>
-                              <td className="py-0.5 text-right tabular-nums">{fmt(v.target)}</td>
-                              <td className="py-0.5 text-right tabular-nums">{fmt(v.current)}</td>
+                              <td className="py-0.5">{v.kpiName}</td>
+                              <td className="py-0.5 text-right tabular-nums">{fmt(v.target, { suffix: v.unit ?? undefined })}</td>
+                              <td className="py-0.5 text-right tabular-nums">{fmt(v.current, { suffix: v.unit ?? undefined })}</td>
                               <td className={`py-0.5 text-right tabular-nums ${isUnder ? "font-bold text-red-600" : ""}`}>
-                                {fmt(v.forecast)}
+                                {fmt(v.forecast, { suffix: v.unit ?? undefined })}
                                 {isUnder && <span className="ml-1 text-[10px]">未達</span>}
                               </td>
                               <td className={`py-0.5 text-right text-xs tabular-nums ${rate == null ? "text-gray-400" : isUnder ? "text-red-600" : "text-emerald-700"}`}>
