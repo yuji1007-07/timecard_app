@@ -604,11 +604,18 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
 
   const totalCols = 1 + (hasPrev ? 1 : 0) + 1 + fwd.length;
 
+  // 来月以降の「予測」行は既定で隠し、必要な時だけチェックで出す（普段は予算だけ見たいため）。
+  // サーバーコンポーネントのままJSなしで切り替えたいので :has() を使ったCSSで制御する。
   return (
-    <Card>
+    <Card className="rolling-wrap">
+      <style>{`.rolling-wrap:has(#rolling-show-forecast:not(:checked)) .rolling-forecast-line{display:none}`}</style>
       <CardHeader>
-        <CardTitle>ローリング予測（予算・実績／来月以降は着地予想）</CardTitle>
-        <p className="text-sm text-muted-foreground">{hasPrev ? "先月実績・" : ""}当月は確定した予算・実績、来月以降は予算・着地予想を横並びで確認できます。予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
+        <CardTitle>ローリング予測（予算・実績）</CardTitle>
+        <p className="text-sm text-muted-foreground">{hasPrev ? "先月実績・" : ""}当月は確定した予算・実績、来月以降は予算を横並びで確認できます。予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
+        <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
+          <input type="checkbox" id="rolling-show-forecast" className="h-4 w-4" />
+          <span>来月以降の「予測」も表示する</span>
+        </label>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
         <div style={{ minWidth: 260 + totalCols * 140 }}>
@@ -641,8 +648,8 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                           const p = projMap.get(`${v.kpiName}__${m}`);
                           return (
                             <TableCell key={m} className="text-right text-sm tabular-nums">
-                              <div className="text-muted-foreground">予算 <Num v={p?.budget ?? null} unit={v.unit} /></div>
-                              <div>着地 <Num v={p?.forecast ?? null} unit={v.unit} /></div>
+                              <div>予算 <Num v={p?.budget ?? null} unit={v.unit} /></div>
+                              <div className="rolling-forecast-line text-muted-foreground">予測 <Num v={p?.forecast ?? null} unit={v.unit} /></div>
                             </TableCell>
                           );
                         })}
