@@ -193,11 +193,10 @@ export function PdfImportCard({
       { role: "target", label: `${curLabel}（当月）の予算` },
       { role: "current", label: `${curLabel}（当月）の実績` },
     ];
-    // 来月以降は「予算」と「予測」。シートに予測列が無ければ予算だけ選べばよい（予測は予算と同じ扱い）
+    // シートは月ごとに1列なので、来月以降は月ごとに1スロット。
+    // 予算／予測の振り分けは列ではなく「行」で決まる（シートの【予算】行と実績（予測）行）。
     for (const m of forwardMonths) {
-      const ml = monthShort(m, baseYear);
-      slots.push({ role: `pb:${m}`, label: `${ml} の予算` });
-      slots.push({ role: `pf:${m}`, label: `${ml} の予測` });
+      slots.push({ role: `pb:${m}`, label: `${monthShort(m, baseYear)} の列` });
     }
     return slots;
   }, [isMonthly, curLabel, forwardMonths, baseYear]);
@@ -213,6 +212,17 @@ export function PdfImportCard({
     return best;
   }, [data]);
   const sampleRowLabel = sampleRow ? `「${sampleRow.label}」` : null;
+
+  // シートの「【予算】」行（事前に決めた数値）と、それに対応する売上ラインKPI。
+  // この2つが揃っている時だけ、予算行→予算 / 実績（予測）行→予測 に振り分ける。
+  const budgetRow = useMemo(
+    () => data?.rows.find((r) => /^(予算|予算合計|売上予算)$/.test(norm(r.label))) ?? null,
+    [data]
+  );
+  const revenueKpi = useMemo(
+    () => kpis.find((k) => ["実績(予測)", "予測着地", "実績予測"].includes(norm(k.name))) ?? null,
+    [kpis]
+  );
 
   const colOfRole = (role: string) => Object.entries(colMap).find(([, r]) => r === role)?.[0] ?? null;
 
@@ -247,31 +257,39 @@ export function PdfImportCard({
     const kpiUpd: PdfKpiUpdates = {};
     const projUpd: PdfProjUpdates = {};
     let n = 0;
+    // シートは「【予算】＝事前に決めた数値」と「実績（予測）＝現実的に届く数値」が別の行になっている。
+    // 予算行は同じ売上ラインKPIの“予算”側、実績（予測）行は“予測”側に入れる。
+    // 行が1本しかないKPIは、その月の予算・予測の両方に同じ数値を入れる。
+    const targets: { row: PdfRow; kpi: KpiItemDef; fill: "both" | "budget" | "forecast" }[] = [];
     for (const { row, kpi } of matched) {
-      if (!kpi) continue;
+      if (kpi) targets.push({ row, kpi, fill: kpi.id === revenueKpi?.id && budgetRow ? "forecast" : "both" });
+      else if (revenueKpi && row === budgetRow) targets.push({ row, kpi: revenueKpi, fill: "budget" });
+    }
+
+    for (const { row, kpi, fill } of targets) {
       for (const [ci, role] of Object.entries(colMap)) {
         if (!role) continue;
         const v = row.cells[ci];
         if (v == null) continue;
         const s = String(v);
         if (role === "current") {
-          if (!kpi.hasCurrent) continue;
+          if (!kpi.hasCurrent || fill === "budget") continue;
           (kpiUpd[kpi.id] ??= {}).current = s;
           n++;
         } else if (role === "target") {
-          if (!kpi.hasTarget) continue;
+          if (!kpi.hasTarget || fill === "forecast") continue;
           (kpiUpd[kpi.id] ??= {}).target = s;
           n++;
         } else if (role === "forecast") {
-          if (!kpi.hasForecast) continue;
+          if (!kpi.hasForecast || fill === "budget") continue;
           (kpiUpd[kpi.id] ??= {}).forecast = s;
           n++;
         } else if (role.startsWith("pb:") || role.startsWith("pf:")) {
           const m = role.slice(3);
           if (!forwardMonths.includes(m)) continue;
           const slot = ((projUpd[kpi.name] ??= {})[m] ??= {});
-          if (role.startsWith("pb:")) slot.budget = s;
-          else slot.forecast = s;
+          if (fill !== "forecast") slot.budget = s;
+          if (fill !== "budget") slot.forecast = s;
           n++;
         }
       }
