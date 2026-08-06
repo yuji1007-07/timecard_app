@@ -611,10 +611,13 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
       <style>{`.rolling-wrap:has(#rolling-show-forecast:not(:checked)) .rolling-forecast-line{display:none}`}</style>
       <CardHeader>
         <CardTitle>ローリング予測（予算・実績）</CardTitle>
-        <p className="text-sm text-muted-foreground">{hasPrev ? "先月実績・" : ""}当月は確定した予算・実績、来月以降は予算を横並びで確認できます。予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。</p>
+        <p className="text-sm text-muted-foreground">
+          {hasPrev ? "先月実績・" : ""}当月は確定した予算・実績、来月以降は予算を横並びで確認できます。
+          「予算」カテゴリは予算・予測の両方を常に表示します。予算に届かない項目は<span className="font-medium text-red-600">赤文字</span>。
+        </p>
         <label className="flex w-fit cursor-pointer items-center gap-2 text-sm">
           <input type="checkbox" id="rolling-show-forecast" className="h-4 w-4" />
-          <span>来月以降の「予測」も表示する</span>
+          <span>「予算」以外の項目も予測を表示する</span>
         </label>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0">
@@ -626,7 +629,7 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                 {hasPrev && <TableHead className="text-center text-base text-muted-foreground">{prevLabel}（先月実績）</TableHead>}
                 <TableHead className="text-center text-base font-bold text-navy">{monthShort(tm, baseYear)}（当月）</TableHead>
                 {fwd.map((m) => (
-                  <TableHead key={m} className="text-center text-base">{monthShort(m, baseYear)}（予測）</TableHead>
+                  <TableHead key={m} className="text-center text-base">{monthShort(m, baseYear)}</TableHead>
                 ))}
               </TableRow>
             </TableHeader>
@@ -639,6 +642,9 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                   {g.items.map((v) => {
                     const dir = v.kpiItem?.goodDirection ?? "UP";
                     const pv = prevMap.get(v.kpiName);
+                    // 「予算」カテゴリ（予測着地・営業日数など全体の数字）は予算・予測とも常時表示。
+                    // それ以外の明細は予算のみ表示し、予測はチェックを入れた時だけ出す。
+                    const alwaysForecast = g.category === "予算";
                     return (
                       <TableRow key={v.id}>
                         <TableCell className="whitespace-nowrap text-sm font-medium">{v.kpiName}</TableCell>
@@ -649,7 +655,7 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                           return (
                             <TableCell key={m} className="text-right text-sm tabular-nums">
                               <div>予算 <Num v={p?.budget ?? null} unit={v.unit} /></div>
-                              <div className="rolling-forecast-line text-muted-foreground">予測 <Num v={p?.forecast ?? null} unit={v.unit} /></div>
+                              <div className={`text-muted-foreground ${alwaysForecast ? "" : "rolling-forecast-line"}`}>予測 <Num v={p?.forecast ?? null} unit={v.unit} /></div>
                             </TableCell>
                           );
                         })}
