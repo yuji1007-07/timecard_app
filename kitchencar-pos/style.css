@@ -99,14 +99,12 @@ button { cursor: pointer; border: none; background: none; }
 .sec-title + .sec-title { margin-top: 22px; }
 .spacer-lg { height: 26px; }
 
-/* ── カテゴリー切替 ── */
+/* ── カテゴリー切替（隠れないよう折り返す） ── */
 .cats {
-  display: flex; gap: 7px; overflow-x: auto; scrollbar-width: none;
-  margin: 0 -16px 12px; padding: 2px 16px 6px;
+  display: flex; flex-wrap: wrap; gap: 7px; margin: 0 0 12px;
 }
-.cats::-webkit-scrollbar { display: none; }
 .cat-chip {
-  flex: none; padding: 8px 16px; border-radius: 22px; white-space: nowrap;
+  flex: none; padding: 8px 14px; border-radius: 22px; white-space: nowrap;
   font-size: 13.5px; font-weight: 700; color: var(--muted);
   background: var(--surface); border: 1px solid var(--line);
   transition: background .15s, color .15s, border-color .15s, transform .08s;
