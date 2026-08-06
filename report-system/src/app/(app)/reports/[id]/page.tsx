@@ -33,7 +33,7 @@ type KpiValueRow = {
   target: number | null;
   current: number | null;
   forecast: number | null;
-  kpiItem: { goodDirection: string; category: string | null } | null;
+  kpiItem: { goodDirection: string; category: string | null; sortOrder?: number } | null;
 };
 
 /**

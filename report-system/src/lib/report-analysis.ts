@@ -8,7 +8,11 @@ export async function getReportAnalysis(reportId: string) {
   const report = await prisma.report.findUnique({
     where: { id: reportId },
     include: {
-      kpiValues: { include: { kpiItem: { select: { goodDirection: true, category: true } } } },
+      // 表示順はKPIテンプレートの並び順に揃える（DBの返却順だとカテゴリ内がバラバラになるため）
+      kpiValues: {
+        include: { kpiItem: { select: { goodDirection: true, category: true, sortOrder: true } } },
+        orderBy: { kpiItem: { sortOrder: "asc" } },
+      },
       kdis: true,
       actions: true,
       projections: true,
