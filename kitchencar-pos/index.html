@@ -230,6 +230,7 @@ const $ = (id) => document.getElementById(id);
 let menu = [];            // [{id,name,price,emoji,cat,sort,active}]
 let cart = {};            // { productId: qty }
 let activeCat = null;     // 表示中のカテゴリー（null = すべて）
+let catInit = false;      // 起動時の既定カテゴリーを決めたか
 let orders = [];          // 本日分
 let pending = [];         // お客様からの未確認注文
 let settings = { qrEnabled: false };
@@ -435,9 +436,15 @@ function renderMenu() {
   // カテゴリーが1種類しかないなら切替は出さない
   const useCats = cats.length > 1;
   $('menuCats').hidden = !useCats;
-  if (!useCats) activeCat = null;
-  else if (activeCat !== null && !cats.includes(activeCat)) activeCat = cats[0];
-  else if (activeCat === null && active.length > 8) activeCat = cats[0];
+  if (!useCats) {
+    activeCat = null;
+  } else if (!catInit) {
+    // 起動時だけ既定のカテゴリーを選ぶ。以降はユーザーの選択を尊重する
+    catInit = true;
+    if (active.length > 8) activeCat = cats[0];
+  } else if (activeCat !== null && !cats.includes(activeCat)) {
+    activeCat = cats[0];   // 選んでいたカテゴリーが無くなった場合
+  }
 
   if (useCats) {
     $('menuCats').innerHTML =
