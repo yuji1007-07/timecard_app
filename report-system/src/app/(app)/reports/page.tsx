@@ -7,13 +7,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { fmt, weekLabel } from "@/lib/utils";
-import { REPORT_TYPES, BUSINESS_TYPES, label } from "@/lib/constants";
+import { REPORT_TYPES, BUSINESS_TYPES, STORE_STATUS, label } from "@/lib/constants";
+import { DeleteReportButton } from "./delete-report-button";
 import type { Prisma } from "@prisma/client";
 
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; type?: string; storeId?: string; draft?: string }>;
+  searchParams: Promise<{ q?: string; type?: string; storeId?: string; draft?: string; inactive?: string }>;
 }) {
   const sp = await searchParams;
   const user = await requireUser();
@@ -25,6 +26,11 @@ export default async function ReportsPage({
     if (user.role === "DEPARTMENT_MANAGER") where.departmentId = user.departmentId;
   } else if (sp.storeId) {
     where.storeId = sp.storeId;
+  }
+  // 使わなくなった店舗（休止中・閉院）の報告は既定で隠す。店舗管理でステータスを変えると反映される。
+  const showInactive = sp.inactive === "1";
+  if (isAdmin && !sp.storeId && !showInactive) {
+    where.store = { status: "ACTIVE" };
   }
   if (sp.type === "WEEKLY" || sp.type === "MONTHLY") where.reportType = sp.type;
   if (sp.q) {
@@ -46,6 +52,7 @@ export default async function ReportsPage({
   });
 
   const stores = isAdmin ? await prisma.store.findMany({ orderBy: { sortOrder: "asc" } }) : [];
+  const inactiveCount = isAdmin ? await prisma.store.count({ where: { status: { not: "ACTIVE" } } }) : 0;
 
   const selectClass = "flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm";
 
@@ -78,9 +85,11 @@ export default async function ReportsPage({
               <div className="space-y-1.5">
                 <label className="text-sm font-medium">店舗</label>
                 <select name="storeId" defaultValue={sp.storeId ?? ""} className={selectClass}>
-                  <option value="">すべて</option>
+                  <option value="">すべて（稼働中）</option>
                   {stores.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.status !== "ACTIVE" ? `（${label(STORE_STATUS, s.status)}）` : ""}
+                    </option>
                   ))}
                 </select>
               </div>
@@ -94,7 +103,18 @@ export default async function ReportsPage({
               </select>
             </div>
             <Button type="submit" variant="outline">検索</Button>
+            {isAdmin && inactiveCount > 0 && (
+              <label className="flex cursor-pointer items-center gap-2 pb-2 text-sm">
+                <input type="checkbox" name="inactive" value="1" defaultChecked={showInactive} className="h-4 w-4" />
+                <span>休止・閉院した店舗も表示（{inactiveCount}店舗）</span>
+              </label>
+            )}
           </form>
+          {isAdmin && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              ※ 使わなくなった店舗は<Link href="/stores" className="text-navy underline">店舗管理</Link>でステータスを「休止中」または「閉院」にすると、この一覧から隠れます。
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -189,11 +209,17 @@ export default async function ReportsPage({
                       )}
                     </TableCell>
                     <TableCell>
-                      {r.status === "DRAFT" ? (
-                        <Link href={`/reports/${r.id}/edit`}><Button size="sm">続きを入力</Button></Link>
-                      ) : (
-                        <Link href={`/reports/${r.id}`}><Button variant="outline" size="sm">詳細</Button></Link>
-                      )}
+                      <div className="flex items-center justify-end gap-1">
+                        {r.status === "DRAFT" ? (
+                          <Link href={`/reports/${r.id}/edit`}><Button size="sm">続きを入力</Button></Link>
+                        ) : (
+                          <Link href={`/reports/${r.id}`}><Button variant="outline" size="sm">詳細</Button></Link>
+                        )}
+                        <DeleteReportButton
+                          id={r.id}
+                          label={`${r.store.name}${r.department ? ` ${r.department.name}` : ""} ${r.targetWeek ? weekLabel(r.targetWeek, { withYear: true }) : r.targetMonth}`}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

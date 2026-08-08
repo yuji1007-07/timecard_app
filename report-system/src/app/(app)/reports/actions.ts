@@ -427,3 +427,30 @@ export async function updateReportPeriod(formData: FormData) {
   revalidatePath(`/reports/${reportId}`);
   redirect(`/reports/${reportId}/edit`);
 }
+
+/**
+ * 報告を削除する（テストで作った報告の後始末用）。
+ * 権限は編集と同じスコープ（管理者は全店、それ以外は自店舗/自部門のみ）。
+ * KPI値・KDI・Action・進捗・予測などの子レコードはカスケードで一緒に消える。
+ */
+export async function deleteReport(formData: FormData) {
+  const user = await requireUser();
+  const id = String(formData.get("id"));
+
+  const report = await prisma.report.findUnique({
+    where: { id },
+    select: { storeId: true, departmentId: true },
+  });
+  if (!report) throw new Error("報告が見つかりません。");
+
+  if (user.role !== "AREA_MANAGER") {
+    if (user.storeId !== report.storeId) throw new Error("この報告は削除できません。");
+    if (user.role === "DEPARTMENT_MANAGER" && user.departmentId !== report.departmentId) {
+      throw new Error("この報告は削除できません。");
+    }
+  }
+
+  await prisma.report.delete({ where: { id } });
+  revalidatePath("/reports");
+  revalidatePath("/dashboard");
+}
