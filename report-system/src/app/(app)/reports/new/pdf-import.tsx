@@ -63,23 +63,25 @@ function matchRows(rows: PdfRow[], kpis: KpiItemDef[]): { row: PdfRow; kpi: KpiI
 // 「8月予算」「9月着地」のように月＋種別が書かれている列は、その種別に振り分ける。
 function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forwardMonths: string[]): string {
   const h = norm(header);
-  const isBudget = /予算|目標/.test(h);
+  // 「差異」列は予算と実績の差分なので、どの欄にも取り込まない
+  if (/差異|差分/.test(h)) return "";
   const isForecast = /着地|予測|見込/.test(h);
   const hasMonth = (n: number) => new RegExp(`(?:^|[^0-9])${n}月`).test(h);
 
-  // 翌月以降の月が書かれている列は、3ヶ月予測（②-2）に振り分ける
   if (isMonthly) {
+    // 翌月以降の月が書かれている列は、3ヶ月予測（②-2）に振り分ける
     for (const m of forwardMonths) {
-      // 「差異」列は取り込まない（予算と実績の差分なので予測ではない）
-      if (/差異|差分/.test(h)) return "";
       if (hasMonth(Number(m.slice(5, 7)))) return isForecast ? `pf:${m}` : `pb:${m}`;
     }
+    if (h.includes("月末")) return "current";
+    if (curMonthNum > 0 && hasMonth(curMonthNum)) return isForecast ? "forecast" : "target";
+    return "";
   }
-  if (h.includes("月末")) return isMonthly ? "current" : "forecast";
-  if (curMonthNum > 0 && hasMonth(curMonthNum)) {
-    if (isMonthly && isForecast) return "forecast";
-    return "target";
-  }
+
+  // 週次は見出しがずれやすい（「8月」が差異列に付く等）ので、月名からの推測はしない。
+  // 種別がはっきり書かれている列だけ自動で割り当て、週の列はユーザーに選んでもらう。
+  if (/予算|目標/.test(h)) return "target";
+  if (h.includes("月末")) return "forecast";
   return "";
 }
 
@@ -176,19 +178,18 @@ export function PdfImportCard({
     }
   }
 
-  // 週次で「今週の列」として選べる列（~7日・~14日…・月末）
-  const weekChoiceCols = useMemo(() => {
-    if (!data || isMonthly) return [];
-    return data.columns.filter((c) => {
-      const h = norm(c.header);
-      return /~\d+日/.test(h) || h.includes("月末");
-    });
-  }, [data, isMonthly]);
   const currentWeekColIndex = Object.entries(colMap).find(([, r]) => r === "current")?.[0] ?? null;
 
   // 月次: 「当月の予算/実績」＋「来月以降3ヶ月の予算/着地予想」の割り当て先スロット
   const monthSlots = useMemo(() => {
-    if (!isMonthly) return [];
+    if (!isMonthly) {
+      // 週次も同じ「行ごとに列をタップ」方式にする（見出しが崩れても数値で選べる）
+      return [
+        { role: "target", label: "目標（月の目標）" },
+        { role: "current", label: "現状（今週まで）" },
+        { role: "forecast", label: "着地予測（月末見込み）" },
+      ];
+    }
     const slots = [
       { role: "target", label: `${curLabel}（当月）の予算` },
       { role: "current", label: `${curLabel}（当月）の実績` },
@@ -234,20 +235,6 @@ export function PdfImportCard({
         if (r === role) delete next[ci];
       }
       if (index != null) next[String(index)] = role;
-      return next;
-    });
-    setApplied(null);
-  }
-
-  function pickWeekCol(index: number) {
-    setColMap((m) => {
-      const next = { ...m };
-      // 既存の「現状」割り当てを外してから、選んだ列を現状に
-      for (const [ci, r] of Object.entries(next)) {
-        if (r === "current") delete next[ci];
-      }
-      // 月末列を現状に選んだ場合は着地予測の割り当てと入れ替わる
-      next[String(index)] = "current";
       return next;
     });
     setApplied(null);
@@ -317,7 +304,7 @@ export function PdfImportCard({
   const previewRows = matched.filter(
     ({ row, kpi }) => kpi && activeCols.some((c) => row.cells[String(c.index)] != null)
   );
-  const needsWeekPick = !isMonthly && weekChoiceCols.length > 0 && currentWeekColIndex == null;
+  const needsWeekPick = !isMonthly && currentWeekColIndex == null;
 
   return (
     <Card className="border-dashed border-navy/40">
@@ -366,36 +353,12 @@ export function PdfImportCard({
               </p>
             )}
 
-            {/* 週次: 今週の列を1タップで選ぶ */}
-            {!isMonthly && weekChoiceCols.length > 0 && (
-              <div className={`rounded-lg border-2 p-3 ${needsWeekPick ? "border-amber-400 bg-amber-50" : "border-navy/20 bg-navy/5"}`}>
-                <p className="text-sm font-bold">
-                  {needsWeekPick ? "👉 今週の数字はどの列に入っていますか？（タップで選択）" : "今週の列:"}
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {weekChoiceCols.map((c) => {
-                    const selected = currentWeekColIndex === String(c.index);
-                    return (
-                      <button
-                        key={c.index}
-                        type="button"
-                        onClick={() => pickWeekCol(c.index)}
-                        className={`rounded-full border-2 px-4 py-1.5 text-sm font-medium transition-colors ${
-                          selected ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
-                        }`}
-                      >
-                        {headerLabel(c)}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 月次: 当月＋来月以降3ヶ月ぶんの列を割り当てる */}
-            {isMonthly && data.columns.length > 0 && (
+            {/* 当月・週の列を割り当てる（見出しが崩れても数値で選べるようにする） */}
+            {data.columns.length > 0 && (
               <div className="space-y-2 rounded-lg border-2 border-navy/20 bg-navy/5 p-3">
-                <p className="text-sm font-bold">👉 どの列がどの月？（行ごとに、当てはまる列を1つタップ）</p>
+                <p className="text-sm font-bold">
+                  {isMonthly ? "👉 どの列がどの月？（行ごとに、当てはまる列を1つタップ）" : "👉 どの列が今週の数字？（行ごとに、当てはまる列を1つタップ）"}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   シートの見出しは崩れて読み取られることがあります。<span className="font-medium">ボタンの下に出ている数値</span>（{sampleRowLabel ?? "先頭の項目"}の値）を見て、
                   合っている列を選んでください。使わない列は選ばなくてOKです。
@@ -480,7 +443,7 @@ export function PdfImportCard({
             )}
 
             {needsWeekPick && (
-              <p className="text-sm font-medium text-amber-700">↑ 先に「今週の列」を選ぶと反映できるようになります。</p>
+              <p className="text-sm font-medium text-amber-700">↑ 先に「現状（今週まで）」の列を選ぶと反映できるようになります。</p>
             )}
 
             <div className="flex flex-wrap items-center gap-2">
