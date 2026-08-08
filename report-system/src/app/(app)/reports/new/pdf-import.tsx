@@ -78,10 +78,11 @@ function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forw
     return "";
   }
 
-  // 週次は見出しがずれやすい（「8月」が差異列に付く等）ので、月名からの推測はしない。
-  // 種別がはっきり書かれている列だけ自動で割り当て、週の列はユーザーに選んでもらう。
-  if (/予算|目標/.test(h)) return "target";
+  // 週次: 月末列は着地予測、対象月の列はその月の目標。週の列（~7日 等）は下で別途割り当てる。
   if (h.includes("月末")) return "forecast";
+  if (/~\d+日?/.test(h)) return "";
+  if (/予算|目標/.test(h)) return "target";
+  if (curMonthNum > 0 && hasMonth(curMonthNum)) return "target";
   return "";
 }
 
@@ -128,7 +129,7 @@ export function PdfImportCard({
   const matchedCount = matched.filter((m) => m.kpi).length;
   const unmatched = matched.filter((m) => !m.kpi);
   // 月次は対象月から、週次は今日の日付から「当月」を推定（目標/予算列の自動判定に使う）
-  const curMonthNum = isMonthly ? Number(period.slice(5, 7)) || 0 : new Date().getMonth() + 1;
+  const curMonthNum = Number(period.slice(5, 7)) || 0; // 週次 2026-08-W2 / 月次 2026-08 のどちらも先頭7文字が年月
   const curLabel = isMonthly ? (/^\d{4}-\d{2}$/.test(period) ? monthShort(period, baseYear) : "当月") : "今週";
 
   async function handleFiles(fs: File[]) {
@@ -159,6 +160,16 @@ export function PdfImportCard({
       for (const c of cols) {
         const g = guessRole(c.header, isMonthly, curMonthNum, forwardMonths);
         if (g) init[String(c.index)] = g;
+      }
+
+      // 週次: 対象週に対応する列（第1週→~7日、第2週→~14日…）を「現状」に自動で割り当てる
+      if (!isMonthly) {
+        const wn = Number((/-W([1-5])$/.exec(period) ?? [])[1] ?? 0);
+        if (wn >= 1 && wn <= 4 && !Object.values(init).includes("current")) {
+          const want = new RegExp(`~${wn * 7}日?`);
+          const col = cols.find((c) => want.test(norm(c.header)));
+          if (col) init[String(col.index)] = "current";
+        }
       }
 
       // 月次シートは見出しが結合セルで崩れやすく、月の判定に失敗することがある。

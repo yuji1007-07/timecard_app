@@ -115,16 +115,6 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     });
     return bestDist <= colSpan ? best : -1;
   };
-  // 数値は右揃えなので、列 i が占める帯は「列 i-1 の右端 〜 列 i の右端」。
-  // 見出し文字はその帯の中に置かれるため、文字の左端がどの帯に入るかで列を決める。
-  // （中心や最近傍で判定すると、桁数の違いで1列ずれて別の月の見出しになってしまう）
-  const headerColOf = (leftX: number): number => {
-    for (let i = 0; i < colCenters.length; i++) {
-      if (leftX <= colCenters[i] + COL_TOL) return i;
-    }
-    return colCenters.length - 1;
-  };
-
   // 数値ゾーンの開始x（ラベルとの境界）
   let valueZoneStart = VALUE_ZONE_MIN_X;
   {
@@ -137,7 +127,8 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     if (minX < Infinity) valueZoneStart = minX - 2;
   }
 
-  const headerParts: string[][] = colCenters.map(() => []);
+  // 見出し文字は「どの列に属するか」を行の解析が終わってから決める（空の列を除いてから判定するため）
+  const headerItems: { str: string; x: number; w: number }[] = [];
   const rowsOut: ParsedRow[] = [];
   const rowKeyIndex = new Map<string, number>();
 
@@ -161,10 +152,7 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
 
       // ヘッダー行（列見出し）: 数値より文字が多い行。列名の材料として回収する
       if (textItems.length > numericItems.length) {
-        for (const it of valueItems) {
-          const ci = headerColOf(it.x);
-          if (ci >= 0) headerParts[ci].push(it.str.trim());
-        }
+        for (const it of valueItems) headerItems.push({ str: it.str.trim(), x: it.x, w: it.w });
         continue;
       }
 
@@ -200,8 +188,25 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     }
   }
 
+  // 値が1つも入らなかった列を捨てる。
+  // 見出し行の数字などから空のクラスタができると、その分だけ見出しが1列ずれてしまうため。
+  const used = new Set<number>();
+  for (const r of rowsOut) for (const ci of Object.keys(r.cells)) used.add(Number(ci));
+  const keep = colCenters.map((_, i) => i).filter((i) => used.has(i));
+  const remap = new Map(keep.map((oldIdx, newIdx) => [oldIdx, newIdx]));
+  if (keep.length < colCenters.length) {
+    for (const r of rowsOut) {
+      const next: Record<string, number> = {};
+      for (const [ci, v] of Object.entries(r.cells)) {
+        const ni = remap.get(Number(ci));
+        if (ni != null) next[String(ni)] = v;
+      }
+      r.cells = next;
+    }
+  }
+
   // 列ごとのサンプル値（プレビュー用）
-  const samples: string[][] = colCenters.map(() => []);
+  const samples: string[][] = keep.map(() => []);
   for (const r of rowsOut) {
     for (const [ci, v] of Object.entries(r.cells)) {
       const arr = samples[Number(ci)];
@@ -209,7 +214,27 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     }
   }
 
-  const columns: ParsedColumn[] = colCenters.map((_, i) => ({
+  // 見出しの割り当て。数値は右揃え・見出しは中央寄せなので、
+  // 「列が占める帯（前の列の右端〜自分の右端）の中心」に一番近い見出し文字をその列のものとする。
+  // 左端や最近傍の右端で判定すると、見出しが隣の列にずれてしまう。
+  const kept = keep.map((i) => colCenters[i]);
+  const bandCenters = kept.map((right, i) => {
+    const left = i === 0 ? Math.min(valueZoneStart, right - (kept[1] ?? right) + right) : kept[i - 1];
+    return (left + right) / 2;
+  });
+  const headerParts: string[][] = kept.map(() => []);
+  for (const it of headerItems) {
+    const center = it.x + it.w / 2;
+    let best = 0;
+    let bestDist = Infinity;
+    bandCenters.forEach((bc, i) => {
+      const d = Math.abs(center - bc);
+      if (d < bestDist) { bestDist = d; best = i; }
+    });
+    headerParts[best].push(it.str);
+  }
+
+  const columns: ParsedColumn[] = kept.map((_, i) => ({
     index: i,
     header: [...new Set(headerParts[i])].join(" ").trim(),
     samples: samples[i],
