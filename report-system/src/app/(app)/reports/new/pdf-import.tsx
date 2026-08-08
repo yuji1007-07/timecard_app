@@ -85,12 +85,18 @@ function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forw
   return "";
 }
 
-// 見出しの表示用（スペース除去・長すぎは省略）
+// 見出しの表示用。結合セルの影響で隣の値やエラー文字（#DIV/0! 等）が混ざるので、
+// ノイズを落として読みやすくする。何も残らない場合は列の位置で示す。
 function headerLabel(c: PdfCol): string {
-  // 見出しが崩れて記号だけ（①②③ など）になることがあるので、その場合は列番号で示す
-  const h = c.header.replace(/\s+/g, "").replace(/^[①-⑳*※・\-]+/, "");
+  const h = c.header
+    .replace(/#(DIV\/0!|REF!|VALUE!|N\/A|NAME\?|NULL!|NUM!)/g, "") // 表計算のエラー表示
+    .replace(/[\d,]{3,}/g, "") // 隣のセルから紛れ込んだ数値
+    .replace(/\s+/g, "")
+    .replace(/^[①-⑳*※・\-]+/, "")
+    .replace(/^日/, "") // 「~14日」の日が隣の列にずれて先頭に付くことがある
+    .trim();
   if (!h) return `左から${c.index + 1}列目`;
-  return h.length > 10 ? `${h.slice(0, 10)}…` : h;
+  return h.length > 12 ? `${h.slice(0, 12)}…` : h;
 }
 
 export function PdfImportCard({
@@ -355,47 +361,40 @@ export function PdfImportCard({
 
             {/* 当月・週の列を割り当てる（見出しが崩れても数値で選べるようにする） */}
             {data.columns.length > 0 && (
-              <div className="space-y-2 rounded-lg border-2 border-navy/20 bg-navy/5 p-3">
-                <p className="text-sm font-bold">
-                  {isMonthly ? "👉 どの列がどの月？（行ごとに、当てはまる列を1つタップ）" : "👉 どの列が今週の数字？（行ごとに、当てはまる列を1つタップ）"}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  シートの見出しは崩れて読み取られることがあります。<span className="font-medium">ボタンの下に出ている数値</span>（{sampleRowLabel ?? "先頭の項目"}の値）を見て、
-                  合っている列を選んでください。使わない列は選ばなくてOKです。
-                </p>
-                {monthSlots.map((slot) => (
-                  <div key={slot.role} className="flex flex-wrap items-start gap-2 border-t pt-2 first:border-0 first:pt-0">
-                    <span className="w-32 shrink-0 pt-1.5 text-xs font-medium">{slot.label}</span>
-                    <div className="flex flex-wrap gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => assignRole(slot.role, null)}
-                        className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
-                          colOfRole(slot.role) == null ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
-                        }`}
-                      >
-                        使わない
-                      </button>
-                      {data.columns.map((c) => {
-                        const selected = colOfRole(slot.role) === String(c.index);
-                        const sample = sampleRow?.cells[String(c.index)];
-                        return (
-                          <button
-                            key={c.index}
-                            type="button"
-                            onClick={() => assignRole(slot.role, c.index)}
-                            className={`rounded-md border px-3 py-1 text-xs leading-tight transition-colors ${
-                              selected ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
-                            }`}
-                          >
-                            <div className={selected ? "" : "text-muted-foreground"}>{headerLabel(c)}</div>
-                            <div className="font-bold tabular-nums">{sample != null ? sample.toLocaleString() : "—"}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3 rounded-lg border-2 border-navy/20 bg-navy/5 p-3">
+                <div>
+                  <p className="text-sm font-bold">
+                    {isMonthly ? "👉 どの列がどの月？" : "👉 どの列が今週の数字？"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    シートの見出しは崩れて読み取られることがあります。かっこ内の数値（{sampleRowLabel ?? "先頭の項目"}の値）を見て選んでください。
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {monthSlots.map((slot) => {
+                    const picked = colOfRole(slot.role);
+                    return (
+                      <label key={slot.role} className="space-y-1 rounded-md bg-background p-2 shadow-sm">
+                        <span className="block text-xs font-medium">{slot.label}</span>
+                        <select
+                          className={selectClass}
+                          value={picked ?? ""}
+                          onChange={(e) => assignRole(slot.role, e.target.value === "" ? null : Number(e.target.value))}
+                        >
+                          <option value="">使わない</option>
+                          {data.columns.map((c) => {
+                            const sample = sampleRow?.cells[String(c.index)];
+                            return (
+                              <option key={c.index} value={c.index}>
+                                {headerLabel(c)}（{sample != null ? sample.toLocaleString() : "空"}）
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
 
