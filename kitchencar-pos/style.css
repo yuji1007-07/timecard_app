@@ -235,6 +235,38 @@ button { cursor: pointer; border: none; background: none; }
 .ticket-actions { margin-top: 11px; }
 
 /* ── 集計 ── */
+/* ── 日付の切替 ── */
+.datebar {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 11px;
+}
+.dnav {
+  width: 42px; height: 42px; flex: none; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--line);
+  font-size: 15px; font-weight: 800; color: var(--ink);
+  display: flex; align-items: center; justify-content: center;
+}
+.dnav:disabled { opacity: .35; }
+.dnav:active:not(:disabled) { background: var(--accent-soft); }
+.dlabel {
+  flex: 1; text-align: center; background: var(--surface);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 7px 10px; min-width: 0;
+}
+.dlabel .d-main { font-size: 15.5px; font-weight: 800; line-height: 1.3; }
+.dlabel .d-sub { font-size: 11px; color: var(--muted); font-weight: 700; }
+.dlabel .d-sub.today { color: var(--green); }
+
+.day-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 11px 0; border-bottom: 1px solid var(--line);
+  font-size: 14px; text-align: left;
+}
+.day-row:last-child { border-bottom: none; }
+.day-row.on { color: var(--accent); }
+.day-row .dy-date { font-weight: 700; }
+.day-row .dy-count { font-size: 12.5px; color: var(--muted); font-weight: 600; margin-left: 7px; }
+.day-row .dy-total { font-weight: 800; flex: none; }
+
 .hero-total {
   background: linear-gradient(140deg, #f97b28 0%, #e2661a 55%, #cf5510 100%);
   border-radius: var(--radius); padding: 22px 20px; text-align: center; color: #fff;

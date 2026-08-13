@@ -138,21 +138,39 @@
   <!-- ── 集計 ── -->
   <section class="page" id="page-summary">
     <div class="container">
+      <div class="datebar">
+        <button class="dnav" id="dPrev" aria-label="前の日">◀</button>
+        <div class="dlabel">
+          <div class="d-main" id="dMain">–</div>
+          <div class="d-sub" id="dSub"></div>
+        </div>
+        <button class="dnav" id="dNext" aria-label="次の日">▶</button>
+      </div>
+
       <div class="hero-total">
-        <div class="h-label">本日の売上合計</div>
+        <div class="h-label" id="sumLabel">本日の売上合計</div>
         <div class="h-value" id="sumTotal">¥0</div>
         <div class="h-sub" id="sumSub">0件 · 0点</div>
       </div>
+
       <div class="card">
         <h3>商品別 売上</h3>
         <div id="sumByItem"></div>
       </div>
+
       <div class="card">
         <h3>内訳</h3>
         <div class="srow"><span>スタッフ入力</span><span class="s-amt" id="sumStaff">0件</span></div>
         <div class="srow"><span>QR注文</span><span class="s-amt" id="sumQr">0件</span></div>
         <div class="srow"><span>取消</span><span class="s-amt" id="sumCancel">0件</span></div>
         <div class="srow"><span>平均客単価</span><span class="s-amt" id="sumAvg">¥0</span></div>
+      </div>
+
+      <button class="btn btn-ghost" id="btnCopySum" style="margin-bottom:20px">📋 この日の集計をコピー</button>
+
+      <div class="card">
+        <h3>日別の売上</h3>
+        <div id="sumByDay"></div>
       </div>
     </div>
   </section>
@@ -183,7 +201,12 @@
 
       <div class="spacer-lg"></div>
       <div class="sec-title">データ管理</div>
-      <button class="btn btn-danger-o" id="btnResetOrders" style="margin-bottom:9px">本日の売上・履歴をリセット</button>
+      <p class="note" style="margin-bottom:12px">
+        売上は日付ごとに自動で分かれます。日付が変わればレジは自動的に0からになるので、
+        通常はリセット不要です。過去の売上は<strong>集計タブ</strong>でいつでも見られます。
+      </p>
+      <button class="btn btn-danger-o" id="btnResetOrders" style="margin-bottom:9px">本日の記録だけ削除</button>
+      <button class="btn btn-danger-o" id="btnResetAll" style="margin-bottom:9px">すべての記録を削除</button>
       <button class="btn btn-ghost" id="btnLogout">ログアウト</button>
 
       <div class="spacer-lg"></div>
@@ -231,7 +254,9 @@ let menu = [];            // [{id,name,price,emoji,cat,sort,active}]
 let cart = {};            // { productId: qty }
 let activeCat = null;     // 表示中のカテゴリー（null = すべて）
 let catInit = false;      // 起動時の既定カテゴリーを決めたか
-let orders = [];          // 本日分
+let ordersAll = [];       // 全期間（過去の売上を見るため）
+let orders = [];          // 本日分（注文・キッチン・履歴で使う）
+let viewDate = todayKey(); // 集計タブで見ている日
 let pending = [];         // お客様からの未確認注文
 let settings = { qrEnabled: false };
 let authed = false;
@@ -372,10 +397,10 @@ function startListeners() {
   onValue(ref(db, 'orders'), (s) => {
     const data = s.val() || {};
     const today = todayKey();
-    orders = Object.entries(data)
-      .map(([key, v]) => ({ ...v, key }))
-      .filter(o => (o.date || today) === today)
+    ordersAll = Object.entries(data)
+      .map(([key, v]) => ({ ...v, key, date: v.date || today }))
       .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    orders = ordersAll.filter(o => o.date === today);
     renderAllOrderViews();
   }, onDbError);
 
@@ -757,14 +782,47 @@ function openEditOrder(key) {
   });
 }
 
-/* ═══════════════ 集計 ═══════════════ */
+/* ═══════════════ 集計（日付を切り替えて過去も見られる） ═══════════════ */
+function ordersOf(date) { return ordersAll.filter(o => o.date === date); }
+
+// 記録のある日を新しい順に
+function daysWithData() {
+  const set = new Set(ordersAll.map(o => o.date));
+  set.add(todayKey());
+  return [...set].sort().reverse();
+}
+
+function shiftDate(date, days) {
+  const [y, m, d] = date.split('-').map(Number);
+  const dt = new Date(y, m - 1, d + days);
+  return todayKey(dt);
+}
+
+function dateLabel(date) {
+  const [y, m, d] = date.split('-').map(Number);
+  const w = ['日', '月', '火', '水', '木', '金', '土'][new Date(y, m - 1, d).getDay()];
+  return `${y}年${m}月${d}日(${w})`;
+}
+
 function renderSummary() {
-  const valid = orders.filter(o => !o.cancelled);
+  // ヘッダーの数字は常に「今日」
+  const todayValid = orders.filter(o => !o.cancelled);
+  $('kpiSales').textContent = yen(todayValid.reduce((s, o) => s + (o.total || 0), 0));
+  $('kpiOrders').textContent = todayValid.length;
+
+  // 集計タブは選択中の日
+  const isToday = viewDate === todayKey();
+  const dayOrders = ordersOf(viewDate);
+  const valid = dayOrders.filter(o => !o.cancelled);
   const total = valid.reduce((s, o) => s + (o.total || 0), 0);
   const pieces = valid.reduce((s, o) => s + (o.items || []).reduce((a, i) => a + i.qty, 0), 0);
 
-  $('kpiSales').textContent = yen(total);
-  $('kpiOrders').textContent = valid.length;
+  $('dMain').textContent = dateLabel(viewDate);
+  $('dSub').textContent = isToday ? '本日' : '過去の記録';
+  $('dSub').classList.toggle('today', isToday);
+  $('dNext').disabled = isToday;
+  $('sumLabel').textContent = isToday ? '本日の売上合計' : 'この日の売上合計';
+
   $('sumTotal').textContent = yen(total);
   $('sumSub').textContent = `${valid.length}件 · ${pieces}点`;
 
@@ -779,13 +837,76 @@ function renderSummary() {
     <div class="srow">
       <span>${esc(d.emoji || '')} ${esc(name)}<span class="s-qty">${d.qty}個</span></span>
       <span class="s-amt">${yen(d.amt)}</span>
-    </div>`).join('') : '<div class="empty">データなし</div>';
+    </div>`).join('') : '<div class="empty">この日の記録はありません</div>';
 
   $('sumStaff').textContent = valid.filter(o => o.source !== 'customer').length + '件';
   $('sumQr').textContent = valid.filter(o => o.source === 'customer').length + '件';
-  $('sumCancel').textContent = orders.filter(o => o.cancelled).length + '件';
+  $('sumCancel').textContent = dayOrders.filter(o => o.cancelled).length + '件';
   $('sumAvg').textContent = yen(valid.length ? Math.round(total / valid.length) : 0);
+
+  renderDays();
 }
+
+function renderDays() {
+  const days = daysWithData();
+  $('sumByDay').innerHTML = days.map(d => {
+    const v = ordersOf(d).filter(o => !o.cancelled);
+    const t = v.reduce((s, o) => s + (o.total || 0), 0);
+    const [y, m, dd] = d.split('-').map(Number);
+    const w = ['日','月','火','水','木','金','土'][new Date(y, m - 1, dd).getDay()];
+    return `<button class="day-row ${d === viewDate ? 'on' : ''}" data-day="${d}">
+      <span><span class="dy-date">${m}/${dd}(${w})</span>${d === todayKey() ? '<span class="dy-count">本日</span>' : `<span class="dy-count">${v.length}件</span>`}</span>
+      <span class="dy-total">${yen(t)}</span>
+    </button>`;
+  }).join('');
+}
+
+$('sumByDay').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-day]');
+  if (!b) return;
+  viewDate = b.dataset.day;
+  renderSummary();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+
+$('dPrev').addEventListener('click', () => { viewDate = shiftDate(viewDate, -1); renderSummary(); });
+$('dNext').addEventListener('click', () => {
+  if (viewDate === todayKey()) return;
+  viewDate = shiftDate(viewDate, 1);
+  renderSummary();
+});
+
+$('btnCopySum').addEventListener('click', async () => {
+  const dayOrders = ordersOf(viewDate);
+  const valid = dayOrders.filter(o => !o.cancelled);
+  const total = valid.reduce((s, o) => s + (o.total || 0), 0);
+  const by = {};
+  valid.forEach(o => (o.items || []).forEach(i => {
+    if (!by[i.name]) by[i.name] = { qty: 0, amt: 0 };
+    by[i.name].qty += i.qty; by[i.name].amt += i.price * i.qty;
+  }));
+  const lines = [
+    `ボナペティ　${dateLabel(viewDate)}`,
+    `売上合計　${yen(total)}`,
+    `会計件数　${valid.length}件`,
+    '',
+    '【商品別】',
+    ...Object.entries(by).sort((a, b) => b[1].amt - a[1].amt)
+      .map(([n, d]) => `${n}　${d.qty}個　${yen(d.amt)}`),
+  ];
+  const text = lines.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('集計をコピーしました');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); toast('集計をコピーしました'); }
+    catch { toast('コピーできませんでした', true); }
+    document.body.removeChild(ta);
+  }
+});
 
 function renderAllOrderViews() { renderSummary(); renderHistory(); renderKitchen(); }
 
@@ -1041,17 +1162,42 @@ function loadQrLib() {
 
 /* ═══════════════ データ管理 ═══════════════ */
 $('btnResetOrders').addEventListener('click', () => {
-  confirmSheet('本日の売上・履歴をリセット', '会計履歴・キッチンの表示・集計がすべて消えます。商品メニューは残ります。営業終了後にお使いください。', 'リセットする', async () => {
-    await Promise.all([
-      remove(ref(db, 'orders')),
-      remove(ref(db, 'pending')),
-      remove(ref(db, 'meta')),
-      remove(ref(db, 'tickets')),
-    ]).catch(() => {});
-    saveOutbox([]);
-    cart = {}; syncBadges(); renderCart();
-    toast('リセットしました');
-  });
+  const today = todayKey();
+  const n = ordersOf(today).length;
+  confirmSheet(
+    '本日の記録だけ削除',
+    `本日の会計 ${n}件 を削除します。過去の日の売上は残ります。テスト入力を消したいときにお使いください。`,
+    '削除する',
+    async () => {
+      await Promise.all([
+        ...ordersOf(today).map(o => remove(ref(db, 'orders/' + o.key))),
+        remove(ref(db, 'pending')),
+        remove(ref(db, 'meta/' + today)),
+        remove(ref(db, 'tickets')),
+      ]).catch(() => {});
+      saveOutbox([]);
+      cart = {}; syncBadges(); renderCart();
+      toast('本日の記録を削除しました');
+    });
+});
+
+$('btnResetAll').addEventListener('click', () => {
+  confirmSheet(
+    'すべての記録を削除',
+    `過去の分も含めて、会計記録 ${ordersAll.length}件 がすべて消えます。元に戻せません。商品メニューは残ります。`,
+    'すべて削除する',
+    async () => {
+      await Promise.all([
+        remove(ref(db, 'orders')),
+        remove(ref(db, 'pending')),
+        remove(ref(db, 'meta')),
+        remove(ref(db, 'tickets')),
+      ]).catch(() => {});
+      saveOutbox([]);
+      viewDate = todayKey();
+      cart = {}; syncBadges(); renderCart();
+      toast('すべての記録を削除しました');
+    });
 });
 
 $('btnLogout').addEventListener('click', () => {
