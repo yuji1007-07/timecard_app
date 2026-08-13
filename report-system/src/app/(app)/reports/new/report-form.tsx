@@ -639,10 +639,20 @@ export function ReportForm({
                   {memberCountItemByCategory.get(g.category) && (() => {
                     const mc = memberCountItemByCategory.get(g.category)!;
                     return (
-                      <div className="flex items-center gap-2 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-dashed bg-muted/30 px-3 py-1.5 text-sm">
                         <span className="font-medium">カルテ枚数（{mc.name}）</span>
                         <Badge variant="muted" className="text-[10px]">自動反映</Badge>
-                        <span className="tabular-nums font-semibold">{kpi[mc.id]?.current || "—"}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {isMonthly ? "予算" : "目標"} <span className="tabular-nums font-semibold text-foreground">{kpi[mc.id]?.target || "—"}</span>
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {isMonthly ? "実績" : "現状"} <span className="tabular-nums font-semibold text-foreground">{kpi[mc.id]?.current || "—"}</span>
+                        </span>
+                        {!isMonthly && (
+                          <span className="text-xs text-muted-foreground">
+                            着地 <span className="tabular-nums font-semibold text-foreground">{kpi[mc.id]?.forecast || "—"}</span>
+                          </span>
+                        )}
                         <span className="text-xs text-muted-foreground">（会員数欄の入力がそのまま反映されます）</span>
                       </div>
                     );

@@ -91,7 +91,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     const name = memberCountKpiName(g.items.map((i) => i.kpiName), allKpiNames);
     if (name) memberCountNameByCategory.set(g.category, name);
   }
-  const kpiCurrentByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.current]));
+  const kpiByName = new Map(report.kpiValues.map((v) => [v.kpiName, v]));
   // KPI名から単位を引く（アクション・デッドライン表示で数値に単位を添えるため）
   const unitByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.unit]));
   const unitOf = (name: string | null | undefined) => (name ? unitByName.get(name) ?? null : null);
@@ -175,19 +175,34 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                     </TableRow>
                     {memberCountNameByCategory.get(g.category) && (() => {
                       const mcName = memberCountNameByCategory.get(g.category)!;
-                      const cur = kpiCurrentByName.get(mcName) ?? null;
+                      // 会員数KPIの値をそのまま写す（予算・実績・着地・達成率まで会員数欄と揃える）
+                      const mc = kpiByName.get(mcName);
                       const lastM = analysis.lastMonthActual.get(mcName) ?? null; // 会員数は名前で特定するためそのまま
-                      const mcUnit = report.kpiValues.find((x) => x.kpiName === mcName)?.unit ?? null;
+                      const mcUnit = mc?.unit ?? null;
+                      const mcDir = mc?.kpiItem?.goodDirection ?? "UP";
+                      const mcJudge = isMonthly ? mc?.current ?? null : mc?.forecast ?? null;
+                      const mcUnder =
+                        mc?.target != null && mcJudge != null && (mcDir === "UP" ? mcJudge < mc.target : mcJudge > mc.target);
+                      const mcRate =
+                        mc?.target != null && mc.target !== 0 && mcJudge != null ? Math.round((mcJudge / mc.target) * 100) : null;
                       return (
                         <TableRow className="bg-muted/20">
                           <TableCell className="font-medium">
                             カルテ枚数（{mcName}）<Badge variant="muted" className="ml-1.5 text-[10px]">自動反映</Badge>
                           </TableCell>
                           <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={lastM} unit={mcUnit} /></TableCell>
-                          <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>
-                          <TableCell className="text-right tabular-nums font-semibold"><Num v={cur} unit={mcUnit} /></TableCell>
-                          {!isMonthly && <TableCell className="text-right tabular-nums text-muted-foreground">—</TableCell>}
-                          <TableCell className="text-right text-xs tabular-nums text-muted-foreground">—</TableCell>
+                          <TableCell className="text-right tabular-nums"><Num v={mc?.target ?? null} unit={mcUnit} /></TableCell>
+                          <TableCell className={`text-right tabular-nums ${isMonthly && mcUnder ? "font-semibold text-red-600" : "font-semibold"}`}>
+                            <Num v={mc?.current ?? null} unit={mcUnit} />{isMonthly && mcUnder && <span className="ml-1 text-[10px]">未達</span>}
+                          </TableCell>
+                          {!isMonthly && (
+                            <TableCell className={`text-right tabular-nums ${mcUnder ? "font-semibold text-red-600" : ""}`}>
+                              <Num v={mc?.forecast ?? null} unit={mcUnit} />{mcUnder && <span className="ml-1 text-[10px]">未達</span>}
+                            </TableCell>
+                          )}
+                          <TableCell className={`text-right text-xs tabular-nums ${mcRate == null ? "text-muted-foreground" : mcUnder ? "text-red-600" : "text-emerald-600"}`}>
+                            {mcRate == null ? "—" : `${mcRate}%`}
+                          </TableCell>
                         </TableRow>
                       );
                     })()}
