@@ -63,13 +63,38 @@ export default async function StocktakeEntryPage({
     prevActual: prevMap.has(r.productId) ? prevMap.get(r.productId)! : null,
   }));
 
+  // 既に確定済みの場合、その後に記録された取引の件数（再確定で吸収されてしまう分）
+  const txSince = existing
+    ? await prisma.transaction.count({ where: { storeId, createdAt: { gt: existing.confirmedAt } } })
+    : 0;
+
+  const already = existing
+    ? {
+        confirmedAt: new Date(existing.confirmedAt).toLocaleString("ja-JP", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+        assigneeName: existing.assigneeName,
+        txSince,
+      }
+    : null;
+
   return (
     <div>
       <PageHeader
         title={`棚卸入力 — ${store.name}`}
         description={`対象月: ${month}｜理論在庫を確認しながら、実際に数えた在庫を入力してください。`}
       />
-      <StocktakeForm storeId={storeId} month={month} rows={rows} assigneeDefault={user.name ?? ""} />
+      <StocktakeForm
+        storeId={storeId}
+        month={month}
+        rows={rows}
+        assigneeDefault={user.name ?? ""}
+        already={already}
+      />
     </div>
   );
 }

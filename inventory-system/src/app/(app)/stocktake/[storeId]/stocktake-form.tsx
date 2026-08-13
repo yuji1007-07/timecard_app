@@ -28,18 +28,19 @@ export function StocktakeForm({
   month,
   rows,
   assigneeDefault,
+  already,
 }: {
   storeId: string;
   month: string;
   rows: Row[];
   assigneeDefault: string;
+  already: { confirmedAt: string; assigneeName: string | null; txSince: number } | null;
 }) {
   const router = useRouter();
-  const [actuals, setActuals] = useState<Record<string, string>>(() => {
-    const init: Record<string, string> = {};
-    for (const r of rows) init[r.productId] = r.prevActual != null ? String(r.prevActual) : "";
-    return init;
-  });
+  // 前回の実数はあえて初期値に入れない。
+  // 入れてしまうと「開いて確定を押しただけ」で前回の数値が今の在庫として上書きされ、
+  // その間に記録した消耗・発注が打ち消されてしまうため（前回値は参考列に表示する）。
+  const [actuals, setActuals] = useState<Record<string, string>>({});
   const [result, action] = useActionState(confirmStocktake, undefined);
 
   // 確定成功後は、社長提出用の報告書印刷ボタンを表示する
@@ -85,6 +86,27 @@ export function StocktakeForm({
       <input type="hidden" name="storeId" value={storeId} />
       <input type="hidden" name="month" value={month} />
 
+      {already && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+          <p className="text-sm font-bold text-amber-900">
+            この月（{month}）の棚卸は確定済みです（{already.confirmedAt}
+            {already.assigneeName ? ` / ${already.assigneeName}` : ""}）
+          </p>
+          <p className="mt-1 text-sm text-amber-900">
+            数量を入れた商品だけが、今の数量で上書きされます。
+            {already.txSince > 0 && (
+              <>
+                {" "}確定後に記録された取引が <span className="font-bold">{already.txSince}件</span>{" "}
+                あります。数え直した商品はその取引ぶんも含んだ「今ある数」を入力してください。
+              </>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-amber-800">
+            ※ 空欄の商品は変更されません。前回の数値はあえて自動入力していません（そのまま確定して在庫が巻き戻るのを防ぐため）。
+          </p>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border bg-card p-4">
         <div className="space-y-1">
           <Label>棚卸担当者</Label>
@@ -103,6 +125,7 @@ export function StocktakeForm({
               <th className="px-3 py-2 text-left">ブランド</th>
               <th className="px-3 py-2 text-left">商品名</th>
               <th className="px-3 py-2 text-right">理論在庫</th>
+              {already && <th className="px-3 py-2 text-right">前回入力</th>}
               <th className="px-3 py-2 text-right">実在庫</th>
               <th className="px-3 py-2 text-right">ズレ</th>
             </tr>
@@ -129,6 +152,11 @@ export function StocktakeForm({
                       </span>
                     )}
                   </td>
+                  {already && (
+                    <td className="px-3 py-2 text-right tabular-nums text-xs text-muted-foreground">
+                      {r.prevActual != null ? r.prevActual : "-"}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-right">
                     <input
                       name={`actual_${r.productId}`}
