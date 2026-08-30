@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DepartmentForm } from "../department-form";
 import { ScopePanel } from "./scope-panel";
+import { StoreEdit } from "./store-edit";
 import { BUSINESS_TYPES, STORE_STATUS, label } from "@/lib/constants";
 
 export default async function StoreKartePage({ params }: { params: Promise<{ id: string }> }) {
@@ -39,7 +40,23 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
         }
       />
 
-      {/* 基本情報 */}
+      {/* 基本情報（エリアマネージャーはここから閉院・休止に変更できる） */}
+      {isAdmin && (
+        <div className="mb-3">
+          <StoreEdit
+            store={{
+              id: store.id,
+              name: store.name,
+              businessType: store.businessType,
+              area: store.area,
+              directorName: store.directorName,
+              managerName: store.managerName,
+              openDate: store.openDate ? store.openDate.toISOString().slice(0, 10) : null,
+              status: store.status,
+            }}
+          />
+        </div>
+      )}
       <Card className="mb-6">
         <CardContent className="grid grid-cols-2 gap-4 pt-5 text-sm md:grid-cols-4">
           <Info label="店舗区分" value={label(BUSINESS_TYPES, store.businessType)} />
