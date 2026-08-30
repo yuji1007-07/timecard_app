@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { monthShort } from "@/lib/utils";
+import { matchRows, norm } from "@/lib/kpi-match";
 import type { KpiItemDef } from "./report-form";
 
 type PdfCol = { index: number; header: string; samples: string[] };
@@ -20,42 +21,6 @@ export type PdfProjUpdates = Record<string, Record<string, { budget?: string; fo
 
 const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-// 表記ゆれの正規化：空白除去・注釈[1]除去・全角カッコ→半角
-const norm = (s: string) =>
-  s.replace(/\s+/g, "").replace(/\[\d+\]/g, "").replace(/（/g, "(").replace(/）/g, ")");
-// 末尾の（…）注記を除去（例: 幽霊会員数（決済あり）→ 幽霊会員数）
-const stripParen = (s: string) => s.replace(/\([^()]*\)$/, "");
-
-// セクション名からKPI接頭辞の候補を作る（例: 新定額会員数 → 新定額 / ダイエットコース → ダイエット）
-function sectionPrefixes(section: string): string[] {
-  const s = norm(section);
-  const out = [s];
-  for (const suf of ["会員数", "会員", "コース", "数"]) {
-    if (s.endsWith(suf) && s.length > suf.length) out.push(s.slice(0, -suf.length));
-  }
-  return out;
-}
-
-function matchRows(rows: PdfRow[], kpis: KpiItemDef[]): { row: PdfRow; kpi: KpiItemDef | null }[] {
-  const byNorm = new Map<string, KpiItemDef>();
-  for (const k of kpis) if (!byNorm.has(norm(k.name))) byNorm.set(norm(k.name), k);
-  const claimed = new Set<string>();
-  return rows.map((row) => {
-    const L = norm(row.label);
-    const cands: string[] = [L, stripParen(L), `${L}会員数`];
-    if (row.section) {
-      for (const p of sectionPrefixes(row.section)) cands.push(`${p}-${L}`, `${p}-${stripParen(L)}`);
-    }
-    let hit: KpiItemDef | null = null;
-    for (const c of cands) {
-      const k = byNorm.get(c);
-      if (k && !claimed.has(k.id)) { hit = k; break; }
-    }
-    if (hit) claimed.add(hit.id);
-    return { row, kpi: hit };
-  });
-}
 
 // 列見出しから取り込み先を推測。
 // シートの運用: 「月末」列は週次では着地予想、月次では確定した実績が入る。
@@ -74,7 +39,9 @@ function guessRole(header: string, isMonthly: boolean, curMonthNum: number, forw
       if (hasMonth(Number(m.slice(5, 7)))) return isForecast ? `pf:${m}` : `pb:${m}`;
     }
     if (h.includes("月末")) return "current";
-    if (curMonthNum > 0 && hasMonth(curMonthNum)) return isForecast ? "forecast" : "target";
+    // 当月の列は「7月予測」＝前月に立てた予測なので予算、「7月実績値」＝確定した実績。
+    // どちらも「7月」を含むため、実績と書かれているかで振り分ける（両方を予算にしない）
+    if (curMonthNum > 0 && hasMonth(curMonthNum)) return /実績/.test(h) ? "current" : "target";
     return "";
   }
 

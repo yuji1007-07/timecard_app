@@ -115,13 +115,16 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     });
     return bestDist <= colSpan ? best : -1;
   };
-  // 数値ゾーンの開始x（ラベルとの境界）
+  // 数値ゾーンの開始x（ラベルとの境界）。
+  // 桁数の多い数値（300,000 など）は右揃えのぶん左に伸びるため、固定のしきい値で切ると
+  // 項目名の側に落ちて「プリカ300,000」のように名前へ食い込んでしまう。
+  // 列に収まる数値の左端から境界を決めることで、桁数によらず正しく分かれる。
   let valueZoneStart = VALUE_ZONE_MIN_X;
   {
     let minX = Infinity;
     for (const items of pages) {
       for (const it of items) {
-        if (it.x >= VALUE_ZONE_MIN_X && isNumeric(it.str)) minX = Math.min(minX, it.x);
+        if (isNumeric(it.str) && colIndexOf(it.x + it.w) >= 0) minX = Math.min(minX, it.x);
       }
     }
     if (minX < Infinity) valueZoneStart = minX - 2;
@@ -145,16 +148,20 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
     let section: string | null = null;
     for (const g of rowGroups) {
       const sorted = g.items.sort((a, b) => a.x - b.x);
-      const labelItems = sorted.filter((it) => it.x < valueZoneStart);
       const valueItems = sorted.filter((it) => it.x >= valueZoneStart);
-      const numericItems = valueItems.filter((it) => isNumeric(it.str));
-      const textItems = valueItems.filter((it) => !isNumeric(it.str));
 
-      // ヘッダー行（列見出し）: 数値より文字が多い行。列名の材料として回収する
-      if (textItems.length > numericItems.length) {
+      // ヘッダー行（列見出し）: 数値より文字が多い行。列名の材料として回収する。
+      // 「8月」の 8 のような見出しの一部を値として扱わないよう、行の判定を先に済ませる
+      if (valueItems.filter((it) => !isNumeric(it.str)).length > valueItems.filter((it) => isNumeric(it.str)).length) {
         for (const it of valueItems) headerItems.push({ str: it.str.trim(), x: it.x, w: it.w });
         continue;
       }
+
+      // セル値は「いずれかの列の右端に合う数値」。項目名はその手前にある文字
+      const cellItems = sorted.filter((it) => isNumeric(it.str) && colIndexOf(it.x + it.w) >= 0);
+      const cellSet = new Set(cellItems);
+      const firstCellX = cellItems.length ? Math.min(...cellItems.map((it) => it.x)) : valueZoneStart;
+      const labelItems = sorted.filter((it) => !cellSet.has(it) && it.x < firstCellX);
 
       const label = dedupeLabel(labelItems.map((it) => it.str).join(""));
       if (!label) continue;
@@ -165,7 +172,7 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       const rowLabel = secMatch ? secMatch[1].trim() : label;
 
       const cells: Record<string, number> = {};
-      for (const it of numericItems) {
+      for (const it of cellItems) {
         const ci = colIndexOf(it.x + it.w);
         if (ci >= 0) {
           const v = toNumber(it.str);
