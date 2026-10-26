@@ -77,6 +77,7 @@ export async function GET(req: Request) {
       )`,
       `CREATE INDEX IF NOT EXISTS "ReportProjection_reportId_idx" ON "ReportProjection"("reportId")`,
       `ALTER TABLE "ReportProjection" ADD CONSTRAINT "ReportProjection_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+      `ALTER TABLE "ReportProjection" ADD COLUMN IF NOT EXISTS "kpiItemId" TEXT`,
     ];
     for (const m of migrations) {
       try {

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
+import { assignSavedValues, assignSavedProjections } from "@/lib/kpi-values";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,12 +21,12 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   const report = await prisma.report.findUnique({
     where: { id },
     include: {
-      kpiValues: true,
+      kpiValues: { orderBy: { id: "asc" } },
       inflows: true,
       kdis: true,
       actions: true,
       progresses: true,
-      projections: true,
+      projections: { orderBy: { id: "asc" } },
       store: true,
       department: true,
     },
@@ -64,7 +65,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       ...(type === "WEEKLY" ? { targetWeek: { lt: period } } : { targetMonth: { lt: period } }),
     },
     orderBy: type === "WEEKLY" ? { targetWeek: "desc" } : { targetMonth: "desc" },
-    include: { kpiValues: true, actions: true, projections: true },
+    include: { kpiValues: { orderBy: { id: "asc" } }, actions: true, projections: { orderBy: { id: "asc" } } },
   });
 
   // 「月初の目標・着地を反映」用: 対象月の最初の週次報告（自分自身は除く）
@@ -78,14 +79,12 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       targetWeek: { startsWith: `${period.slice(0, 7)}-W`, ...(type === "WEEKLY" ? { lt: period } : {}) },
     },
     orderBy: { targetWeek: "asc" },
-    include: { kpiValues: true },
+    include: { kpiValues: { orderBy: { id: "asc" } } },
   });
-  // 同名KPIの取り違えを防ぐため ID を主キーにし、名前は旧データ用のフォールバックとして併記する
+  // 同名KPIの取り違えを防ぐため KPI項目ID で割り当てる（IDが今の項目に無い旧データだけ名前で割り当て）
   const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
-  for (const v of monthStartReport?.kpiValues ?? []) {
-    const val = { target: v.target, forecast: v.forecast };
-    kpiMonthStart[v.kpiItemId] = val;
-    if (!(v.kpiName in kpiMonthStart)) kpiMonthStart[v.kpiName] = val;
+  for (const [kid, v] of assignSavedValues(kpiItems, monthStartReport?.kpiValues ?? [])) {
+    kpiMonthStart[kid] = { target: v.target, forecast: v.forecast };
   }
 
   const prevKpiByName = new Map((prevReport?.kpiValues ?? []).map((v) => [v.kpiName, v.current]));
@@ -102,10 +101,8 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   }));
 
   const kpiPrev: Record<string, { target: number | null; current: number | null; forecast: number | null }> = {};
-  for (const v of prevReport?.kpiValues ?? []) {
-    const val = { target: v.target, current: v.current, forecast: v.forecast };
-    kpiPrev[v.kpiItemId] = val;
-    if (!(v.kpiName in kpiPrev)) kpiPrev[v.kpiName] = val;
+  for (const [kid, v] of assignSavedValues(kpiItems, prevReport?.kpiValues ?? [])) {
+    kpiPrev[kid] = { target: v.target, current: v.current, forecast: v.forecast };
   }
 
   // 非表示KPI
@@ -119,13 +116,11 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   }
 
   // 既存値をフォーム初期値へ
-  // 保存値は KPI項目ID で引き当てる（同名KPIがあっても値・コメントが混ざらない）
+  // 保存値は KPI項目ID で引き当てる（同名KPIがあっても値・コメントが混ざらない）。
+  // IDが今のテンプレートに無い旧データだけ名前で割り当てる（同名が複数なら並び順どおり1件ずつ）
   const kpiById: ReportInitial["kpiById"] = {};
-  const kpiByName: ReportInitial["kpiByName"] = {};
-  for (const v of report.kpiValues) {
-    const val = { target: s(v.target), current: s(v.current), forecast: s(v.forecast), comment: v.comment ?? "" };
-    kpiById[v.kpiItemId] = val;
-    if (!(v.kpiName in kpiByName)) kpiByName[v.kpiName] = val;
+  for (const [kid, v] of assignSavedValues(kpiItems, report.kpiValues)) {
+    kpiById[kid] = { target: s(v.target), current: s(v.current), forecast: s(v.forecast), comment: v.comment ?? "" };
   }
   const inflow: Record<string, string> = Object.fromEntries(INFLOW_CHANNELS.map((c) => [c, ""]));
   for (const i of report.inflows) inflow[i.channel] = String(i.count);
@@ -158,9 +153,9 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   // 月次：3ヶ月予測（このレポートの保存値）＋前月からの引き継ぎ
   const forwardMonths = type === "MONTHLY" ? [1, 2, 3].map((n) => addMonthStr(period, n)) : [];
   const projections: ProjMap = {};
-  for (const p of report.projections) {
-    projections[p.kpiName] = projections[p.kpiName] ?? {};
-    projections[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+  for (const [kid, months] of assignSavedProjections(kpiItems, report.projections)) {
+    projections[kid] = {};
+    for (const [month, p] of months) projections[kid][month] = { budget: s(p.budget), forecast: s(p.forecast) };
   }
   const kpiCarry: Record<string, { budget: string; forecast: string }> = {};
   const projCarry: ProjMap = {};
@@ -178,7 +173,7 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       },
       orderBy: { targetMonth: "desc" },
       take: 6,
-      select: { targetMonth: true, projections: true },
+      select: { targetMonth: true, projections: { orderBy: { id: "asc" } } },
     });
     const wanted = [period, ...forwardMonths];
     const source =
@@ -187,11 +182,13 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
       null;
     if (source) {
       carryFromMonth = source.targetMonth;
-      for (const p of source.projections) {
-        if (p.targetMonth === period) kpiCarry[p.kpiName] = { budget: s(p.budget), forecast: s(p.forecast) };
-        if (forwardMonths.includes(p.targetMonth)) {
-          projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
-          projCarry[p.kpiName][p.targetMonth] = { budget: s(p.budget), forecast: s(p.forecast) };
+      for (const [kid, months] of assignSavedProjections(kpiItems, source.projections)) {
+        for (const [month, p] of months) {
+          if (month === period) kpiCarry[kid] = { budget: s(p.budget), forecast: s(p.forecast) };
+          if (forwardMonths.includes(month)) {
+            projCarry[kid] = projCarry[kid] ?? {};
+            projCarry[kid][month] = { budget: s(p.budget), forecast: s(p.forecast) };
+          }
         }
       }
     }
@@ -200,7 +197,6 @@ export default async function EditReportPage({ params }: { params: Promise<{ id:
   const initial: ReportInitial = {
     originalText: report.originalText ?? "",
     kpiById,
-    kpiByName,
     inflow,
     review: {
       goodPoints: report.goodPoints ?? "",

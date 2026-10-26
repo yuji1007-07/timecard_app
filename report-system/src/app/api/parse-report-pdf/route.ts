@@ -8,6 +8,7 @@ export const maxDuration = 60;
 
 const MAX_SIZE = 10 * 1024 * 1024;
 const MAX_IMAGES = 4;
+const MAX_STRIPS = 10;
 const isImage = (f: File) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|heic|heif)$/i.test(f.name);
 
 // スプレッドシートを印刷したPDF、またはシートのスクリーンショット／写真をアップロードすると、
@@ -20,10 +21,15 @@ export async function POST(req: Request) {
   }
 
   const files: File[] = [];
+  // 画像のときはブラウザが切り出した拡大用の帯画像（strip-<画像番号>-<順番>.jpg）も届く
+  const strips: File[] = [];
   try {
     const fd = await req.formData();
     for (const f of fd.getAll("file")) {
       if (f instanceof File && f.size > 0) files.push(f);
+    }
+    for (const f of fd.getAll("strip")) {
+      if (f instanceof File && f.size > 0 && f.size <= MAX_SIZE) strips.push(f);
     }
   } catch {
     // fallthrough
@@ -39,10 +45,21 @@ export async function POST(req: Request) {
     // 画像だけが渡された場合は視覚モデルで読み取る。PDFが含まれる場合は先頭のPDFを解析する。
     const pdf = files.find((f) => !isImage(f));
     if (!pdf) {
+      const toImage = async (f: File) => ({
+        buffer: Buffer.from(await f.arrayBuffer()),
+        mime: f.type && f.type.startsWith("image/") ? f.type : "image/png",
+      });
+      const stripOrder = (f: File) => Number(/^strip-\d+-(\d+)/.exec(f.name)?.[1] ?? 0);
       const images = await Promise.all(
-        files.slice(0, MAX_IMAGES).map(async (f) => ({
-          buffer: Buffer.from(await f.arrayBuffer()),
-          mime: f.type && f.type.startsWith("image/") ? f.type : "image/png",
+        files.slice(0, MAX_IMAGES).map(async (f, i) => ({
+          ...(await toImage(f)),
+          strips: await Promise.all(
+            strips
+              .filter((s) => s.name.startsWith(`strip-${i}-`))
+              .sort((a, b) => stripOrder(a) - stripOrder(b))
+              .slice(0, MAX_STRIPS)
+              .map(toImage)
+          ),
         }))
       );
       const result = await parseImageTable(images);

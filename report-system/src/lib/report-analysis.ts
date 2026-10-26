@@ -3,6 +3,7 @@ import { computeKpiDiff, checkConsistency, checkKdiConsistency, type KpiDiffRow 
 import { CONSISTENCY, label, KDI_STATUS, TREND } from "@/lib/constants";
 import { addMonthStr } from "@/lib/utils";
 import { splitDataIssues } from "@/lib/deadline-actions";
+import { assignSavedValues } from "@/lib/kpi-values";
 
 export async function getReportAnalysis(reportId: string) {
   const report = await prisma.report.findUnique({
@@ -15,7 +16,7 @@ export async function getReportAnalysis(reportId: string) {
       },
       kdis: true,
       actions: true,
-      projections: true,
+      projections: { orderBy: { id: "asc" } },
       progresses: { include: { previousAction: true } },
       inflows: true,
       store: true,
@@ -43,7 +44,7 @@ export async function getReportAnalysis(reportId: string) {
               targetWeek: prevWeek,
             },
             orderBy: { submittedAt: "desc" },
-            include: { kpiValues: true },
+            include: { kpiValues: { orderBy: { id: "asc" } } },
           })
         : null
       : await prisma.report.findFirst({
@@ -55,7 +56,7 @@ export async function getReportAnalysis(reportId: string) {
             submittedAt: { lt: report.submittedAt },
           },
           orderBy: { submittedAt: "desc" },
-          include: { kpiValues: true },
+          include: { kpiValues: { orderBy: { id: "asc" } } },
         });
 
   // 週次: 同じ月の各週の報告（第1週→月末の推移比較用）
@@ -69,7 +70,7 @@ export async function getReportAnalysis(reportId: string) {
           targetWeek: { startsWith: `${wm[1]}-W` },
         },
         orderBy: { targetWeek: "asc" },
-        select: { id: true, targetWeek: true, kpiValues: { select: { kpiName: true, current: true } } },
+        select: { id: true, targetWeek: true, kpiValues: { select: { kpiItemId: true, kpiName: true, current: true }, orderBy: { id: "asc" } } },
       })
     : [];
 
@@ -121,21 +122,20 @@ export async function getReportAnalysis(reportId: string) {
       src = await prisma.report.findFirst({
         where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "WEEKLY", status: "SUBMITTED", targetWeek: { startsWith: `${pm}-W` } },
         orderBy: { targetWeek: "desc" },
-        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true } } },
+        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true }, orderBy: { id: "asc" } } },
       });
     } else if (report.reportType === "MONTHLY" && report.targetMonth) {
       const pm = addMonthStr(report.targetMonth, -1);
       src = await prisma.report.findFirst({
         where: { storeId: report.storeId, departmentId: report.departmentId, reportType: "MONTHLY", status: "SUBMITTED", targetMonth: pm },
         orderBy: { submittedAt: "desc" },
-        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true } } },
+        select: { kpiValues: { select: { kpiItemId: true, kpiName: true, current: true }, orderBy: { id: "asc" } } },
       });
     }
-    // 同名KPIがあっても取り違えないよう ID を主キーにし、名前はフォールバックとして併記する
-    for (const v of src?.kpiValues ?? []) {
-      lastMonthActual.set(v.kpiItemId, v.current);
-      if (!lastMonthActual.has(v.kpiName)) lastMonthActual.set(v.kpiName, v.current);
-    }
+    // 同名KPIがあっても取り違えないよう KPI項目ID で割り当てる（キーは今回の報告の kpiItemId）。
+    // 名前で引くのはIDが今回の項目に無い旧データだけ（別の区分の同名項目の値を「先月実績」に出さない）
+    const items = report.kpiValues.map((v) => ({ id: v.kpiItemId, name: v.kpiName }));
+    for (const [id, v] of assignSavedValues(items, src?.kpiValues ?? [])) lastMonthActual.set(id, v.current);
   }
 
   // 週次: 現在有効な月次アクションプランの進捗を自動追跡する。

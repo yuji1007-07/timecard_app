@@ -14,7 +14,7 @@ import { isoWeekToMonthWeek } from "./utils";
 let ran: Promise<void> | null = null;
 
 // マイグレーションのバージョン。新しい列やテーブルを足したらここを上げる。
-const DONE_FLAG = "schema_migration_v3";
+const DONE_FLAG = "schema_migration_v4";
 
 // 追加カラム・テーブル（既に存在すれば何もしない。各文はtry/catchで実行）
 const COLUMN_MIGRATIONS = [
@@ -36,6 +36,8 @@ const COLUMN_MIGRATIONS = [
   )`,
   `CREATE INDEX IF NOT EXISTS "ReportProjection_reportId_idx" ON "ReportProjection"("reportId")`,
   `ALTER TABLE "ReportProjection" ADD CONSTRAINT "ReportProjection_reportId_fkey" FOREIGN KEY ("reportId") REFERENCES "Report"("id") ON DELETE CASCADE ON UPDATE CASCADE`,
+  // 予測をKPI項目IDでも持つ（同名KPIの取り違え防止。旧データは null のまま名前で引く）
+  `ALTER TABLE "ReportProjection" ADD COLUMN IF NOT EXISTS "kpiItemId" TEXT`,
 ];
 
 async function autoCategorize() {

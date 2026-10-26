@@ -31,7 +31,11 @@ export async function getSubmissionStatus(
 export async function getKpiSummary(week: string, filter?: { storeId?: string }) {
   const reports = (await prisma.report.findMany({
     where: { reportType: "WEEKLY", targetWeek: week, status: "SUBMITTED", ...(filter ?? {}) },
-    include: { kpiValues: { include: { kpiItem: { select: { goodDirection: true } } } }, store: true, department: true },
+    include: {
+      kpiValues: { include: { kpiItem: { select: { goodDirection: true } } }, orderBy: { kpiItem: { sortOrder: "asc" } } },
+      store: true,
+      department: true,
+    },
   })) as unknown as (ReportWithValues & { store: { businessType: string }; department: { businessType: string } | null })[];
 
   const salesByType: Record<string, number> = { SEIKOTSU: 0, SHINKYU: 0, ESTHE: 0 };
@@ -46,17 +50,21 @@ export async function getKpiSummary(week: string, filter?: { storeId?: string })
 
   for (const r of reports) {
     const bt = r.department?.businessType ?? r.store.businessType;
+    // カルテ枚数・総来院数 などは区分ごとに同じ名前の項目があるので、集計は並び順で最初の1件（全体の数字）だけ数える
+    const counted = new Set<string>();
     for (const v of r.kpiValues) {
-      if (v.kpiName === "売上" && v.current != null) {
+      const first = !counted.has(v.kpiName);
+      counted.add(v.kpiName);
+      if (first && v.kpiName === "売上" && v.current != null) {
         totalSales += v.current;
         if (salesByType[bt] != null) salesByType[bt] += v.current;
       }
-      if (v.kpiName === "初診数" && v.current != null) firstVisits += v.current;
-      if (v.kpiName === "新規数" && v.current != null) newCustomers += v.current;
-      if (v.kpiName === "会員数" && v.current != null) members += v.current;
-      if (v.kpiName === "カルテ枚数" && v.current != null) charts += v.current;
-      if (v.kpiName === "成約率" && v.current != null) closingRates.push(v.current);
-      if (v.kpiName === "離反率" && v.current != null) churnRates.push(v.current);
+      if (first && v.kpiName === "初診数" && v.current != null) firstVisits += v.current;
+      if (first && v.kpiName === "新規数" && v.current != null) newCustomers += v.current;
+      if (first && v.kpiName === "会員数" && v.current != null) members += v.current;
+      if (first && v.kpiName === "カルテ枚数" && v.current != null) charts += v.current;
+      if (first && v.kpiName === "成約率" && v.current != null) closingRates.push(v.current);
+      if (first && v.kpiName === "離反率" && v.current != null) churnRates.push(v.current);
 
       // 未達KPI: 目標があり、良化方向に対して目標未達
       if (v.target != null && v.current != null) {

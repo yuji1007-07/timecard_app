@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAreaManager } from "@/lib/session";
 import { setSetting } from "@/lib/settings";
 
-const STRING_KEYS = ["weeklyDeadlineDay", "weeklyDeadlineTime", "monthlyDeadlineDay", "unsubmittedNotifyTime", "openaiModel"];
+const STRING_KEYS = ["weeklyDeadlineDay", "weeklyDeadlineTime", "monthlyDeadlineDay", "unsubmittedNotifyTime", "openaiModel", "openaiVisionModel"];
 const BOOL_KEYS = ["lineEnabled", "sheetsEnabled", "aiEnabled", "alertNotifyEnabled"];
 
 export async function saveSettings(_prev: unknown, formData: FormData) {

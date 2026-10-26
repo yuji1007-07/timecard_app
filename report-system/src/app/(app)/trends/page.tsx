@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { fmt, addMonthStr, monthShort, yearMonth, weekLabel } from "@/lib/utils";
 import { TrendPicker } from "./trend-picker";
+import { assignSavedValues, assignSavedProjections } from "@/lib/kpi-values";
 
 export const dynamic = "force-dynamic";
 
@@ -20,22 +21,23 @@ const CATEGORY_COLORS = [
   "bg-lime-100 text-lime-900",
 ];
 
-type KpiDef = { name: string; unit: string | null; category: string; goodDirection: string };
+type KpiDef = { id: string; name: string; unit: string | null; category: string; goodDirection: string };
 
-// レポートの kpiValues から KPI一覧（カテゴリ順）を作る
-function buildKpiList(kpiValues: { kpiName: string; unit: string | null; kpiItem: { category: string | null; goodDirection: string } | null }[]): { category: string; items: KpiDef[] }[] {
+// レポートの kpiValues から KPI一覧（カテゴリ順）を作る。
+// 同じ名前の項目が複数の区分にある（会員の月単価／骨盤の月単価）ので、名前ではなくKPI項目IDで1行にする
+function buildKpiList(kpiValues: { kpiItemId: string; kpiName: string; unit: string | null; kpiItem: { category: string | null; goodDirection: string } | null }[]): { category: string; items: KpiDef[] }[] {
   const order: string[] = [];
   const map = new Map<string, KpiDef[]>();
   const seen = new Set<string>();
   for (const v of kpiValues) {
-    if (seen.has(v.kpiName)) continue;
-    seen.add(v.kpiName);
+    if (seen.has(v.kpiItemId)) continue;
+    seen.add(v.kpiItemId);
     const c = v.kpiItem?.category || "その他";
     if (!map.has(c)) {
       map.set(c, []);
       order.push(c);
     }
-    map.get(c)!.push({ name: v.kpiName, unit: v.unit, category: c, goodDirection: v.kpiItem?.goodDirection ?? "UP" });
+    map.get(c)!.push({ id: v.kpiItemId, name: v.kpiName, unit: v.unit, category: c, goodDirection: v.kpiItem?.goodDirection ?? "UP" });
   }
   return order.map((c) => ({ category: c, items: map.get(c)! }));
 }
@@ -91,7 +93,13 @@ export default async function TrendsPage({
     const reports = await prisma.report.findMany({
       where: { ...scope, reportType: "MONTHLY" },
       orderBy: { targetMonth: "asc" },
-      include: { kpiValues: { include: { kpiItem: { select: { category: true, goodDirection: true } } } }, projections: true },
+      include: {
+        kpiValues: {
+          include: { kpiItem: { select: { category: true, goodDirection: true } } },
+          orderBy: { kpiItem: { sortOrder: "asc" } },
+        },
+        projections: { orderBy: { id: "asc" } },
+      },
     });
 
     if (reports.length === 0) {
@@ -105,19 +113,24 @@ export default async function TrendsPage({
 
       // 月→レポート
       const monthReport = new Map(reports.map((r) => [r.targetMonth ?? "", r]));
-      // KPI値: month__kpiName → {予算,着地,実績}
-      const kpiCell = new Map<string, { budget: number | null; forecast: number | null; actual: number | null }>();
-      for (const r of reports) {
-        for (const v of r.kpiValues) kpiCell.set(`${r.targetMonth}__${v.kpiName}`, { budget: v.target, forecast: v.forecast, actual: v.current });
-      }
-      // 予測: month__kpiName → {予算,予測}（最新のレポートが勝つ）
-      const projCell = new Map<string, { budget: number | null; forecast: number | null }>();
-      for (const r of reports) {
-        for (const p of r.projections) projCell.set(`${p.targetMonth}__${p.kpiName}`, { budget: p.budget, forecast: p.forecast });
-      }
-
       // KPI一覧は最新レポート基準
       const groups = buildKpiList(reports[reports.length - 1].kpiValues);
+      const items = groups.flatMap((g) => g.items);
+
+      // KPI値: month__kpiItemId → {予算,着地,実績}
+      const kpiCell = new Map<string, { budget: number | null; forecast: number | null; actual: number | null }>();
+      for (const r of reports) {
+        for (const [id, v] of assignSavedValues(items, r.kpiValues)) {
+          kpiCell.set(`${r.targetMonth}__${id}`, { budget: v.target, forecast: v.forecast, actual: v.current });
+        }
+      }
+      // 予測: month__kpiItemId → {予算,予測}（最新のレポートが勝つ）
+      const projCell = new Map<string, { budget: number | null; forecast: number | null }>();
+      for (const r of reports) {
+        for (const [id, months] of assignSavedProjections(items, r.projections)) {
+          for (const [month, p] of months) projCell.set(`${month}__${id}`, { budget: p.budget, forecast: p.forecast });
+        }
+      }
 
       body = (
         <Card>
@@ -148,13 +161,13 @@ export default async function TrendsPage({
                         <TableCell colSpan={cols.length + 1} className={`py-1 text-xs font-bold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>{g.category}</TableCell>
                       </TableRow>
                       {g.items.map((k) => (
-                        <TableRow key={k.name}>
+                        <TableRow key={k.id}>
                           <TableCell className="sticky left-0 whitespace-nowrap bg-card font-medium">{k.name}<span className="ml-1 text-xs text-muted-foreground">{k.unit}</span></TableCell>
                           {cols.map((m) => {
                             const isFuture = futureSet.has(m);
                             const hasReport = monthReport.has(m);
                             if (isFuture) {
-                              const p = projCell.get(`${m}__${k.name}`);
+                              const p = projCell.get(`${m}__${k.id}`);
                               return (
                                 <TableCell key={m} className="text-right text-xs tabular-nums">
                                   <div className="text-muted-foreground">予 {fmt(p?.budget ?? null)}</div>
@@ -163,7 +176,7 @@ export default async function TrendsPage({
                               );
                             }
                             if (!hasReport) return <TableCell key={m} className="text-center text-xs text-muted-foreground">—</TableCell>;
-                            const c = kpiCell.get(`${m}__${k.name}`);
+                            const c = kpiCell.get(`${m}__${k.id}`);
                             const under = c?.budget != null && c?.actual != null && (k.goodDirection === "UP" ? c.actual < c.budget : c.actual > c.budget);
                             return (
                               <TableCell key={m} className={`text-right text-xs tabular-nums ${m === anchor ? "bg-navy/5" : ""}`}>
@@ -189,18 +202,24 @@ export default async function TrendsPage({
       where: { ...scope, reportType: "WEEKLY" },
       orderBy: { targetWeek: "desc" },
       take: 8,
-      include: { kpiValues: { include: { kpiItem: { select: { category: true, goodDirection: true } } } } },
+      include: {
+        kpiValues: {
+          include: { kpiItem: { select: { category: true, goodDirection: true } } },
+          orderBy: { kpiItem: { sortOrder: "asc" } },
+        },
+      },
     });
     const weeks = [...recent].reverse();
 
     if (weeks.length === 0) {
       body = <Card><CardContent className="py-10 text-center text-sm text-muted-foreground">この店舗の週次報告がまだありません。</CardContent></Card>;
     } else {
+      const groups = buildKpiList(weeks[weeks.length - 1].kpiValues);
+      const items = groups.flatMap((g) => g.items);
       const cellMap = new Map<string, { target: number | null; current: number | null }>();
       for (const r of weeks) {
-        for (const v of r.kpiValues) cellMap.set(`${r.targetWeek}__${v.kpiName}`, { target: v.target, current: v.current });
+        for (const [id, v] of assignSavedValues(items, r.kpiValues)) cellMap.set(`${r.targetWeek}__${id}`, { target: v.target, current: v.current });
       }
-      const groups = buildKpiList(weeks[weeks.length - 1].kpiValues);
       const weekLabels = weeks.map((r) => weekLabel(r.targetWeek, { short: true }));
 
       body = (
@@ -227,10 +246,10 @@ export default async function TrendsPage({
                         <TableCell colSpan={weeks.length + 1} className={`py-1 text-xs font-bold ${CATEGORY_COLORS[gi % CATEGORY_COLORS.length]}`}>{g.category}</TableCell>
                       </TableRow>
                       {g.items.map((k) => (
-                        <TableRow key={k.name}>
+                        <TableRow key={k.id}>
                           <TableCell className="sticky left-0 whitespace-nowrap bg-card font-medium">{k.name}<span className="ml-1 text-xs text-muted-foreground">{k.unit}</span></TableCell>
                           {weeks.map((r) => {
-                            const c = cellMap.get(`${r.targetWeek}__${k.name}`);
+                            const c = cellMap.get(`${r.targetWeek}__${k.id}`);
                             const under = c?.target != null && c?.current != null && (k.goodDirection === "UP" ? c.current < c.target : c.current > c.target);
                             return (
                               <TableCell key={r.id} className={`text-right text-xs tabular-nums ${under ? "font-semibold text-red-600" : ""}`}>

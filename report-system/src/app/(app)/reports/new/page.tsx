@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { getEffectiveKpiItems, getEffectiveKdiItems } from "@/lib/templates";
+import { assignSavedValues, assignSavedProjections } from "@/lib/kpi-values";
 import { reportingMonthWeek, reportingMonth, yearMonth, addMonthStr, jstNow, weekLabel } from "@/lib/utils";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent } from "@/components/ui/card";
@@ -116,7 +117,7 @@ async function ResolvedForm({
         ...(type === "WEEKLY" ? { targetWeek: { lt: period } } : { targetMonth: { lt: period } }),
       },
       orderBy: type === "WEEKLY" ? { targetWeek: "desc" } : { targetMonth: "desc" },
-      include: { kpiValues: true, actions: true, projections: true },
+      include: { kpiValues: { orderBy: { id: "asc" } }, actions: true, projections: { orderBy: { id: "asc" } } },
     }),
     prisma.report.findFirst({
       where: {
@@ -127,7 +128,7 @@ async function ResolvedForm({
         targetWeek: { startsWith: `${targetMonth}-W`, ...(type === "WEEKLY" ? { lt: period } : {}) },
       },
       orderBy: { targetWeek: "asc" },
-      include: { kpiValues: true },
+      include: { kpiValues: { orderBy: { id: "asc" } } },
     }),
     departmentId ? prisma.department.findUnique({ where: { id: departmentId } }) : Promise.resolve(null),
     prisma.store.findUnique({ where: { id: storeId } }),
@@ -147,20 +148,16 @@ async function ResolvedForm({
   }));
 
   // 前回報告のKPI値（着地の変化色付け用）
-  // 同名KPIの取り違えを防ぐため ID を主キーにし、名前は旧データ用のフォールバックとして併記する
+  // 同名KPIの取り違えを防ぐため KPI項目ID で割り当てる（IDが今の項目に無い旧データだけ名前で割り当て）
   const kpiPrev: Record<string, { target: number | null; current: number | null; forecast: number | null }> = {};
-  for (const v of prevReport?.kpiValues ?? []) {
-    const val = { target: v.target, current: v.current, forecast: v.forecast };
-    kpiPrev[v.kpiItemId] = val;
-    if (!(v.kpiName in kpiPrev)) kpiPrev[v.kpiName] = val;
+  for (const [id, v] of assignSavedValues(kpiItems, prevReport?.kpiValues ?? [])) {
+    kpiPrev[id] = { target: v.target, current: v.current, forecast: v.forecast };
   }
 
   // 当月の最初の報告（月初の目標・着地を反映ボタン用）
   const kpiMonthStart: Record<string, { target: number | null; forecast: number | null }> = {};
-  for (const v of monthStartReport?.kpiValues ?? []) {
-    const val = { target: v.target, forecast: v.forecast };
-    kpiMonthStart[v.kpiItemId] = val;
-    if (!(v.kpiName in kpiMonthStart)) kpiMonthStart[v.kpiName] = val;
+  for (const [id, v] of assignSavedValues(kpiItems, monthStartReport?.kpiValues ?? [])) {
+    kpiMonthStart[id] = { target: v.target, forecast: v.forecast };
   }
 
   const unitLabel = `${storeName}${dept ? ` ${dept.name}` : ""}・${label(BUSINESS_TYPES, dept?.businessType ?? businessType)}`;
@@ -193,7 +190,7 @@ async function ResolvedForm({
       },
       orderBy: { targetMonth: "desc" },
       take: 6,
-      select: { targetMonth: true, projections: true },
+      select: { targetMonth: true, projections: { orderBy: { id: "asc" } } },
     });
     const wanted = [period, ...forwardMonths];
     const source =
@@ -204,14 +201,16 @@ async function ResolvedForm({
     if (source) {
       carryFromMonth = source.targetMonth;
       const sv = (n: number | null) => (n != null ? String(n) : "");
-      for (const p of source.projections) {
-        if (p.targetMonth === period) {
-          // 過去に立てた「対象月の予測」→ 対象月の予算・着地予測
-          kpiCarry[p.kpiName] = { budget: sv(p.budget), forecast: sv(p.forecast) };
-        }
-        if (forwardMonths.includes(p.targetMonth)) {
-          projCarry[p.kpiName] = projCarry[p.kpiName] ?? {};
-          projCarry[p.kpiName][p.targetMonth] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+      for (const [id, months] of assignSavedProjections(kpiItems, source.projections)) {
+        for (const [month, p] of months) {
+          if (month === period) {
+            // 過去に立てた「対象月の予測」→ 対象月の予算・着地予測
+            kpiCarry[id] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+          }
+          if (forwardMonths.includes(month)) {
+            projCarry[id] = projCarry[id] ?? {};
+            projCarry[id][month] = { budget: sv(p.budget), forecast: sv(p.forecast) };
+          }
         }
       }
     }

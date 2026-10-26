@@ -12,12 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { monthShort } from "@/lib/utils";
 import { matchRows, norm } from "@/lib/kpi-match";
 import type { KpiItemDef } from "./report-form";
+import { prepareSheetImages } from "./prepare-image";
 
 type PdfCol = { index: number; header: string; samples: string[] };
 type PdfRow = { section: string | null; label: string; cells: Record<string, number> };
 
 export type PdfKpiUpdates = Record<string, { target?: string; current?: string; forecast?: string }>; // kpiItemId ->
-export type PdfProjUpdates = Record<string, Record<string, { budget?: string; forecast?: string }>>; // kpiName -> month ->
+export type PdfProjUpdates = Record<string, Record<string, { budget?: string; forecast?: string }>>; // kpiItemId -> month ->
 
 const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-background px-2 py-1 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -88,11 +89,19 @@ export function PdfImportCard({
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<{ columns: PdfCol[]; rows: PdfRow[] } | null>(null);
   const [colMap, setColMap] = useState<Record<string, string>>({});
-  const [applied, setApplied] = useState<number | null>(null);
+  const [applied, setApplied] = useState<{ count: number; missing: KpiItemDef[] } | null>(null);
   const [showUnmatched, setShowUnmatched] = useState(false);
+  const [showMissing, setShowMissing] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   const matched = useMemo(() => (data ? matchRows(data.rows, kpis) : []), [data, kpis]);
+  // 同じ名前の項目が複数の区分にあるときは、どの区分に入るのかが分かるように区分名を添える
+  const dupNames = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const k of kpis) count.set(k.name, (count.get(k.name) ?? 0) + 1);
+    return new Set([...count].filter(([, n]) => n > 1).map(([name]) => name));
+  }, [kpis]);
+  const kpiLabel = (k: KpiItemDef) => (dupNames.has(k.name) && k.category ? `${k.category} / ${k.name}` : k.name);
   const matchedCount = matched.filter((m) => m.kpi).length;
   const unmatched = matched.filter((m) => !m.kpi);
   // 月次は対象月から、週次は今日の日付から「当月」を推定（目標/予算列の自動判定に使う）
@@ -112,7 +121,17 @@ export function PdfImportCard({
     setBusy(true);
     try {
       const fd = new FormData();
-      for (const f of fs) fd.append("file", f);
+      const isImageFile = (f: File) => f.type.startsWith("image/") || /\.(png|jpe?g|webp|heic|heif)$/i.test(f.name);
+      // 画像は読み取り精度を上げるため、全体画像＋拡大用の帯画像に整えてから送る
+      const prepared = fs.every(isImageFile) ? await prepareSheetImages(fs.slice(0, 4)) : null;
+      if (prepared) {
+        prepared.forEach((p, i) => {
+          fd.append("file", p.overview, `sheet-${i}.jpg`);
+          p.strips.forEach((s, j) => fd.append("strip", s, `strip-${i}-${j}.jpg`));
+        });
+      } else {
+        for (const f of fs) fd.append("file", f);
+      }
       const res = await fetch("/api/parse-report-pdf", { method: "POST", body: fd });
       const json = await res.json();
       if (!res.ok || !json.ok) {
@@ -258,7 +277,7 @@ export function PdfImportCard({
         } else if (role.startsWith("pb:") || role.startsWith("pf:")) {
           const m = role.slice(3);
           if (!forwardMonths.includes(m)) continue;
-          const slot = ((projUpd[kpi.name] ??= {})[m] ??= {});
+          const slot = ((projUpd[kpi.id] ??= {})[m] ??= {});
           if (fill !== "forecast") slot.budget = s;
           if (fill !== "budget") slot.forecast = s;
           n++;
@@ -266,7 +285,10 @@ export function PdfImportCard({
       }
     }
     onApply(kpiUpd, projUpd);
-    setApplied(n);
+    // 当月の欄に1つも数値が入らなかった項目。気づかずに提出すると空欄のまま保存されるので一覧で知らせる
+    const missing = kpis.filter((k) => (k.hasTarget || k.hasCurrent || k.hasForecast) && !kpiUpd[k.id]);
+    setApplied({ count: n, missing });
+    setShowMissing(false);
   }
 
   const roleLabel = (role: string) => {
@@ -405,8 +427,8 @@ export function PdfImportCard({
                   </thead>
                   <tbody>
                     {previewRows.map(({ row, kpi }) => (
-                      <tr key={`${row.section}|${row.label}`} className="border-t">
-                        <td className="px-2 py-1 font-medium">{kpi!.name}</td>
+                      <tr key={kpi!.id} className="border-t">
+                        <td className="px-2 py-1 font-medium">{kpiLabel(kpi!)}</td>
                         {activeCols.map((c) => (
                           <td key={c.index} className="px-2 py-1 text-right tabular-nums">
                             {row.cells[String(c.index)] != null ? row.cells[String(c.index)].toLocaleString() : "—"}
@@ -429,10 +451,25 @@ export function PdfImportCard({
               </Button>
               {applied != null && (
                 <span className="text-sm font-medium text-emerald-700">
-                  {applied}件を反映しました。下のKPI欄を確認してください。
+                  {applied.count}件を反映しました。下のKPI欄を確認してください。
                 </span>
               )}
             </div>
+            {applied != null && applied.missing.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                <button type="button" className="font-medium underline" onClick={() => setShowMissing((v) => !v)}>
+                  ⚠ シートから数値が入らなかった項目 {applied.missing.length}件{showMissing ? "（閉じる）" : "（確認する）"}
+                </button>
+                {showMissing && (
+                  <>
+                    <p className="mt-1">{applied.missing.map(kpiLabel).join(" ／ ")}</p>
+                    <p className="mt-1 text-amber-800">
+                      シートの行名とアプリの項目名が違う、またはシートが空欄の項目です。必要なものは下のKPI欄に手入力してください。
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* 上級者向け: 列の割り当てを手動調整 */}
             <div>

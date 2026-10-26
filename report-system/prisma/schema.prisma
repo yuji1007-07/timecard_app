@@ -186,6 +186,7 @@ model Report {
 model ReportProjection {
   id          String  @id @default(cuid())
   reportId    String
+  kpiItemId   String? // 同じ名前のKPIが複数の区分にあっても取り違えないためのID（旧データは null）
   kpiName     String
   targetMonth String // 予測対象の月 例: 2026-07
   budget      Float? // 予算

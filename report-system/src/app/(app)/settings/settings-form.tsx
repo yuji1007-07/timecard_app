@@ -64,6 +64,13 @@ export function SettingsForm({ settings }: { settings: Record<string, string> })
             <Label>OpenAIモデル</Label>
             <Input name="openaiModel" defaultValue={settings.openaiModel} placeholder="gpt-4o-mini" />
           </div>
+          <div className="space-y-1.5 md:col-span-2">
+            <Label>画像読み取りのモデル</Label>
+            <Input name="openaiVisionModel" defaultValue={settings.openaiVisionModel ?? ""} placeholder="空欄で自動（gpt-4.1 → 使えなければ gpt-4o）" />
+            <p className="text-xs text-muted-foreground">
+              シートの画像から数値を読み取るときに使うモデル。空欄のままで問題ありません。指定したモデルが使えない場合は自動で切り替えます。
+            </p>
+          </div>
         </CardContent>
       </Card>
 

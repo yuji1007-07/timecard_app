@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { FeedbackPanel } from "./feedback-panel";
 import { fmt, addMonthStr, monthShort, weekLabel, MONTH_WEEK_RANGES, memberCountKpiName } from "@/lib/utils";
 import { splitDataIssues } from "@/lib/deadline-actions";
+import { assignSavedValues, assignSavedProjections } from "@/lib/kpi-values";
 import { REPORT_TYPES, KDI_STATUS, BUSINESS_TYPES, FREQUENCIES, label } from "@/lib/constants";
 
 // カテゴリ見出しの色
@@ -91,7 +92,8 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
     const name = memberCountKpiName(g.items.map((i) => i.kpiName), allKpiNames);
     if (name) memberCountNameByCategory.set(g.category, name);
   }
-  const kpiByName = new Map(report.kpiValues.map((v) => [v.kpiName, v]));
+  const kpiByName = new Map<string, KpiValueRow>();
+  for (const v of report.kpiValues) if (!kpiByName.has(v.kpiName)) kpiByName.set(v.kpiName, v);
   // KPI名から単位を引く（アクション・デッドライン表示で数値に単位を添えるため）
   const unitByName = new Map(report.kpiValues.map((v) => [v.kpiName, v.unit]));
   const unitOf = (name: string | null | undefined) => (name ? unitByName.get(name) ?? null : null);
@@ -177,7 +179,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                       const mcName = memberCountNameByCategory.get(g.category)!;
                       // 会員数KPIの値をそのまま写す（予算・実績・着地・達成率まで会員数欄と揃える）
                       const mc = kpiByName.get(mcName);
-                      const lastM = analysis.lastMonthActual.get(mcName) ?? null; // 会員数は名前で特定するためそのまま
+                      const lastM = mc ? analysis.lastMonthActual.get(mc.kpiItemId) ?? null : null;
                       const mcUnit = mc?.unit ?? null;
                       const mcDir = mc?.kpiItem?.goodDirection ?? "UP";
                       const mcJudge = isMonthly ? mc?.current ?? null : mc?.forecast ?? null;
@@ -214,7 +216,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
                         v.target != null && judgeVal != null && (dir === "UP" ? judgeVal < v.target : judgeVal > v.target);
                       const rate =
                         v.target != null && v.target !== 0 && judgeVal != null ? Math.round((judgeVal / v.target) * 100) : null;
-                      const lastM = analysis.lastMonthActual.get(v.kpiItemId) ?? analysis.lastMonthActual.get(v.kpiName) ?? null;
+                      const lastM = analysis.lastMonthActual.get(v.kpiItemId) ?? null;
                       return (
                         <TableRow key={v.id} className={ii % 2 === 1 ? "bg-muted/40" : ""}>
                           <TableCell className="font-medium">{v.kpiName}</TableCell>
@@ -491,7 +493,7 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
 }
 
 // 週次: 同じ月の 第1週（1〜7日）→ 月末 の現状値を横並びにし、目標に対する進捗率を添える
-type WeekSnapshot = { id: string; targetWeek: string | null; kpiValues: { kpiName: string; current: number | null }[] };
+type WeekSnapshot = { id: string; targetWeek: string | null; kpiValues: { kpiItemId: string; kpiName: string; current: number | null }[] };
 
 function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null; kpiValues: KpiValueRow[] }; weeks: WeekSnapshot[] }) {
   const m = /^(\d{4}-\d{2})-W([1-5])$/.exec(report.targetWeek ?? "");
@@ -499,11 +501,13 @@ function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null
   const curW = Number(m[2]);
   const monthLabel = monthShort(m[1]);
 
+  // 週ごとの値は KPI項目ID で引く（同じ名前の項目が複数の区分にあっても混ざらない）
+  const items = report.kpiValues.map((v) => ({ id: v.kpiItemId, name: v.kpiName }));
   const valByWeek = new Map<number, Map<string, number | null>>();
   for (const w of weeks) {
     const wm = /-W([1-5])$/.exec(w.targetWeek ?? "");
     if (!wm) continue;
-    valByWeek.set(Number(wm[1]), new Map(w.kpiValues.map((v) => [v.kpiName, v.current])));
+    valByWeek.set(Number(wm[1]), new Map([...assignSavedValues(items, w.kpiValues)].map(([id, v]) => [id, v.current])));
   }
   const groups = groupKpiValuesByCategory(report.kpiValues);
 
@@ -543,7 +547,7 @@ function WeeklyProgress({ report, weeks }: { report: { targetWeek: string | null
                       <TableCell className="whitespace-nowrap font-medium">{v.kpiName}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground"><Num v={v.target} unit={v.unit} /></TableCell>
                       {[1, 2, 3, 4, 5].map((n) => {
-                        const val = valByWeek.get(n)?.get(v.kpiName) ?? null;
+                        const val = valByWeek.get(n)?.get(v.kpiItemId) ?? null;
                         const rate = v.target != null && v.target !== 0 && val != null ? Math.round((val / v.target) * 100) : null;
                         return (
                           <TableCell key={n} className={`whitespace-nowrap text-right tabular-nums ${n === curW ? "bg-navy/5 font-semibold" : ""}`}>
@@ -585,11 +589,11 @@ function ReviewLine({ label, value }: { label: string; value: string | null }) {
 type RollingReport = {
   targetMonth: string | null;
   kpiValues: KpiValueRow[];
-  projections: { kpiName: string; targetMonth: string; budget: number | null; forecast: number | null }[];
+  projections: { kpiItemId: string | null; kpiName: string; targetMonth: string; budget: number | null; forecast: number | null }[];
 };
 type PrevReport = {
   targetMonth: string | null;
-  kpiValues: { kpiName: string; target: number | null; current: number | null; forecast: number | null }[];
+  kpiValues: { kpiItemId: string; kpiName: string; target: number | null; current: number | null; forecast: number | null }[];
 } | null;
 
 // 予算/実績 を縦に並べたセル（先月・当月＝売上確定済みなので着地は出さない）
@@ -608,13 +612,13 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
   if (!/^\d{4}-\d{2}$/.test(tm)) return null;
   const baseYear = Number(tm.slice(0, 4));
   const fwd = [1, 2, 3].map((n) => addMonthStr(tm, n));
-  const projMap = new Map<string, { budget: number | null; forecast: number | null }>();
-  for (const p of report.projections) projMap.set(`${p.kpiName}__${p.targetMonth}`, { budget: p.budget, forecast: p.forecast });
+  // 予測・先月の値は KPI項目ID で引く（同じ名前の項目が複数の区分にあっても混ざらない）
+  const items = report.kpiValues.map((v) => ({ id: v.kpiItemId, name: v.kpiName }));
+  const projById = assignSavedProjections(items, report.projections);
   const groups = groupKpiValuesByCategory(report.kpiValues);
 
   const hasPrev = !!prev && prev.kpiValues.length > 0;
-  const prevMap = new Map<string, { target: number | null; current: number | null; forecast: number | null }>();
-  for (const v of prev?.kpiValues ?? []) prevMap.set(v.kpiName, { target: v.target, current: v.current, forecast: v.forecast });
+  const prevMap = assignSavedValues(items, prev?.kpiValues ?? []);
   const prevLabel = prev?.targetMonth && /^\d{4}-\d{2}$/.test(prev.targetMonth) ? monthShort(prev.targetMonth, baseYear) : "先月";
 
   const totalCols = 1 + (hasPrev ? 1 : 0) + 1 + fwd.length;
@@ -656,7 +660,7 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                   </TableRow>
                   {g.items.map((v) => {
                     const dir = v.kpiItem?.goodDirection ?? "UP";
-                    const pv = prevMap.get(v.kpiName);
+                    const pv = prevMap.get(v.kpiItemId);
                     // 「予算」カテゴリ（予測着地・営業日数など全体の数字）は予算・予測とも常時表示。
                     // それ以外の明細は予算のみ表示し、予測はチェックを入れた時だけ出す。
                     const alwaysForecast = g.category === "予算";
@@ -666,7 +670,7 @@ function RollingForecast({ report, prev }: { report: RollingReport; prev: PrevRe
                         {hasPrev && <ActualCell budget={pv?.target ?? null} actual={pv?.current ?? null} good={dir} unit={v.unit} />}
                         <ActualCell budget={v.target} actual={v.current} good={dir} unit={v.unit} />
                         {fwd.map((m) => {
-                          const p = projMap.get(`${v.kpiName}__${m}`);
+                          const p = projById.get(v.kpiItemId)?.get(m);
                           return (
                             <TableCell key={m} className="text-right text-sm tabular-nums">
                               <div>予算 <Num v={p?.budget ?? null} unit={v.unit} /></div>

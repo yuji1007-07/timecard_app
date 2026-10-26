@@ -63,6 +63,7 @@ export type PrevActionDef = {
   prevKpiValue: number | null;
 };
 
+// いずれも KPI項目ID をキーにする（同じ名前の項目が複数の区分にあっても値が混ざらないように）
 export type KpiPrevMap = Record<string, { target: number | null; current: number | null; forecast: number | null }>;
 export type KpiMonthStartMap = Record<string, { target: number | null; forecast: number | null }>;
 
@@ -165,10 +166,9 @@ type MonthlyState = {
 // 編集モードでフォームに初期値を流し込むためのデータ
 export type ReportInitial = {
   originalText: string;
-  // 同じ名前のKPIが複数あっても取り違えないよう、KPI項目ID で保持する。
-  // kpiByName は旧データ（IDが一致しない場合）のフォールバック。
+  // 同じ名前のKPIが複数あっても取り違えないよう、KPI項目ID で保持する
+  // （IDが今の項目に無い旧データは、サーバー側で名前から割り当て済み）
   kpiById: Record<string, { target: string; current: string; forecast: string; comment: string }>;
-  kpiByName: Record<string, { target: string; current: string; forecast: string; comment: string }>;
   inflow: Record<string, string>;
   review: ReviewStrings;
   monthly: MonthlyState | null;
@@ -178,7 +178,7 @@ export type ReportInitial = {
   projections?: ProjMap;
 };
 
-// 月次の3ヶ月予測： kpiName -> 年月(YYYY-MM) -> { 予算, 着地予想 }（文字列で保持）
+// 月次の3ヶ月予測： KPI項目ID -> 年月(YYYY-MM) -> { 予算, 着地予想 }（文字列で保持）
 export type ProjMap = Record<string, Record<string, { budget: string; forecast: string }>>;
 
 const EMPTY_MONTHLY: MonthlyState = {
@@ -230,7 +230,7 @@ export function ReportForm({
   initial?: ReportInitial | null;
   initialStatus?: string; // "DRAFT" | "SUBMITTED"（edit時の元ステータス）
   forwardMonths?: string[];
-  kpiCarry?: Record<string, { budget: string; forecast: string }>;
+  kpiCarry?: Record<string, { budget: string; forecast: string }>; // KPI項目ID ->
   projCarry?: ProjMap;
   carryFromMonth?: string | null; // 取り込み元になった月次報告の対象月（YYYY-MM）
   monthStartLabel?: string | null; // 「月初の目標・着地」の参照元（例: 7月 第1週）
@@ -245,29 +245,36 @@ export function ReportForm({
   const [editVisibility, setEditVisibility] = useState(false);
   const [savingVis, setSavingVis] = useState(false);
   const hiddenSet = useMemo(() => new Set(hiddenKpis), [hiddenKpis]);
+  // 非表示リストは名前で保存するが、同じ名前の項目が複数の区分にあるものはIDで保存する（片方だけ隠せるように）
+  const dupNames = useMemo(() => {
+    const count = new Map<string, number>();
+    for (const k of kpiItems) count.set(k.name, (count.get(k.name) ?? 0) + 1);
+    return new Set([...count].filter(([, n]) => n > 1).map(([name]) => name));
+  }, [kpiItems]);
+  const isHidden = (k: KpiItemDef) => hiddenSet.has(k.id) || hiddenSet.has(k.name);
 
   const [originalText, setOriginalText] = useState(initial?.originalText ?? "");
   const [kpi, setKpi] = useState<KpiState>(() =>
     Object.fromEntries(
       kpiItems.map((k) => {
-        const saved = initial?.kpiById[k.id] ?? initial?.kpiByName[k.name];
+        const saved = initial?.kpiById[k.id];
         if (saved) return [k.id, saved];
         // 新規・月次：前月が立てた「今月の予測」を 予算(target)・着地予測(forecast) に引き継ぐ（実績は空）
-        const carry = kpiCarry[k.name];
+        const carry = kpiCarry[k.id];
         if (carry) return [k.id, { target: carry.budget, current: "", forecast: carry.forecast, comment: "" }];
         return [k.id, { target: "", current: "", forecast: "", comment: "" }];
       })
     )
   );
-  // 月次：来月以降3ヶ月の予測 state（kpiName -> 月 -> {budget,forecast}）
+  // 月次：来月以降3ヶ月の予測 state（KPI項目ID -> 月 -> {budget,forecast}）
   const [proj, setProj] = useState<ProjMap>(() => {
     const src: ProjMap = initial?.projections ?? projCarry;
     const out: ProjMap = {};
     for (const k of kpiItems) {
-      out[k.name] = {};
+      out[k.id] = {};
       for (const mo of forwardMonths) {
-        const v = src[k.name]?.[mo];
-        out[k.name][mo] = { budget: v?.budget ?? "", forecast: v?.forecast ?? "" };
+        const v = src[k.id]?.[mo];
+        out[k.id][mo] = { budget: v?.budget ?? "", forecast: v?.forecast ?? "" };
       }
     }
     return out;
@@ -279,7 +286,7 @@ export function ReportForm({
     setKpi((prev) => {
       const next = { ...prev };
       for (const k of kpiItems) {
-        const c = kpiCarry[k.name];
+        const c = kpiCarry[k.id];
         if (!c) continue;
         if (!c.budget && !c.forecast) continue;
         next[k.id] = { ...next[k.id], target: c.budget || next[k.id].target, forecast: c.forecast || next[k.id].forecast };
@@ -290,11 +297,11 @@ export function ReportForm({
     setProj((prev) => {
       const next: ProjMap = { ...prev };
       for (const k of kpiItems) {
-        next[k.name] = { ...(next[k.name] ?? {}) };
+        next[k.id] = { ...(next[k.id] ?? {}) };
         for (const mo of forwardMonths) {
-          const v = projCarry[k.name]?.[mo];
+          const v = projCarry[k.id]?.[mo];
           if (v && (v.budget || v.forecast)) {
-            next[k.name][mo] = { budget: v.budget, forecast: v.forecast };
+            next[k.id][mo] = { budget: v.budget, forecast: v.forecast };
             n++;
           }
         }
@@ -322,12 +329,12 @@ export function ReportForm({
     });
     setProj((prev) => {
       const next: ProjMap = { ...prev };
-      for (const [name, months] of Object.entries(projUpd)) {
-        next[name] = { ...(next[name] ?? {}) };
+      for (const [id, months] of Object.entries(projUpd)) {
+        next[id] = { ...(next[id] ?? {}) };
         for (const [mo, u] of Object.entries(months)) {
           if (!forwardMonths.includes(mo)) continue;
-          const cur = next[name][mo] ?? { budget: "", forecast: "" };
-          next[name][mo] = { budget: u.budget ?? cur.budget, forecast: u.forecast ?? cur.forecast };
+          const cur = next[id][mo] ?? { budget: "", forecast: "" };
+          next[id][mo] = { budget: u.budget ?? cur.budget, forecast: u.forecast ?? cur.forecast };
         }
       }
       return next;
@@ -370,7 +377,7 @@ export function ReportForm({
     setKpi((prev) => {
       const next = { ...prev };
       for (const k of kpiItems) {
-        const ms = kpiMonthStart[k.id] ?? kpiMonthStart[k.name];
+        const ms = kpiMonthStart[k.id];
         if (!ms) continue;
         next[k.id] = {
           ...next[k.id],
@@ -381,9 +388,12 @@ export function ReportForm({
       return next;
     });
   }
-  const hasMonthStart = kpiItems.some((k) => kpiMonthStart[k.id] ?? kpiMonthStart[k.name]);
+  const hasMonthStart = kpiItems.some((k) => kpiMonthStart[k.id]);
 
-  const visibleKpis = useMemo(() => kpiItems.filter((k) => !hiddenSet.has(k.name)), [kpiItems, hiddenSet]);
+  const visibleKpis = useMemo(
+    () => kpiItems.filter((k) => !hiddenSet.has(k.id) && !hiddenSet.has(k.name)),
+    [kpiItems, hiddenSet]
+  );
   const groupedVisible = useMemo(() => groupByCategory(visibleKpis), [visibleKpis]);
   // 各メンバー区分（定額会員/新定額会員/プレミアム会員/ダイエットコース 等）に対応する
   // 「会員数（カルテ枚数）」KPI を接頭辞から特定。会員数は会員数・新規欄で1回入力し、各区分欄へ自動反映する。
@@ -414,8 +424,12 @@ export function ReportForm({
     return order.map((c) => ({ category: c, items: map.get(c)! }));
   }
 
-  function toggleHidden(name: string) {
-    const next = hiddenSet.has(name) ? hiddenKpis.filter((n) => n !== name) : [...hiddenKpis, name];
+  function toggleHidden(target: KpiItemDef) {
+    // 今の項目に関係しない登録（他の部門のテンプレート等）はそのまま残す
+    const others = hiddenKpis.filter((h) => !kpiItems.some((k) => k.id === h || k.name === h));
+    const hiddenNow = kpiItems.filter(isHidden);
+    const nextHidden = isHidden(target) ? hiddenNow.filter((k) => k.id !== target.id) : [...hiddenNow, target];
+    const next = [...others, ...nextHidden.map((k) => (dupNames.has(k.name) ? k.id : k.name))];
     setSavingVis(true);
     startTransition(async () => {
       await setUnitHiddenKpis({ storeId, departmentId, hidden: next });
@@ -478,11 +492,12 @@ export function ReportForm({
       projections: isMonthly
         ? visibleKpis.flatMap((k) =>
             forwardMonths.map((m) => ({
+              kpiItemId: k.id,
               kpiName: k.name,
               targetMonth: m,
-              budget: numOrNull(proj[k.name]?.[m]?.budget ?? ""),
+              budget: numOrNull(proj[k.id]?.[m]?.budget ?? ""),
               // 予測が未入力なら予算と同じ数値で保存する
-              forecast: numOrNull(proj[k.name]?.[m]?.forecast ?? "") ?? numOrNull(proj[k.name]?.[m]?.budget ?? ""),
+              forecast: numOrNull(proj[k.id]?.[m]?.forecast ?? "") ?? numOrNull(proj[k.id]?.[m]?.budget ?? ""),
             }))
           )
         : [],
@@ -587,22 +602,22 @@ export function ReportForm({
                   </div>
                   <div className="mt-1 grid gap-1 md:grid-cols-2">
                     {g.items.map((k) => {
-                      const isHidden = hiddenSet.has(k.name);
+                      const hidden = isHidden(k);
                       return (
                         <label
                           key={k.id}
-                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${isHidden ? "bg-muted/40" : ""}`}
+                          className={`flex cursor-pointer items-center gap-2 rounded-md border px-3 py-1.5 text-sm ${hidden ? "bg-muted/40" : ""}`}
                         >
                           <input
                             type="checkbox"
                             className="h-4 w-4"
-                            checked={!isHidden}
+                            checked={!hidden}
                             disabled={savingVis}
-                            onChange={() => toggleHidden(k.name)}
+                            onChange={() => toggleHidden(k)}
                           />
-                          <span className={isHidden ? "text-muted-foreground line-through" : "font-medium"}>{k.name}</span>
+                          <span className={hidden ? "text-muted-foreground line-through" : "font-medium"}>{k.name}</span>
                           <span className="text-xs text-muted-foreground">({k.unit})</span>
-                          {isHidden && <span className="ml-auto text-[10px] text-muted-foreground">非表示</span>}
+                          {hidden && <span className="ml-auto text-[10px] text-muted-foreground">非表示</span>}
                         </label>
                       );
                     })}
@@ -658,7 +673,7 @@ export function ReportForm({
                     );
                   })()}
                   {g.items.map((k) => {
-                    const prevForecast = (kpiPrev[k.id] ?? kpiPrev[k.name])?.forecast ?? null;
+                    const prevForecast = kpiPrev[k.id]?.forecast ?? null;
                     const target = numOrNull(kpi[k.id].target);
                     const actual = numOrNull(kpi[k.id].current);
                     const curForecast = numOrNull(kpi[k.id].forecast);
@@ -754,11 +769,11 @@ export function ReportForm({
                           {/* 予算（事前に決めた数値）を上、予測（現実的な見込み）を下に */}
                           <div className="flex items-center gap-1">
                             <span className="w-8 shrink-0 text-[10px] font-medium text-muted-foreground">予算</span>
-                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.budget ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), budget: e.target.value } } }))} placeholder="予算" />
+                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.id]?.[m]?.budget ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.id]: { ...(s[k.id] ?? {}), [m]: { ...(s[k.id]?.[m] ?? { budget: "", forecast: "" }), budget: e.target.value } } }))} placeholder="予算" />
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="w-8 shrink-0 text-[10px] font-medium text-muted-foreground">予測</span>
-                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.name]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.name]: { ...(s[k.name] ?? {}), [m]: { ...(s[k.name]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="予測" />
+                            <Input type="number" step="any" inputMode="decimal" className="h-8 text-sm" value={proj[k.id]?.[m]?.forecast ?? ""} onChange={(e) => setProj((s) => ({ ...s, [k.id]: { ...(s[k.id] ?? {}), [m]: { ...(s[k.id]?.[m] ?? { budget: "", forecast: "" }), forecast: e.target.value } } }))} placeholder="予測" />
                           </div>
                         </div>
                       ))}
