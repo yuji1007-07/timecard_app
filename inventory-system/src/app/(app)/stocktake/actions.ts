@@ -7,6 +7,7 @@ import { getStoreInventory } from "@/lib/inventory";
 import { getSetting } from "@/lib/settings";
 import { syncStocktake } from "@/lib/sync";
 import { notifyStockDiff } from "@/lib/notify";
+import { jstDayKey } from "@/lib/stock";
 
 /**
  * 棚卸を確定する。
@@ -30,6 +31,14 @@ export async function confirmStocktake(
   const invMap = new Map(inv.map((r) => [r.productId, r]));
 
   const assigneeName = String(formData.get("assigneeName") ?? "") || user.name || "棚卸担当";
+
+  // 棚卸日（実際に数えた日）。未指定なら今日（日本時間）。未来日は不可。
+  const countedOnRaw = String(formData.get("countedOn") ?? "").trim();
+  const todayJst = jstDayKey(new Date());
+  const countedOnDay = countedOnRaw || todayJst;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(countedOnDay)) return { ok: false, message: "棚卸日の形式が不正です。" };
+  if (countedOnDay > todayJst) return { ok: false, message: "棚卸日に未来の日付は指定できません。" };
+  const countedOn = new Date(`${countedOnDay}T00:00:00.000Z`);
 
   let diffCount = 0;
   let diffAmount = 0;
@@ -69,6 +78,7 @@ export async function confirmStocktake(
     data: {
       storeId,
       targetMonth: month,
+      countedOn,
       assigneeId: realUserId(user),
       assigneeName,
       diffCount,

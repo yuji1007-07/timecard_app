@@ -125,7 +125,7 @@ async function StoreSection({
               <td>{new Date(t.date).toISOString().slice(0, 10)}</td>
               <td>{label(TX_TYPES, t.type)}</td>
               <td>{t.product.brand.name}</td>
-              <td>{t.product.name}</td>
+              <td>{t.product.name}{t.product.size ? `（${t.product.size}）` : ""}</td>
               <td>{t.quantity}</td>
               <td>{t.unitPriceIncl ? yen(t.unitPriceIncl) : "-"}</td>
               <td>{[t.assignee, t.toStore && t.type === "TRANSFER_OUT" ? `→${t.toStore.name}` : "", t.counterpart, t.memo].filter(Boolean).join(" / ")}</td>
@@ -158,7 +158,7 @@ async function StoreSection({
             <tbody>
               {st.items.map((it) => (
                 <tr key={it.id}>
-                  <td>{it.product.brand.name}</td><td>{it.product.name}</td>
+                  <td>{it.product.brand.name}</td><td>{it.product.name}{it.product.size ? `（${it.product.size}）` : ""}</td>
                   <td>{it.theoreticalQty}</td><td>{it.actualQty}</td>
                   <td>{it.diff > 0 ? `+${it.diff}` : it.diff}</td><td>{yen(it.diffAmount)}</td>
                 </tr>

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeStoreStocks, getStoreProducts } from "@/lib/stock";
 import { TX_SIGN } from "@/lib/constants";
+import { isAfterStocktake, type Baseline } from "@/lib/stock";
 
 export type InventoryRow = {
   productId: string;
@@ -78,12 +79,12 @@ export async function getAllStoresInventorySummary() {
       select: {
         productId: true,
         actualQty: true,
-        stocktake: { select: { storeId: true, confirmedAt: true } },
+        stocktake: { select: { storeId: true, confirmedAt: true, countedOn: true } },
       },
       orderBy: { stocktake: { confirmedAt: "asc" } },
     }),
     prisma.transaction.findMany({
-      select: { storeId: true, productId: true, type: true, quantity: true, createdAt: true },
+      select: { storeId: true, productId: true, type: true, quantity: true, date: true, createdAt: true },
     }),
   ]);
 
@@ -103,11 +104,12 @@ export async function getAllStoresInventorySummary() {
 
   // 棚卸ベースライン（confirmedAt 昇順なので後勝ちで最新になる）
   const key = (storeId: string, productId: string) => `${storeId}|${productId}`;
-  const baseline = new Map<string, { base: number; cutoff: Date }>();
+  const baseline = new Map<string, Baseline>();
   for (const it of stItems) {
     baseline.set(key(it.stocktake.storeId, it.productId), {
       base: it.actualQty,
-      cutoff: it.stocktake.confirmedAt,
+      countedOn: it.stocktake.countedOn,
+      confirmedAt: it.stocktake.confirmedAt,
     });
   }
 
@@ -117,7 +119,7 @@ export async function getAllStoresInventorySummary() {
   for (const t of txs) {
     const k = key(t.storeId, t.productId);
     const b = baseline.get(k);
-    if (b && t.createdAt <= b.cutoff) continue; // ベースライン以前は無視
+    if (b && !isAfterStocktake(t, b)) continue; // 棚卸に含まれている分は無視
     stocks.set(k, (stocks.get(k) ?? 0) + (TX_SIGN[t.type] ?? 0) * t.quantity);
   }
 

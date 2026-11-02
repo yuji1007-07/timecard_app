@@ -5,11 +5,48 @@ import { TX_SIGN } from "@/lib/constants";
  * 在庫は「取引履歴の積み上げ」で算出する（在庫数を直接書き換えない設計）。
  * 棚卸が確定すると、その時点の実在庫が以降の基準（ベースライン）になる。
  *
- * computeStock(店舗, 商品):
- *   1. 最新の確定棚卸（その商品の StocktakeItem）を探す
- *   2. あれば actualQty を基準 base、confirmedAt を境界 cutoff とする
- *   3. cutoff 以降（無ければ全期間）の取引の符号付き合計を base に足す
+ * ベースラインより後かどうかは「取引日(date)」で判定する。
+ * 入力日時(createdAt)で判定すると、あとから遡って入力した取引
+ * （例: 店舗間移動を翌月に記録した場合の移動先の入庫）が、
+ * すでに実地カウントに含まれているのに再度積み上がって二重計上になる。
  */
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * 日本時間での「日」キー（YYYY-MM-DD）。
+ * 日付入力由来の値（UTC午前0時）も、日時そのもの（now）も、同じ基準で日に落とせる。
+ */
+export function jstDayKey(d: Date): string {
+  return new Date(d.getTime() + JST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** 棚卸ベースライン。countedOn（棚卸日）が無い既存行は confirmedAt の日を棚卸日とみなす。 */
+export type Baseline = {
+  base: number;
+  countedOn: Date | null;
+  confirmedAt: Date;
+};
+
+/** 棚卸日（表示・判定に使う日）。 */
+export function stocktakeDay(b: { countedOn: Date | null; confirmedAt: Date }): string {
+  return jstDayKey(b.countedOn ?? b.confirmedAt);
+}
+
+/**
+ * この取引を棚卸ベースラインに積み上げるか。
+ *
+ * - 棚卸日より後の日付の取引 → 積み上げる
+ * - 棚卸日より前の日付の取引 → 実地カウントに含まれているので無視
+ * - 棚卸日と同じ日付の取引   → 確定ボタンより後に入力されたものだけ積み上げる
+ *   （確定後にその日のうちに記録した販売を落とさないため）
+ */
+export function isAfterStocktake(tx: { date: Date; createdAt: Date }, b: Baseline): boolean {
+  const txDay = jstDayKey(tx.date);
+  const cntDay = stocktakeDay(b);
+  if (txDay !== cntDay) return txDay > cntDay;
+  return tx.createdAt > b.confirmedAt;
+}
 
 type TxLite = { type: string; quantity: number };
 
@@ -27,15 +64,22 @@ export async function computeStock(storeId: string, productId: string): Promise<
     include: { stocktake: true },
   });
 
-  const base = latest?.actualQty ?? 0;
-  const cutoff = latest?.stocktake.confirmedAt;
+  const baseline: Baseline | null = latest
+    ? {
+        base: latest.actualQty,
+        countedOn: latest.stocktake.countedOn,
+        confirmedAt: latest.stocktake.confirmedAt,
+      }
+    : null;
 
+  // 取引日で判定するため、SQLでは絞り込まず取得してから判定する
   const txs = await prisma.transaction.findMany({
-    where: { storeId, productId, ...(cutoff ? { createdAt: { gt: cutoff } } : {}) },
-    select: { type: true, quantity: true },
+    where: { storeId, productId },
+    select: { type: true, quantity: true, date: true, createdAt: true },
   });
 
-  return base + sumEffect(txs);
+  if (!baseline) return sumEffect(txs);
+  return baseline.base + sumEffect(txs.filter((t) => isAfterStocktake(t, baseline)));
 }
 
 export type StockRow = {
@@ -51,18 +95,22 @@ export async function computeStoreStocks(storeId: string): Promise<Map<string, n
   // 各商品の最新棚卸ベースライン
   const items = await prisma.stocktakeItem.findMany({
     where: { stocktake: { storeId } },
-    include: { stocktake: { select: { confirmedAt: true } } },
+    include: { stocktake: { select: { confirmedAt: true, countedOn: true } } },
     orderBy: { stocktake: { confirmedAt: "asc" } },
   });
   // 最後に来たものが最新（asc なので上書き）
-  const baseline = new Map<string, { base: number; cutoff: Date }>();
+  const baseline = new Map<string, Baseline>();
   for (const it of items) {
-    baseline.set(it.productId, { base: it.actualQty, cutoff: it.stocktake.confirmedAt });
+    baseline.set(it.productId, {
+      base: it.actualQty,
+      countedOn: it.stocktake.countedOn,
+      confirmedAt: it.stocktake.confirmedAt,
+    });
   }
 
   const txs = await prisma.transaction.findMany({
     where: { storeId },
-    select: { productId: true, type: true, quantity: true, createdAt: true },
+    select: { productId: true, type: true, quantity: true, date: true, createdAt: true },
   });
 
   const result = new Map<string, number>();
@@ -70,7 +118,7 @@ export async function computeStoreStocks(storeId: string): Promise<Map<string, n
 
   for (const t of txs) {
     const b = baseline.get(t.productId);
-    if (b && t.createdAt <= b.cutoff) continue; // ベースライン以前は無視
+    if (b && !isAfterStocktake(t, b)) continue; // 棚卸に含まれている分は無視
     const cur = result.get(t.productId) ?? 0;
     result.set(t.productId, cur + (TX_SIGN[t.type] ?? 0) * t.quantity);
   }

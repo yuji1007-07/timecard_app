@@ -197,7 +197,8 @@ model Stocktake {
   id          String   @id @default(cuid())
   storeId     String
   targetMonth String // 例: 2026-06
-  confirmedAt DateTime @default(now())
+  confirmedAt DateTime @default(now()) // 「確定」ボタンを押した瞬間（監査・同日判定用）
+  countedOn   DateTime? // 実際に棚卸した日。未設定の既存行は confirmedAt の日を棚卸日として扱う
   assigneeId  String?
   assigneeName String?
   diffCount   Int      @default(0) // ズレが出た商品数

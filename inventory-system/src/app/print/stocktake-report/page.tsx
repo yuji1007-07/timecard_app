@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessStore } from "@/lib/session";
 import { yen } from "@/lib/constants";
+import { jstDayKey } from "@/lib/stock";
 import { PrintToolbar } from "../print-toolbar";
 
 export const dynamic = "force-dynamic";
@@ -76,8 +77,10 @@ export default async function StocktakeReportPage({
             <tr>
               <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-medium">対象月</th>
               <td className="border border-gray-300 px-3 py-2">{month}</td>
-              <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-medium">棚卸確定日</th>
-              <td className="border border-gray-300 px-3 py-2">{fmtDate(new Date(st.confirmedAt))}</td>
+              <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-medium">棚卸日</th>
+              <td className="border border-gray-300 px-3 py-2">
+                {fmtDate(new Date(`${jstDayKey(st.countedOn ?? st.confirmedAt)}T00:00:00.000Z`))}
+              </td>
             </tr>
           </tbody>
         </table>

@@ -4,6 +4,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { TX_SIGN } from "../src/lib/constants";
+import { isAfterStocktake, type Baseline } from "../src/lib/stock";
 import { getAllStoresInventorySummary } from "../src/lib/inventory";
 
 const prisma = new PrismaClient();
@@ -24,21 +25,26 @@ async function getStoreProductsOld(storeId: string) {
 async function computeStoreStocksOld(storeId: string) {
   const items = await prisma.stocktakeItem.findMany({
     where: { stocktake: { storeId } },
-    include: { stocktake: { select: { confirmedAt: true } } },
+    include: { stocktake: { select: { confirmedAt: true, countedOn: true } } },
     orderBy: { stocktake: { confirmedAt: "asc" } },
   });
-  const baseline = new Map<string, { base: number; cutoff: Date }>();
-  for (const it of items) baseline.set(it.productId, { base: it.actualQty, cutoff: it.stocktake.confirmedAt });
+  const baseline = new Map<string, Baseline>();
+  for (const it of items)
+    baseline.set(it.productId, {
+      base: it.actualQty,
+      countedOn: it.stocktake.countedOn,
+      confirmedAt: it.stocktake.confirmedAt,
+    });
 
   const txs = await prisma.transaction.findMany({
     where: { storeId },
-    select: { productId: true, type: true, quantity: true, createdAt: true },
+    select: { productId: true, type: true, quantity: true, date: true, createdAt: true },
   });
   const result = new Map<string, number>();
   for (const [pid, b] of baseline) result.set(pid, b.base);
   for (const t of txs) {
     const b = baseline.get(t.productId);
-    if (b && t.createdAt <= b.cutoff) continue;
+    if (b && !isAfterStocktake(t, b)) continue;
     result.set(t.productId, (result.get(t.productId) ?? 0) + (TX_SIGN[t.type] ?? 0) * t.quantity);
   }
   return result;
@@ -123,7 +129,7 @@ async function seed() {
 
   // A店: 棚卸ベースラインあり（cutoff 前後の取引を混在）
   const st = await prisma.stocktake.create({
-    data: { storeId: s1.id, targetMonth: "2026-06", confirmedAt: D("2026-06-30T00:00:00Z") },
+    data: { storeId: s1.id, targetMonth: "2026-06", countedOn: D("2026-06-30T00:00:00Z"), confirmedAt: D("2026-06-30T00:00:00Z") },
   });
   await prisma.stocktakeItem.createMany({
     data: [
@@ -148,6 +154,13 @@ async function seed() {
   await tx(s1.id, p1.id, "ORDER", 3, D("2026-07-01T00:00:00Z"));
   await tx(s1.id, p1.id, "CONSUME", 1, D("2026-07-02T00:00:00Z"));
   await tx(s1.id, p3.id, "GIFT", 2, D("2026-07-03T00:00:00Z"));
+  // 遡り入力: 取引日は棚卸日より前だが、入力は棚卸確定より後（在庫に積み上げてはいけない）
+  await prisma.transaction.create({
+    data: {
+      storeId: s1.id, productId: p1.id, type: "TRANSFER_IN", quantity: 9,
+      date: D("2026-06-10T00:00:00Z"), createdAt: D("2026-07-20T00:00:00Z"),
+    },
+  });
   // 棚卸ベースラインが無い商品（全期間集計）
   await tx(s1.id, p2.id, "ORDER", 20, D("2026-01-01T00:00:00Z"));
   await tx(s1.id, p2.id, "EMPLOYEE_SALE", 5, D("2026-07-04T00:00:00Z"));

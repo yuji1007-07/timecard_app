@@ -37,11 +37,17 @@ export function TransactionForm({
   stores,
   fixedStoreId,
   defaultType,
+  lastStocktakeDay,
+  todayJst,
 }: {
   products: ProductOpt[];
   stores: StoreOpt[];
   fixedStoreId: string | null;
   defaultType?: string;
+  /** 店舗IDごとの直近の棚卸日（YYYY-MM-DD, 日本時間） */
+  lastStocktakeDay: Record<string, string>;
+  /** 日本時間の今日（YYYY-MM-DD） */
+  todayJst: string;
 }) {
   const router = useRouter();
   const [type, setType] = useState(defaultType ?? "ORDER");
@@ -55,7 +61,12 @@ export function TransactionForm({
   const [result, action] = useActionState(createTransaction, undefined);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
-  const today = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(todayJst);
+
+  // 直近の棚卸日以前の日付で記録しても、その分はすでに実地カウントに含まれているため
+  // 現在の在庫数は動かない。気づかず「反映されない」と誤解しないよう注意を出す。
+  const lastCount = lastStocktakeDay[storeId];
+  const beforeStocktake = !!lastCount && !!date && date <= lastCount;
 
   // ブランド一覧（商品から重複なしで導出）
   const brands = useMemo(() => {
@@ -246,7 +257,13 @@ export function TransactionForm({
         {/* 日付 */}
         <div className="space-y-1">
           <Label>{type === "ORDER" ? "発注・入荷日" : "日付"}</Label>
-          <Input name="date" type="date" defaultValue={today} />
+          <Input name="date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          {beforeStocktake && (
+            <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-800">
+              この日付は直近の棚卸（{lastCount}）より前です。棚卸で数えた実在庫にすでに含まれているため、
+              <strong>現在の在庫数は変わりません</strong>（記録は履歴に残ります）。
+            </p>
+          )}
         </div>
 
         {/* 価格 */}

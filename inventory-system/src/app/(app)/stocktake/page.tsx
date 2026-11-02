@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
 import { BusinessTypeBadge } from "@/components/badges";
 import { yen } from "@/lib/constants";
+import { jstDayKey } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -74,6 +75,7 @@ export default async function StocktakePage({ searchParams }: { searchParams: Pr
               <th className="px-3 py-2 text-left">店舗</th>
               <th className="px-3 py-2 text-left">業態</th>
               <th className="px-3 py-2 text-center">状態</th>
+              <th className="px-3 py-2 text-left">棚卸日</th>
               <th className="px-3 py-2 text-right">ズレ件数</th>
               <th className="px-3 py-2 text-right">ズレ金額</th>
               <th className="px-3 py-2 text-right">操作</th>
@@ -94,6 +96,7 @@ export default async function StocktakePage({ searchParams }: { searchParams: Pr
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">未実施</span>
                     )}
                   </td>
+                  <td className="px-3 py-2 text-muted-foreground">{st ? jstDayKey(st.countedOn ?? st.confirmedAt) : "-"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{st ? st.diffCount : "-"}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${st && st.diffAmount !== 0 ? "text-red-600" : ""}`}>{st ? yen(st.diffAmount) : "-"}</td>
                   <td className="px-3 py-2 text-right">

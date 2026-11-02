@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessStore } from "@/lib/session";
 import { getStoreInventory } from "@/lib/inventory";
+import { jstDayKey, isAfterStocktake } from "@/lib/stock";
 import { StocktakeForm } from "./stocktake-form";
 
 export const dynamic = "force-dynamic";
@@ -63,13 +64,24 @@ export default async function StocktakeEntryPage({
     prevActual: prevMap.has(r.productId) ? prevMap.get(r.productId)! : null,
   }));
 
-  // 既に確定済みの場合、その後に記録された取引の件数（再確定で吸収されてしまう分）
-  const txSince = existing
-    ? await prisma.transaction.count({ where: { storeId, createdAt: { gt: existing.confirmedAt } } })
-    : 0;
+  // 既に確定済みの場合、その棚卸より後として在庫に積み上がっている取引の件数
+  let txSince = 0;
+  if (existing) {
+    const base = {
+      base: 0,
+      countedOn: existing.countedOn,
+      confirmedAt: existing.confirmedAt,
+    };
+    const since = await prisma.transaction.findMany({
+      where: { storeId },
+      select: { date: true, createdAt: true },
+    });
+    txSince = since.filter((t) => isAfterStocktake(t, base)).length;
+  }
 
   const already = existing
     ? {
+        countedOn: jstDayKey(existing.countedOn ?? existing.confirmedAt),
         confirmedAt: new Date(existing.confirmedAt).toLocaleString("ja-JP", {
           year: "numeric",
           month: "2-digit",
@@ -93,6 +105,7 @@ export default async function StocktakeEntryPage({
         month={month}
         rows={rows}
         assigneeDefault={user.name ?? ""}
+        countedOnDefault={already?.countedOn ?? jstDayKey(new Date())}
         already={already}
       />
     </div>

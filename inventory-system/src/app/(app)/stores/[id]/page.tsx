@@ -120,7 +120,7 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
                 <tr key={t.id} className="border-t">
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{new Date(t.date).toISOString().slice(0, 10)}</td>
                   <td className="px-3 py-2"><TxTypeBadge type={t.type} /></td>
-                  <td className="px-3 py-2"><div className="flex items-center gap-2"><BrandBadge name={t.product.brand.name} color={t.product.brand.colorHex} />{t.product.name}</div></td>
+                  <td className="px-3 py-2"><div className="flex items-center gap-2"><BrandBadge name={t.product.brand.name} color={t.product.brand.colorHex} />{t.product.name}{t.product.size && <span className="rounded bg-navy/10 px-1.5 py-0.5 text-xs font-semibold text-navy">{t.product.size}</span>}</div></td>
                   <td className="px-3 py-2 text-right tabular-nums">{t.quantity}</td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{t.assignee ?? ""}{t.toStore && t.type === "TRANSFER_OUT" ? ` → ${t.toStore.name}` : ""}</td>
                 </tr>

@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/session";
 import { TxTypeBadge, BrandBadge } from "@/components/badges";
 import { ConfirmSubmit } from "@/components/confirm-submit";
 import { TX_TYPES, TX_SIGN, yen } from "@/lib/constants";
+import { jstDayKey } from "@/lib/stock";
 import { cancelTransaction } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -110,13 +111,28 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               const amount = (t.unitPriceIncl ?? 0) * t.quantity;
               return (
                 <tr key={t.id} className="border-t align-top">
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{new Date(t.date).toISOString().slice(0, 10)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
+                    {new Date(t.date).toISOString().slice(0, 10)}
+                    {jstDayKey(t.date) !== jstDayKey(t.createdAt) && (
+                      <div
+                        title="取引日より後に入力された記録です。棚卸日より前の日付の取引は、現在の在庫数には反映されません。"
+                        className="text-[10px] text-amber-700"
+                      >
+                        入力: {jstDayKey(t.createdAt).slice(5).replace("-", "/")}
+                      </div>
+                    )}
+                  </td>
                   {isArea && <td className="px-3 py-2">{t.store.name}</td>}
                   <td className="px-3 py-2"><TxTypeBadge type={t.type} /></td>
                   <td className="px-3 py-2">
                     <div className="flex items-center gap-2">
                       <BrandBadge name={t.product.brand.name} color={t.product.brand.colorHex} />
                       <span className="font-medium">{t.product.name}</span>
+                      {t.product.size && (
+                        <span className="shrink-0 rounded bg-navy/10 px-1.5 py-0.5 text-xs font-semibold text-navy">
+                          {t.product.size}
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className={`px-3 py-2 text-right font-semibold tabular-nums ${sign > 0 ? "text-green-600" : "text-red-600"}`}>

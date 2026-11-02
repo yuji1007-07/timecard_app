@@ -28,13 +28,15 @@ export function StocktakeForm({
   month,
   rows,
   assigneeDefault,
+  countedOnDefault,
   already,
 }: {
   storeId: string;
   month: string;
   rows: Row[];
   assigneeDefault: string;
-  already: { confirmedAt: string; assigneeName: string | null; txSince: number } | null;
+  countedOnDefault: string;
+  already: { countedOn: string; confirmedAt: string; assigneeName: string | null; txSince: number } | null;
 }) {
   const router = useRouter();
   // 前回の実数はあえて初期値に入れない。
@@ -89,14 +91,14 @@ export function StocktakeForm({
       {already && (
         <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
           <p className="text-sm font-bold text-amber-900">
-            この月（{month}）の棚卸は確定済みです（{already.confirmedAt}
+            この月（{month}）の棚卸は確定済みです（棚卸日 {already.countedOn} / 確定 {already.confirmedAt}
             {already.assigneeName ? ` / ${already.assigneeName}` : ""}）
           </p>
           <p className="mt-1 text-sm text-amber-900">
             数量を入れた商品だけが、今の数量で上書きされます。
             {already.txSince > 0 && (
               <>
-                {" "}確定後に記録された取引が <span className="font-bold">{already.txSince}件</span>{" "}
+                {" "}前回の棚卸日より後の取引が <span className="font-bold">{already.txSince}件</span>{" "}
                 あります。数え直した商品はその取引ぶんも含んだ「今ある数」を入力してください。
               </>
             )}
@@ -108,9 +110,15 @@ export function StocktakeForm({
       )}
 
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg border bg-card p-4">
-        <div className="space-y-1">
-          <Label>棚卸担当者</Label>
-          <Input name="assigneeName" defaultValue={assigneeDefault} className="w-48" />
+        <div className="flex flex-wrap gap-4">
+          <div className="space-y-1">
+            <Label>棚卸日（実際に数えた日）</Label>
+            <Input name="countedOn" type="date" defaultValue={countedOnDefault} className="w-44" />
+          </div>
+          <div className="space-y-1">
+            <Label>棚卸担当者</Label>
+            <Input name="assigneeName" defaultValue={assigneeDefault} className="w-48" />
+          </div>
         </div>
         <div className="flex gap-4 text-sm">
           <div>入力済: <span className="font-semibold tabular-nums">{entered}/{rows.length}</span></div>
@@ -186,7 +194,11 @@ export function StocktakeForm({
         <Button type="button" variant="ghost" onClick={() => router.push("/stocktake")}>キャンセル</Button>
       </div>
       <p className="text-xs text-muted-foreground">
-        ※ 確定すると、入力した実在庫がこの時点の在庫基準になります。以降の発注・消耗はこの実数に積み上がります。
+        ※ 確定すると、入力した実在庫が「棚卸日」時点の在庫基準になります。棚卸日より後の日付の発注・消耗がこの実数に積み上がります。
+      </p>
+      <p className="text-xs text-muted-foreground">
+        ※ 数えた日とシステムに入力する日がずれる場合は、「棚卸日」に<strong>実際に数えた日</strong>を入れてください。
+        その後に発生した取引が正しく反映されます。
       </p>
       <p className="text-xs text-muted-foreground">
         ※ <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">入荷記録なし</span>{" "}
