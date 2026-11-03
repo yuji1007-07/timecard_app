@@ -42,12 +42,14 @@ export function KpiItemForm({
   scopeKey,
   item,
   categories = [],
+  count = 0,
   onDone,
 }: {
   level: string;
   scopeKey: string;
   item?: KpiItemData;
   categories?: string[];
+  count?: number; // 今ある項目数（並び順の入力欄の目安表示用）
   onDone?: () => void;
 }) {
   const isEdit = !!item;
@@ -105,6 +107,13 @@ export function KpiItemForm({
           </select>
         </div>
       </div>
+      {!isEdit && (
+        <div className="space-y-1.5">
+          <Label>並び順（番号）</Label>
+          <Input name="position" type="number" min={1} max={count + 1} step={1} className="w-40" placeholder={`空欄なら最後（${count + 1}番）`} />
+          <p className="text-xs text-muted-foreground">例: 5 と入れると5番目に入り、元の5番目以降は1つずつ後ろにずれます。</p>
+        </div>
+      )}
 
       <div className="md:col-span-2">
         <Label className="mb-2 block">入力・表示オプション</Label>
@@ -138,7 +147,7 @@ export function KpiItemForm({
   );
 }
 
-export function AddKpiToggle({ level, scopeKey, categories = [] }: { level: string; scopeKey: string; categories?: string[] }) {
+export function AddKpiToggle({ level, scopeKey, categories = [], count = 0 }: { level: string; scopeKey: string; categories?: string[]; count?: number }) {
   const [open, setOpen] = useState(false);
   if (!open)
     return (
@@ -146,7 +155,7 @@ export function AddKpiToggle({ level, scopeKey, categories = [] }: { level: stri
         ＋ KPI項目を追加
       </Button>
     );
-  return <KpiItemForm level={level} scopeKey={scopeKey} categories={categories} onDone={() => setOpen(false)} />;
+  return <KpiItemForm level={level} scopeKey={scopeKey} categories={categories} count={count} onDone={() => setOpen(false)} />;
 }
 
 export function EditKpiToggle({ level, scopeKey, item, categories = [] }: { level: string; scopeKey: string; item: KpiItemData; categories?: string[] }) {
@@ -182,7 +191,7 @@ export function ClearScopeKpiButton({ level, scopeKey, count }: { level: string;
   );
 }
 
-export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: string }) {
+export function BulkAddKpi({ level, scopeKey, count = 0 }: { level: string; scopeKey: string; count?: number }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(bulkCreateKpiItems, null);
   if (state?.success && open) setOpen(false);
@@ -201,7 +210,7 @@ export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: strin
       <div className="space-y-1.5">
         <Label>KPI名（1行に1つ）</Label>
         <Textarea name="names" rows={6} placeholder={"売上\n初診数\n会員数\nカルテ枚数"} />
-        <p className="text-xs text-muted-foreground">改行で区切って入力すると、まとめて追加されます。「会員-カルテ枚数」のように「カテゴリ-項目名」で入力すると、接頭辞が大枠カテゴリ（色分けの見出し）に自動で入ります。単位や並び順は追加後に変更できます。</p>
+        <p className="text-xs text-muted-foreground">改行で区切って入力すると、まとめて追加されます。「会員-カルテ枚数」のように「カテゴリ-項目名」で入力すると、接頭辞が大枠カテゴリ（色分けの見出し）に自動で入ります。「追加する位置」を入れると、その番号から入力した順番のまま差し込みます（空欄なら最後）。</p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div className="space-y-1.5">
@@ -218,6 +227,10 @@ export function BulkAddKpi({ level, scopeKey }: { level: string; scopeKey: strin
               </option>
             ))}
           </select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>追加する位置（番号）</Label>
+          <Input name="position" type="number" min={1} max={count + 1} step={1} className="w-40" placeholder={`空欄なら最後（${count + 1}番）`} />
         </div>
         <Button type="submit" size="sm" disabled={pending}>
           {pending ? "追加中..." : "一括で追加する"}

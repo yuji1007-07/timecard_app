@@ -72,8 +72,8 @@ export default async function KpiTemplatesPage({
       <Card className="mb-4">
         <CardContent className="flex flex-wrap items-end gap-3 pt-5">
           <ScopeSelector basePath="/kpi-templates" options={options} current={`${level}:${key}`} />
-          <AddKpiToggle level={level} scopeKey={key} categories={categories} />
-          <BulkAddKpi level={level} scopeKey={key} />
+          <AddKpiToggle level={level} scopeKey={key} categories={categories} count={items.length} />
+          <BulkAddKpi level={level} scopeKey={key} count={items.length} />
           {uncategorized > 0 && (
             <form action={autoFillCategories}>
               <input type="hidden" name="level" value={level} />

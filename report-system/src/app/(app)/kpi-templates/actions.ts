@@ -36,13 +36,30 @@ function scopeFromForm(formData: FormData): Scope {
   return { businessType: String(formData.get("scopeKey")) };
 }
 
+/** フォームの「並び順（番号）」。1始まりの位置を返し、空欄・不正値は null（＝最後に追加） */
+function positionFromForm(formData: FormData): number | null {
+  const raw = String(formData.get("position") ?? "").trim();
+  if (!raw) return null;
+  const n = Math.round(Number(raw));
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
+/** 追加した項目を pos 番目（1始まり）から並べ、スコープ内の並び順を振り直す */
+async function placeAt(scope: Scope, ids: string[], pos: number) {
+  const siblings = await prisma.kpiItem.findMany({ where: scope, orderBy: { sortOrder: "asc" }, select: { id: true } });
+  const added = new Set(ids);
+  const arr = siblings.map((s) => s.id).filter((id) => !added.has(id));
+  arr.splice(Math.min(arr.length, pos - 1), 0, ...ids);
+  await prisma.$transaction(arr.map((id, i) => prisma.kpiItem.update({ where: { id }, data: { sortOrder: i } })));
+}
+
 export async function createKpiItem(_prev: unknown, formData: FormData) {
   await requireAreaManager();
   const parsed = kpiSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   const scope = scopeFromForm(formData);
   const count = await prisma.kpiItem.count({ where: scope });
-  await prisma.kpiItem.create({
+  const created = await prisma.kpiItem.create({
     data: {
       ...parsed.data,
       ...scope,
@@ -57,6 +74,9 @@ export async function createKpiItem(_prev: unknown, formData: FormData) {
       sortOrder: count,
     },
   });
+  // 番号を指定したときはその位置に差し込む（空欄なら最後のまま）
+  const pos = positionFromForm(formData);
+  if (pos != null && pos <= count) await placeAt(scope, [created.id], pos);
   revalidatePath("/kpi-templates");
   return { success: true };
 }
@@ -170,20 +190,27 @@ export async function bulkCreateKpiItems(_prev: unknown, formData: FormData) {
 
   const bulkCategory = String(formData.get("category") || "").trim();
   const count = await prisma.kpiItem.count({ where: scope });
-  await prisma.kpiItem.createMany({
-    data: names.map((name, i) => {
+  // 並び順を後から差し込めるよう、作成したIDを受け取る（createMany は ID を返さないため1件ずつ）
+  const created = await prisma.$transaction(
+    names.map((name, i) => {
       const unit = unitChoice === "AUTO" ? guessUnit(name) : unitChoice;
-      return {
-        name,
-        unit,
-        inputType: unit === "%" ? "PERCENT" : "NUMBER",
-        goodDirection: guessDirection(name),
-        category: resolveCategory(bulkCategory || null, name),
-        ...scope,
-        sortOrder: count + i,
-      };
-    }),
-  });
+      return prisma.kpiItem.create({
+        data: {
+          name,
+          unit,
+          inputType: unit === "%" ? "PERCENT" : "NUMBER",
+          goodDirection: guessDirection(name),
+          category: resolveCategory(bulkCategory || null, name),
+          ...scope,
+          sortOrder: count + i,
+        },
+        select: { id: true },
+      });
+    })
+  );
+  // 番号を指定したときは、入力した順番のままその位置から差し込む
+  const pos = positionFromForm(formData);
+  if (pos != null && pos <= count) await placeAt(scope, created.map((c) => c.id), pos);
   revalidatePath("/kpi-templates");
   return { success: true, added: names.length };
 }
