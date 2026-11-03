@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 import { getSetting } from "@/lib/settings";
-import type { ParsedPdfTable } from "@/lib/pdf-table";
+import { splitRowNo, type ParsedPdfTable } from "@/lib/pdf-table";
 
 /**
  * スプレッドシートのスクリーンショット／写真から表を読み取る。
@@ -26,13 +26,15 @@ const SYSTEM_PROMPT = `あなたは日本の整骨院・鍼灸・エステ店の
 - 画像が複数ある場合は、同じ表の続きとして1つにまとめてください（列の並びは共通）。
 
 columns（数値が入る列）:
-- 項目名の列（一番左の見出し列）を除き、数値が入る列を左から順にすべて並べる。
+- 項目名の列と、項目名の左にある番号の列を除き、数値が入る列を左から順にすべて並べる。
 - header はその列の真上にある見出し。見出しが2段（上段「8月」下段「予算」）なら "8月予算" のように連結する。
   隣の列の見出しを混ぜないこと。見出しが空欄の列も header を "" にして必ず含める。
 - 「差異」「差分」の列も1列として必ず含める（飛ばすと右側の列がずれるため）。
 
 rows（行）:
 - label はその行の項目名を書かれている通りに（（決済あり）（P）のような注記も含めて）写す。注釈番号 [1] は不要。
+- no は、項目名のすぐ左に書かれている番号（表の中の番号列の数字）。label には含めない。番号が無い行は null。
+  スプレッドシート画面の左端にある灰色の行番号（26, 27, 28…）や、上端の列記号（A, B, C…）は表の一部ではないので無視する。
 - section は、その行が属する小見出し（【会員】【骨盤】【カルテ枚数】など）の名前を【】を外して入れる。小見出しが無ければ null。
 - 小見出しの行そのものに数値が入っている場合は、その行も label を小見出し名にして出力する。数値の無い小見出し行は出力しない。
 - values は columns と同じ数・同じ順番の配列にする。空欄・「-」・読めない値は null を入れて位置を保つ（詰めない）。
@@ -62,9 +64,10 @@ const TABLE_SCHEMA = {
         items: {
           type: "object",
           additionalProperties: false,
-          required: ["section", "label", "values"],
+          required: ["section", "no", "label", "values"],
           properties: {
             section: { type: ["string", "null"] },
+            no: { type: ["integer", "null"] },
             label: { type: "string" },
             values: { type: "array", items: { type: ["number", "null"] } },
           },
@@ -89,6 +92,7 @@ type RawTable = {
   columns?: { index?: number; header?: string }[];
   rows?: {
     section?: string | null;
+    no?: unknown;
     label?: string;
     values?: unknown[];
     cells?: Record<string, unknown>; // 旧形式（json_object で返ってきた場合の保険）
@@ -212,13 +216,16 @@ export async function parseImageTable(
         if (n != null) cells[String(k)] = n;
       }
     }
-    const label = String(r.label ?? "").trim().replace(/^【(.+)】$/, "$1");
+    // 番号を label に含めて返された場合（「19 プリカ消費」）も切り分ける
+    const split = splitRowNo(String(r.label ?? ""));
+    const no = toNum(r.no) ?? split.no;
+    const label = split.label.replace(/^【(.+)】$/, "$1");
     const section = r.section ? String(r.section).trim().replace(/^【(.+)】$/, "$1") || null : null;
     if (!label || Object.keys(cells).length === 0) continue;
     // 拡大画像の重なり部分を二重に書き出した行（直前と全く同じ行）は捨てる
     const prev = rows[rows.length - 1];
-    if (prev && prev.label === label && prev.section === section && JSON.stringify(prev.cells) === JSON.stringify(cells)) continue;
-    rows.push({ section, label, cells });
+    if (prev && prev.label === label && prev.section === section && prev.no === no && JSON.stringify(prev.cells) === JSON.stringify(cells)) continue;
+    rows.push({ section, label, no: no != null && Number.isInteger(no) ? no : null, cells });
   }
 
   if (rows.length === 0) {

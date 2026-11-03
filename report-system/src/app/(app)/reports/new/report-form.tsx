@@ -27,6 +27,7 @@ const selectClass =
 
 export type KpiItemDef = {
   id: string;
+  no: number; // KPIテンプレート画面の並び順の番号（シートの番号列と突き合わせる）
   name: string;
   category: string | null;
   unit: string;
@@ -685,6 +686,7 @@ export function ReportForm({
                     return (
                       <div key={k.id} className={`grid gap-2 border-b pb-2 md:items-center md:border-0 md:pb-0 ${isMonthly ? "md:grid-cols-[1.5fr_1fr_1fr_2fr]" : "md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]"}`}>
                         <div className="flex items-center gap-1.5 text-sm font-medium">
+                          <span className="w-6 shrink-0 text-right text-[11px] font-normal tabular-nums text-muted-foreground" title="KPIテンプレートの番号">{k.no}</span>
                           {k.name}
                           <span className="text-xs text-muted-foreground">({k.unit})</span>
                           {k.required && <Badge variant="bad" className="text-[10px]">必須</Badge>}

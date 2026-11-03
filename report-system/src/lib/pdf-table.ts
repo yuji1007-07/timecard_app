@@ -4,7 +4,8 @@
 // 「行 = y座標クラスタ」「列 = 数値の右端x座標クラスタ（表計算の数値は右揃え）」として再構成する。
 
 export type ParsedColumn = { index: number; header: string; samples: string[] };
-export type ParsedRow = { section: string | null; label: string; cells: Record<string, number> };
+// no: 項目名の左に振った番号（シートとアプリのKPIテンプレートの並び順を揃えておくと、名前が少し違っても対応づけられる）
+export type ParsedRow = { section: string | null; label: string; no?: number | null; cells: Record<string, number> };
 export type ParsedPdfTable = { columns: ParsedColumn[]; rows: ParsedRow[] };
 
 type TextPiece = { str: string; x: number; y: number; w: number };
@@ -22,6 +23,12 @@ function isNumeric(s: string): boolean {
 function toNumber(s: string): number {
   const t = s.trim().replace(/[¥￥,%]/g, "").replace(/−/g, "-");
   return Number(t);
+}
+
+/** 項目名の頭に付いた番号（「19 プリカ消費」「19.プリカ消費」）を切り出す */
+export function splitRowNo(label: string): { no: number | null; label: string } {
+  const m = /^(\d{1,3})[\s.．、:：)）]+(\S.*)$/.exec(label.trim());
+  return m ? { no: Number(m[1]), label: m[2].trim() } : { no: null, label: label.trim() };
 }
 
 // ラベルが「AA」のように2回繰り返されて抽出されるケース（固定列の重複印字）を半分にする
@@ -161,10 +168,19 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       const cellItems = sorted.filter((it) => isNumeric(it.str) && colIndexOf(it.x + it.w) >= 0);
       const cellSet = new Set(cellItems);
       const firstCellX = cellItems.length ? Math.min(...cellItems.map((it) => it.x)) : valueZoneStart;
-      const labelItems = sorted.filter((it) => !cellSet.has(it) && it.x < firstCellX);
+      let labelItems = sorted.filter((it) => !cellSet.has(it) && it.x < firstCellX);
 
-      const label = dedupeLabel(labelItems.map((it) => it.str).join(""));
-      if (!label) continue;
+      // 項目名の左の番号列（「19」「プリカ消費」が別の文字片になる）。固定列で2回印字されても両方外す
+      let rowNo: number | null = null;
+      const firstNum = labelItems[0] && /^\d{1,3}$/.test(labelItems[0].str.trim()) ? labelItems[0] : null;
+      // 項目名がセル内で折り返されて別の行に分かれても、番号と数値が同じ行にあれば番号で取り込めるよう番号だけの行も残す
+      if (firstNum && cellItems.length > 0) {
+        rowNo = Number(firstNum.str.trim());
+        labelItems = labelItems.filter((it) => it.str.trim() !== firstNum.str.trim());
+      }
+      let label = dedupeLabel(labelItems.map((it) => it.str).join(""));
+      if (rowNo == null) ({ no: rowNo, label } = splitRowNo(label));
+      if (!label && rowNo == null) continue;
 
       // セクション見出し（【…】）: 以降の行の文脈として記録しつつ、行自体も残す
       const secMatch = label.match(/^【(.+)】$/);
@@ -182,15 +198,15 @@ export async function parsePdfTable(buffer: Buffer): Promise<ParsedPdfTable> {
       if (Object.keys(cells).length === 0) continue;
 
       // 複数ページに同じ行が出た場合はセル数が多い方を残す
-      const key = `${section ?? ""}|${rowLabel}`;
+      const key = `${section ?? ""}|${rowNo ?? ""}|${rowLabel}`;
       const existing = rowKeyIndex.get(key);
       if (existing != null) {
         if (Object.keys(cells).length > Object.keys(rowsOut[existing].cells).length) {
-          rowsOut[existing] = { section, label: rowLabel, cells };
+          rowsOut[existing] = { section, label: rowLabel, no: rowNo, cells };
         }
       } else {
         rowKeyIndex.set(key, rowsOut.length);
-        rowsOut.push({ section, label: rowLabel, cells });
+        rowsOut.push({ section, label: rowLabel, no: rowNo, cells });
       }
     }
   }

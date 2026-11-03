@@ -3,9 +3,12 @@
 // 繰り返し、アプリ側も区分（カテゴリ）ごとに同じ名前の項目を持てる。
 // 行名だけで探すと最初の1件が代表のKPIを取ってしまい、残りの区分の数値が取り込まれないため、
 // 「区分つきの名前」「同じ区分にある同じ名前」を先に確定させ、表記ゆれの吸収はその後に回す。
+// シートの項目名の左に番号を振り、アプリのKPIテンプレートの並び順（番号）と揃えている場合は、
+// 番号を最優先で使う（名前が少し違っても取り込めるように）。
 
-export type MatchRow = { section: string | null; label: string };
-export type MatchKpi = { id: string; name: string; category?: string | null };
+export type MatchRow = { section: string | null; label: string; no?: number | null };
+/** no: KPIテンプレート画面の並び順の番号（1始まり） */
+export type MatchKpi = { id: string; name: string; category?: string | null; no?: number };
 
 /** 表記ゆれの正規化：空白除去・注釈[1]除去・全角カッコ→半角 */
 export const norm = (s: string) =>
@@ -31,10 +34,72 @@ export function sameSection(a: string | null | undefined, b: string | null | und
   return sectionPrefixes(a).some((p) => pb.has(p));
 }
 
+// 名前の比較用に、区分の接頭辞（新定額-）・末尾の注記（（決済あり））・記号を落とした芯の部分
+const core = (s: string) =>
+  stripParen(norm(s))
+    .replace(/^[^-]+-/, "")
+    .replace(/[\/／・･()（）.．、,，:：]/g, "");
+
+function bigrams(s: string): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < s.length - 1; i++) out.push(s.slice(i, i + 2));
+  return out;
+}
+
+/** 表記が少し違うだけの同じ項目か（入会数/再来 ↔ 新定額-入会数、幽霊会員 ↔ 幽霊会員数 など） */
+export function looselySame(a: string, b: string): boolean {
+  const A = core(a);
+  const B = core(b);
+  if (!A || !B) return false;
+  if (A === B) return true;
+  const [short, long] = A.length <= B.length ? [A, B] : [B, A];
+  if (short.length >= 2 && long.includes(short) && short.length / long.length >= 0.6) return true;
+  const ba = bigrams(A);
+  const bb = bigrams(B);
+  if (ba.length === 0 || bb.length === 0) return false;
+  const pool = [...bb];
+  let common = 0;
+  for (const g of ba) {
+    const i = pool.indexOf(g);
+    if (i >= 0) { common++; pool.splice(i, 1); }
+  }
+  return (2 * common) / (ba.length + bb.length) >= 0.6;
+}
+
+export type NumberingCheck = {
+  rowsWithNo: number; // 番号が読み取れた行
+  checked: number; // そのうち、同じ番号のKPIがアプリにあった行
+  agree: number; // さらに名前もおおむね一致した行
+  trusted: boolean; // 番号で対応づけてよいか
+};
+
+/**
+ * シートの番号とアプリの番号が揃っているかを確かめる。
+ * 番号がずれている（アプリ側で項目を足して番号が1つずれた等）のに番号で入れると全部が1行ずつずれて入るため、
+ * 番号が同じ行の半分以上で名前もおおむね一致する時だけ、番号を使う。
+ */
+export function checkNumbering(rows: MatchRow[], kpis: MatchKpi[]): NumberingCheck {
+  const byNo = new Map<number, MatchKpi>();
+  for (const k of kpis) if (k.no != null && !byNo.has(k.no)) byNo.set(k.no, k);
+  let rowsWithNo = 0;
+  let checked = 0;
+  let agree = 0;
+  for (const r of rows) {
+    if (r.no == null) continue;
+    rowsWithNo++;
+    const k = byNo.get(r.no);
+    if (!k) continue;
+    checked++;
+    if (looselySame(r.label, k.name)) agree++;
+  }
+  return { rowsWithNo, checked, agree, trusted: checked >= 3 && agree / checked >= 0.5 };
+}
+
 export function matchRows<R extends MatchRow, K extends MatchKpi>(
   rows: R[],
   kpis: K[]
 ): { row: R; kpi: K | null }[] {
+  const useNumbers = checkNumbering(rows, kpis).trusted;
   const ks = kpis.map((k) => {
     const n = norm(k.name);
     return { k, n, loose: stripParen(n) };
@@ -59,6 +124,8 @@ export function matchRows<R extends MatchRow, K extends MatchKpi>(
 
   // 確からしい順に並べた判定。上から順に全行へ当てはめていく
   const tiers: { onlyUnsectioned?: boolean; test: (ri: number, ki: number) => boolean }[] = [
+    // 0. シートの番号 ＝ KPIテンプレートの番号（番号が揃っていると確認できた時だけ）
+    ...(useNumbers ? [{ test: (ri: number, ki: number) => rows[ri].no != null && kpis[ki].no === rows[ri].no }] : []),
     // 1. 区分つきの名前（【会員】カルテ枚数 → 会員-カルテ枚数 ／ 会員入会数）
     { test: (ri, ki) => withPrefix(ri, ki, rs[ri].L) },
     // 2. 同じ区分にある同じ名前（【骨盤】月単価 → 骨盤カテゴリの「月単価」）
@@ -78,6 +145,9 @@ export function matchRows<R extends MatchRow, K extends MatchKpi>(
     { test: (ri, ki) => ks[ki].n === `${rs[ri].L}会員数` && freeFor(ri, ki) },
     // 8. 同じ区分で、双方の注記を外すと同じ（月単価（P込）↔ 月単価(P) など）
     { test: (ri, ki) => ks[ki].loose === rs[ri].Ls && catOk(ri, ki) },
+    // 9. 表記が少し違うだけ（入会数/再来 ↔ 入会数 など）。区分が一致する時だけ
+    //    （区分が分からないまま似た名前で入れると、同名の別区分の項目に入ってしまうため。そこは番号で補う）
+    { test: (ri, ki) => catOk(ri, ki) && looselySame(rows[ri].label, kpis[ki].name) },
   ];
 
   const claimed = new Set<number>();

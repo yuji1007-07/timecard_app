@@ -244,8 +244,9 @@ async function ResolvedForm({
         unitLabel={unitLabel}
         reportType={type}
         period={period}
-        kpiItems={kpiItems.map((k) => ({
+        kpiItems={kpiItems.map((k, i) => ({
           id: k.id,
+          no: i + 1,
           name: k.name,
           category: k.category,
           unit: k.unit,

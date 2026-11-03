@@ -10,12 +10,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { monthShort } from "@/lib/utils";
-import { matchRows, norm } from "@/lib/kpi-match";
+import { matchRows, checkNumbering, norm } from "@/lib/kpi-match";
 import type { KpiItemDef } from "./report-form";
 import { prepareSheetImages } from "./prepare-image";
 
 type PdfCol = { index: number; header: string; samples: string[] };
-type PdfRow = { section: string | null; label: string; cells: Record<string, number> };
+type PdfRow = { section: string | null; label: string; no?: number | null; cells: Record<string, number> };
 
 export type PdfKpiUpdates = Record<string, { target?: string; current?: string; forecast?: string }>; // kpiItemId ->
 export type PdfProjUpdates = Record<string, Record<string, { budget?: string; forecast?: string }>>; // kpiItemId -> month ->
@@ -103,6 +103,8 @@ export function PdfImportCard({
   }, [kpis]);
   const kpiLabel = (k: KpiItemDef) => (dupNames.has(k.name) && k.category ? `${k.category} / ${k.name}` : k.name);
   const matchedCount = matched.filter((m) => m.kpi).length;
+  // シートの番号列とKPIテンプレートの番号が揃っているか（揃っていれば番号で対応づけている）
+  const numbering = useMemo(() => (data ? checkNumbering(data.rows, kpis) : null), [data, kpis]);
   const unmatched = matched.filter((m) => !m.kpi);
   // 月次は対象月から、週次は今日の日付から「当月」を推定（目標/予算列の自動判定に使う）
   const curMonthNum = Number(period.slice(5, 7)) || 0; // 週次 2026-08-W2 / 月次 2026-08 のどちらも先頭7文字が年月
@@ -351,10 +353,18 @@ export function PdfImportCard({
                   読み取れなかった行 {unmatched.length}件 {showUnmatched ? "を隠す" : ""}
                 </button>
               )}
+              {numbering?.trusted && <Badge variant="muted">番号で照合しました</Badge>}
             </div>
+            {numbering && numbering.rowsWithNo >= 3 && !numbering.trusted && (
+              <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                シートの番号とKPIテンプレートの番号がずれているため、番号は使わず項目名で照合しました
+                （番号が同じ{numbering.checked}行のうち、名前も合っていたのは{numbering.agree}行）。
+                KPIテンプレート画面の番号をシートの番号に揃えると、名前が少し違っても番号で取り込めます。
+              </p>
+            )}
             {showUnmatched && unmatched.length > 0 && (
               <p className="rounded-md bg-muted/40 p-2 text-xs text-muted-foreground">
-                {unmatched.map((m) => m.row.label).join(" ／ ")}
+                {unmatched.map((m) => (m.row.no != null ? `${m.row.no} ${m.row.label}` : m.row.label)).join(" ／ ")}
                 <span className="mt-1 block">※ 集計行など、アプリのKPIにない項目はスキップされます（問題ありません）。</span>
               </p>
             )}
@@ -428,7 +438,10 @@ export function PdfImportCard({
                   <tbody>
                     {previewRows.map(({ row, kpi }) => (
                       <tr key={kpi!.id} className="border-t">
-                        <td className="px-2 py-1 font-medium">{kpiLabel(kpi!)}</td>
+                        <td className="px-2 py-1 font-medium">
+                          <span className="mr-1.5 text-[10px] font-normal tabular-nums text-muted-foreground">{kpi!.no}</span>
+                          {kpiLabel(kpi!)}
+                        </td>
                         {activeCols.map((c) => (
                           <td key={c.index} className="px-2 py-1 text-right tabular-nums">
                             {row.cells[String(c.index)] != null ? row.cells[String(c.index)].toLocaleString() : "—"}
@@ -462,7 +475,7 @@ export function PdfImportCard({
                 </button>
                 {showMissing && (
                   <>
-                    <p className="mt-1">{applied.missing.map(kpiLabel).join(" ／ ")}</p>
+                    <p className="mt-1">{applied.missing.map((k) => `${k.no} ${kpiLabel(k)}`).join(" ／ ")}</p>
                     <p className="mt-1 text-amber-800">
                       シートの行名とアプリの項目名が違う、またはシートが空欄の項目です。必要なものは下のKPI欄に手入力してください。
                     </p>
