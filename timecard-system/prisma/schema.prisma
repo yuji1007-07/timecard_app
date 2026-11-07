@@ -1,0 +1,100 @@
+// 株式会社まごころグループ 勤怠管理システム
+// Prisma schema (PostgreSQL)。列挙値は String + コメントで表現（週次/月次報告システムと同じ流儀）。
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// 在庫管理システムと同じ Supabase プロジェクトを共有できるよう、専用スキーマ "timecard" を使う
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["timecard"]
+}
+
+// ===== ユーザー =====
+// role: ADMIN(全体管理者) | STAFF(スタッフ)
+// スタッフのうち StorePermission を1件以上持つ人は「店舗責任者」として担当店舗の管理画面を使える。
+model User {
+  id           String   @id @default(cuid())
+  loginId      String   @unique // ログイン用のユーザーID（例: kitamura）
+  passwordHash String
+  name         String
+  role         String   @default("STAFF")
+  storeId      String? // 主所属店舗
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store       Store?            @relation(fields: [storeId], references: [id])
+  attendances Attendance[]
+  permissions StorePermission[]
+  @@schema("timecard")
+}
+
+// ===== 店舗 =====
+// brand: からだラボ整骨院 | ラコンシェル | 鍼灸ラコンシェル（店舗名から自動判定）
+model Store {
+  id        String   @id @default(cuid())
+  name      String   @unique // 表示名（例: ラコンシェル町田店）
+  brand     String
+  shortName String // ブランドを除いた店舗名（例: 町田店）
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  attendances Attendance[]
+  permissions StorePermission[]
+  @@schema("timecard")
+}
+
+// ===== 店舗責任者の担当店舗 =====
+model StorePermission {
+  id        String   @id @default(cuid())
+  userId    String
+  storeId   String
+  createdAt DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storeId])
+  @@schema("timecard")
+}
+
+// ===== 打刻 =====
+// 1人1日1レコード。時刻はUTCで保存し、表示は日本時間。
+model Attendance {
+  id           String    @id @default(cuid())
+  userId       String
+  storeId      String
+  workDate     String // 日本時間の勤務日 YYYY-MM-DD
+  clockIn      DateTime?
+  breakStart   DateTime?
+  breakEnd     DateTime?
+  clockOut     DateTime?
+  breakMinutes Int       @default(0)
+  workMinutes  Int?
+  note         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  store Store @relation(fields: [storeId], references: [id])
+
+  @@unique([userId, workDate])
+  @@index([storeId, workDate])
+  @@schema("timecard")
+}
+
+// ===== 設定（キー・バリュー） =====
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+  @@schema("timecard")
+}

@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 215 35% 18%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 35% 18%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 35% 18%;
+    --primary: 213 52% 25%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 30% 94%;
+    --secondary-foreground: 215 35% 18%;
+    --muted: 210 30% 94%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 210 90% 96%;
+    --accent-foreground: 213 52% 25%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214 20% 88%;
+    --input: 214 20% 88%;
+    --ring: 213 52% 35%;
+    --radius: 0.5rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "palt";
+  }
+}
+
+/* 数値カードなどで使う表形式の罫線 */
+.table-grid th,
+.table-grid td {
+  @apply border-b border-border px-3 py-2 text-left align-middle;
+}
