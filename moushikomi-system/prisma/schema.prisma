@@ -1,0 +1,116 @@
+// 株式会社まごころグループ 会員申込書アプリ
+// Prisma schema (PostgreSQL)。列挙値は String + コメントで表現（勤怠管理システムと同じ流儀）。
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// 勤怠管理・在庫管理と同じ Supabase プロジェクトを共有できるよう、専用スキーマ "moushikomi" を使う
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["moushikomi"]
+}
+
+// ===== ユーザー =====
+// role: ADMIN(本部) | STAFF(店舗担当)。STAFF は必ず店舗に所属する。
+model User {
+  id           String   @id @default(cuid())
+  loginId      String   @unique // ログイン用のユーザーID（例: honbu / store1007）
+  passwordHash String
+  name         String
+  role         String   @default("STAFF")
+  storeId      String? // 所属店舗（本部は null）
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store        Store?        @relation(fields: [storeId], references: [id])
+  applications Application[]
+
+  @@schema("moushikomi")
+}
+
+// ===== 店舗 =====
+// department: 整骨院 | エステ | 鍼灸
+// pinCode: 旧アプリで使っていた4桁のPIN（参考情報。ログインには使わない）
+model Store {
+  id         String   @id @default(cuid())
+  name       String   @unique // 表示名（例: 狛江院）
+  department String
+  pinCode    String?
+  isActive   Boolean  @default(true)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  users        User[]
+  applications Application[]
+
+  @@schema("moushikomi")
+}
+
+// ===== 申込書テンプレート（ひな形） =====
+// departments: 対象部門の配列（空 = 全部門共通）
+// fields / checks / plans: 旧アプリと同じ JSON 構造
+model Template {
+  id          String   @id @default(cuid())
+  name        String
+  category    String   @default("")
+  departments Json     @default("[]")
+  bodyText    String   @default("")
+  fields      Json     @default("[]")
+  checks      Json     @default("[]")
+  plans       Json     @default("[]")
+  terms       String   @default("")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@schema("moushikomi")
+}
+
+// ===== 作成済みの申込書（履歴） =====
+// テンプレートの内容は作成時点のスナップショットを保持する（後でテンプレートを変えても申込書は変わらない）
+model Application {
+  id               String   @id @default(cuid())
+  templateId       String
+  templateName     String
+  category         String   @default("")
+  bodySnapshot     String   @default("")
+  termsSnapshot    String   @default("")
+  checks           Json     @default("[]")
+  fields           Json     @default("[]")
+  applyDate        String // 申込日 YYYY-MM-DD
+  storeId          String
+  storeName        String
+  department       String   @default("")
+  staffName        String   @default("")
+  fieldValues      Json     @default("{}")
+  planId           String   @default("")
+  planName         String   @default("")
+  monthlyFee       String   @default("")
+  initialFee       String   @default("")
+  checkedItems     Json     @default("[]")
+  signatureDataUrl String   @default("") // 署名画像（PNG の data URL）
+  createdById      String?
+  createdAt        DateTime @default(now())
+
+  store     Store @relation(fields: [storeId], references: [id])
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([storeId, applyDate])
+  @@schema("moushikomi")
+}
+
+// ===== 設定（キー・バリュー） =====
+// allowStoreEdit: "1" のとき店舗アカウントでもテンプレート編集ができる
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+
+  @@schema("moushikomi")
+}
