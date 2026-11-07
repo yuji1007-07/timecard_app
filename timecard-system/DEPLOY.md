@@ -31,6 +31,15 @@ npm run db:seed         # 店舗マスタ24店舗 + admin を投入
 
 スタッフ・店舗・担当店舗・過去の打刻をすべてコピーします。**スタッフのID・パスワードはそのまま使えます。**
 
+### ブラウザだけで行う方法（おすすめ）
+
+1. Render ダッシュボード → 旧アプリの PostgreSQL → 「External Database URL」をコピー
+2. Vercel → このプロジェクト → Settings → Environment Variables に `OLD_DATABASE_URL` としてその文字列を追加 → Redeploy
+3. `https://<アプリURL>/api/migrate?key=<AUTH_SECRET>` を開く → `"ok":true` と件数が出れば完了
+4. 終わったら `OLD_DATABASE_URL` は削除してよい
+
+### ターミナルで行う方法
+
 1. Render ダッシュボード → 旧アプリの PostgreSQL → 「External Database URL」をコピー
 2. 自分のPCで実行:
 
