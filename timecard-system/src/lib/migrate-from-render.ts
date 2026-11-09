@@ -1,6 +1,6 @@
 // 旧システム（Render 上の Flask 版勤怠アプリ）の PostgreSQL から、新システムへデータを移行する共通処理。
 // scripts/migrate-from-render.ts（ターミナル実行）と /api/migrate（ブラウザ実行）の両方から使う。
-import type { PrismaClient } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { Client } from "pg";
 import { detectBrandAndStore, normalizeText } from "./stores";
 
@@ -77,6 +77,7 @@ export async function fetchFromOldApp(baseUrl: string, username: string, passwor
  * - 何度実行しても安全（既にあるものは更新、無いものは追加。削除はしない）
  */
 export async function importOldData(prisma: PrismaClient, data: OldExport, log: (m: string) => void = () => {}): Promise<MigrateResult> {
+  // ---- 店舗（件数が少ないので1件ずつ upsert）----
   const storeMap = new Map<number, string>();
   let order = 0;
   for (const s of data.stores) {
@@ -92,30 +93,54 @@ export async function importOldData(prisma: PrismaClient, data: OldExport, log: 
   }
   log(`店舗: ${data.stores.length} 件`);
 
+  // ---- スタッフ（既存はまとめて取得し、無いものだけ createMany）----
+  const loginIds = data.users.map((u) => u.username);
+  const existingUsers = await prisma.user.findMany({ where: { loginId: { in: loginIds } }, select: { id: true, loginId: true } });
+  const existingByLogin = new Map(existingUsers.map((u) => [u.loginId, u.id]));
+  const newUsers = data.users.filter((u) => !existingByLogin.has(u.username));
+  if (newUsers.length > 0) {
+    await prisma.user.createMany({
+      data: newUsers.map((u) => ({
+        loginId: u.username,
+        name: u.full_name,
+        passwordHash: u.password_hash,
+        role: u.role === "admin" ? "ADMIN" : "STAFF",
+        storeId: storeMap.get(u.store_id) ?? null,
+        isActive: !!u.is_active,
+      })),
+      skipDuplicates: true,
+    });
+  }
+  for (const u of data.users) {
+    const id = existingByLogin.get(u.username);
+    if (!id) continue;
+    await prisma.user.update({
+      where: { id },
+      data: { name: u.full_name, role: u.role === "admin" ? "ADMIN" : "STAFF", storeId: storeMap.get(u.store_id) ?? null, isActive: !!u.is_active },
+    });
+  }
+  const allUsers = await prisma.user.findMany({ where: { loginId: { in: loginIds } }, select: { id: true, loginId: true } });
+  const idByLogin = new Map(allUsers.map((u) => [u.loginId, u.id]));
   const userMap = new Map<number, string>();
   for (const u of data.users) {
-    const storeId = storeMap.get(u.store_id) ?? null;
-    const role = u.role === "admin" ? "ADMIN" : "STAFF";
-    const row = await prisma.user.upsert({
-      where: { loginId: u.username },
-      create: { loginId: u.username, name: u.full_name, passwordHash: u.password_hash, role, storeId, isActive: !!u.is_active },
-      update: { name: u.full_name, role, storeId, isActive: !!u.is_active },
-    });
-    userMap.set(u.id, row.id);
+    const id = idByLogin.get(u.username);
+    if (id) userMap.set(u.id, id);
   }
-  log(`スタッフ: ${data.users.length} 件`);
+  log(`スタッフ: ${data.users.length} 件（新規 ${newUsers.length}）`);
 
-  let permCount = 0;
-  for (const p of data.permissions) {
-    const userId = userMap.get(p.user_id);
-    const storeId = storeMap.get(p.store_id);
-    if (!userId || !storeId) continue;
-    await prisma.storePermission.upsert({ where: { userId_storeId: { userId, storeId } }, create: { userId, storeId }, update: {} });
-    permCount += 1;
-  }
-  log(`担当店舗: ${permCount} 件`);
+  // ---- 担当店舗（createMany + skipDuplicates）----
+  const permRows = data.permissions
+    .map((p) => ({ userId: userMap.get(p.user_id), storeId: storeMap.get(p.store_id) }))
+    .filter((p): p is { userId: string; storeId: string } => !!p.userId && !!p.storeId);
+  if (permRows.length > 0) await prisma.storePermission.createMany({ data: permRows, skipDuplicates: true });
+  log(`担当店舗: ${permRows.length} 件`);
 
-  let attCount = 0;
+  // ---- 打刻（既存キーをまとめて取得し、新規は createMany、既存は更新）----
+  const userIds = [...new Set([...userMap.values()])];
+  const existingAtt = await prisma.attendance.findMany({ where: { userId: { in: userIds } }, select: { id: true, userId: true, workDate: true } });
+  const existingAttKey = new Map(existingAtt.map((a) => [`${a.userId}|${a.workDate}`, a.id]));
+  const toCreate: Prisma.AttendanceCreateManyInput[] = [];
+  const toUpdate: { id: string; data: Record<string, unknown> }[] = [];
   let skipped = 0;
   for (const a of data.attendance) {
     const userId = userMap.get(a.user_id);
@@ -135,11 +160,18 @@ export async function importOldData(prisma: PrismaClient, data: OldExport, log: 
       workMinutes: a.work_minutes ?? null,
       note: a.note || null,
     };
-    await prisma.attendance.upsert({ where: { userId_workDate: { userId, workDate } }, create: { userId, workDate, ...row }, update: row });
-    attCount += 1;
+    const existingId = existingAttKey.get(`${userId}|${workDate}`);
+    if (existingId) toUpdate.push({ id: existingId, data: row });
+    else toCreate.push({ userId, workDate, ...row });
   }
-  log(`打刻: ${attCount} 件（スキップ ${skipped} 件）`);
-  return { stores: data.stores.length, users: data.users.length, permissions: permCount, attendance: attCount, skipped };
+  for (let i = 0; i < toCreate.length; i += 500) {
+    await prisma.attendance.createMany({ data: toCreate.slice(i, i + 500), skipDuplicates: true });
+  }
+  for (let i = 0; i < toUpdate.length; i += 50) {
+    await prisma.$transaction(toUpdate.slice(i, i + 50).map((u) => prisma.attendance.update({ where: { id: u.id }, data: u.data })));
+  }
+  log(`打刻: ${toCreate.length + toUpdate.length} 件（新規 ${toCreate.length} / 更新 ${toUpdate.length} / スキップ ${skipped}）`);
+  return { stores: data.stores.length, users: data.users.length, permissions: permRows.length, attendance: toCreate.length + toUpdate.length, skipped };
 }
 
 /** 旧DBへ直接接続して移行（ターミナル用） */

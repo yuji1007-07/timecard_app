@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { fetchFromOldApp, fetchFromOldDatabase, importOldData } from "@/lib/migrate-from-render";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 /**
  * 旧システム（Render）からのデータ移行をブラウザから実行する。
