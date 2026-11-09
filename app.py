@@ -1427,6 +1427,47 @@ def bulk_edit_attendance():
     )
 
 
+# ---------- 新システム（Next.js版）へのデータ移行用エクスポート ----------
+# 全体管理者のID・パスワードで認証し、店舗・スタッフ・担当店舗・打刻をJSONで返す。
+# 新システムの /api/migrate がこのエンドポイントを呼び出してデータを取り込む。
+@app.route("/api/export-all", methods=["POST"])
+def export_all_for_migration():
+    from flask import jsonify
+
+    payload = request.get_json(silent=True) or {}
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    if not username or not password:
+        return jsonify({"ok": False, "error": "username と password を指定してください。"}), 400
+
+    db = get_db()
+    user = db.execute("SELECT * FROM users WHERE username = ? AND is_active = 1", (username,)).fetchone()
+    if user is None or user["role"] != "admin" or not check_password_hash(user["password_hash"], password):
+        return jsonify({"ok": False, "error": "全体管理者のID・パスワードが正しくありません。"}), 401
+
+    def rows(sql):
+        return [dict(r) for r in db.execute(sql).fetchall()]
+
+    def iso(v):
+        if v is None:
+            return None
+        if hasattr(v, "isoformat"):
+            return v.isoformat()
+        return str(v)
+
+    stores = rows("SELECT id, brand_name, store_name, display_name, is_active FROM stores ORDER BY id")
+    users = rows("SELECT id, store_id, username, password_hash, full_name, role, is_active FROM users ORDER BY id")
+    perms = rows("SELECT user_id, store_id FROM user_store_permissions")
+    attendance = rows(
+        "SELECT id, user_id, store_id, work_date, clock_in, break_start, break_end, clock_out, "
+        "break_minutes, work_minutes, note FROM attendance ORDER BY id"
+    )
+    for a in attendance:
+        for k in ("work_date", "clock_in", "break_start", "break_end", "clock_out"):
+            a[k] = iso(a[k])
+    return jsonify({"ok": True, "stores": stores, "users": users, "permissions": perms, "attendance": attendance})
+
+
 # ---------- 申込書アプリ用クラウド保存API を有効化 ----------
 # 既存の勤怠アプリには影響しない独立したAPI（/api/moushikomi/...）。
 try:

@@ -31,12 +31,18 @@ npm run db:seed         # 店舗マスタ24店舗 + admin を投入
 
 スタッフ・店舗・担当店舗・過去の打刻をすべてコピーします。**スタッフのID・パスワードはそのまま使えます。**
 
-### ブラウザだけで行う方法（おすすめ）
+### ブラウザだけで行う方法（おすすめ・DBに直接繋がない）
 
-1. Render ダッシュボード → 旧アプリの PostgreSQL → 「External Database URL」をコピー
-2. Vercel → このプロジェクト → Settings → Environment Variables に `OLD_DATABASE_URL` としてその文字列を追加 → Redeploy
-3. `https://<アプリURL>/api/migrate?key=<AUTH_SECRET>` を開く → `"ok":true` と件数が出れば完了
-4. 終わったら `OLD_DATABASE_URL` は削除してよい
+旧アプリ（Flask版）に `/api/export-all` が付いているので、新アプリがそこからデータを取り込めます。
+
+1. Vercel → このプロジェクト → Settings → Environment Variables に次の3つを追加 → Redeploy
+   - `OLD_APP_URL` … 旧アプリのURL（例: `https://timecard-app-1.onrender.com`）
+   - `OLD_ADMIN_ID` … 旧アプリの全体管理者のユーザーID
+   - `OLD_ADMIN_PASSWORD` … そのパスワード
+2. `https://<アプリURL>/api/migrate?key=<AUTH_SECRET>` を開く → `"ok":true` と件数が出れば完了
+3. 終わったら上の3つの環境変数は削除してよい
+
+旧DBの External Database URL が分かる場合は、代わりに `OLD_DATABASE_URL` を設定しても同じことができる。
 
 ### ターミナルで行う方法
 
