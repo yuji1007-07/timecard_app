@@ -252,7 +252,7 @@ async function StoreDashboard({ storeId, month, userName }: { storeId: string | 
 
       {/* 在庫一覧 */}
       <h2 className="mb-2 mt-6 text-sm font-semibold text-muted-foreground">在庫一覧（ブランド別）</h2>
-      <InventoryAccordion rows={inv} />
+      <InventoryAccordion rows={inv} storeId={storeId} />
     </div>
   );
 }

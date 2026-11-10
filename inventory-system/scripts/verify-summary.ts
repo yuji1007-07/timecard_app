@@ -4,7 +4,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { TX_SIGN } from "../src/lib/constants";
-import { isAfterStocktake, type Baseline } from "../src/lib/stock";
+import { isAfterStocktake, baselineOf, keepLatest, type Baseline } from "../src/lib/stock";
 import { getAllStoresInventorySummary } from "../src/lib/inventory";
 
 const prisma = new PrismaClient();
@@ -26,15 +26,9 @@ async function computeStoreStocksOld(storeId: string) {
   const items = await prisma.stocktakeItem.findMany({
     where: { stocktake: { storeId } },
     include: { stocktake: { select: { confirmedAt: true, countedOn: true } } },
-    orderBy: { stocktake: { confirmedAt: "asc" } },
   });
   const baseline = new Map<string, Baseline>();
-  for (const it of items)
-    baseline.set(it.productId, {
-      base: it.actualQty,
-      countedOn: it.stocktake.countedOn,
-      confirmedAt: it.stocktake.confirmedAt,
-    });
+  for (const it of items) keepLatest(baseline, it.productId, baselineOf(it, it.stocktake));
 
   const txs = await prisma.transaction.findMany({
     where: { storeId },

@@ -133,7 +133,7 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
 
       {/* 現在在庫 */}
       <h2 className="mb-2 mt-6 text-sm font-semibold text-muted-foreground">現在の在庫（ブランド別）</h2>
-      <InventoryAccordion rows={inv} />
+      <InventoryAccordion rows={inv} storeId={store.id} />
     </div>
   );
 }

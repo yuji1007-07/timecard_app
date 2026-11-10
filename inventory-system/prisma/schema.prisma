@@ -224,6 +224,10 @@ model StocktakeItem {
   actualQty      Int    @default(0)
   diff           Int    @default(0) // 実在庫 - 理論在庫
   diffAmount     Float  @default(0) // ズレ金額
+  // この商品を数えた日・数を確定した時刻。棚卸のやり直しで一部の商品だけ
+  // 別の日に数え直すことがあるため、商品ごとに持つ。空の既存行は棚卸全体の日付を使う。
+  countedOn      DateTime?
+  confirmedAt    DateTime?
 
   stocktake Stocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
   product   Product   @relation(fields: [productId], references: [id], onDelete: Cascade)

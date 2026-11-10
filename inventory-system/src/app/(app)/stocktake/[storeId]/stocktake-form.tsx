@@ -28,17 +28,28 @@ export function StocktakeForm({
   month,
   rows,
   assigneeDefault,
-  countedOnDefault,
+  todayJst,
+  txCountByDay,
   already,
 }: {
   storeId: string;
   month: string;
   rows: Row[];
   assigneeDefault: string;
-  countedOnDefault: string;
-  already: { countedOn: string; confirmedAt: string; assigneeName: string | null; txSince: number } | null;
+  /** 日本時間の今日（YYYY-MM-DD）。棚卸日の初期値 */
+  todayJst: string;
+  /** 取引日ごとの件数（YYYY-MM-DD → 件数） */
+  txCountByDay: Record<string, number>;
+  already: { countedDays: string[]; confirmedAt: string; assigneeName: string | null; txSince: number } | null;
 }) {
   const router = useRouter();
+  // 棚卸日の初期値は常に今日。前回の日付を引き継ぐと、後日数え直した数が
+  // 前回の日付扱いになり、その間の消耗・発注が二重に計上されるため。
+  const [countedOn, setCountedOn] = useState(todayJst);
+  // 棚卸日より後の取引件数（数えた数に含まれていない＝上乗せされる取引）
+  const txAfterCount = Object.entries(txCountByDay)
+    .filter(([d]) => countedOn && d > countedOn)
+    .reduce((s, [, n]) => s + n, 0);
   // 前回の実数はあえて初期値に入れない。
   // 入れてしまうと「開いて確定を押しただけ」で前回の数値が今の在庫として上書きされ、
   // その間に記録した消耗・発注が打ち消されてしまうため（前回値は参考列に表示する）。
@@ -91,7 +102,7 @@ export function StocktakeForm({
       {already && (
         <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
           <p className="text-sm font-bold text-amber-900">
-            この月（{month}）の棚卸は確定済みです（棚卸日 {already.countedOn} / 確定 {already.confirmedAt}
+            この月（{month}）の棚卸は確定済みです（棚卸日 {already.countedDays.join("・")} / 最終確定 {already.confirmedAt}
             {already.assigneeName ? ` / ${already.assigneeName}` : ""}）
           </p>
           <p className="mt-1 text-sm text-amber-900">
@@ -113,7 +124,28 @@ export function StocktakeForm({
         <div className="flex flex-wrap gap-4">
           <div className="space-y-1">
             <Label>棚卸日（実際に数えた日）</Label>
-            <Input name="countedOn" type="date" defaultValue={countedOnDefault} className="w-44" />
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                name="countedOn"
+                type="date"
+                value={countedOn}
+                max={todayJst}
+                onChange={(e) => setCountedOn(e.target.value)}
+                className="w-44"
+              />
+              {countedOn !== todayJst && (
+                <Button type="button" size="sm" variant="ghost" onClick={() => setCountedOn(todayJst)}>
+                  今日にする
+                </Button>
+              )}
+              {already?.countedDays
+                .filter((d) => d !== countedOn)
+                .map((d) => (
+                  <Button key={d} type="button" size="sm" variant="outline" onClick={() => setCountedOn(d)}>
+                    前回の棚卸日（{d.slice(5).replace("-", "/")}）にする
+                  </Button>
+                ))}
+            </div>
           </div>
           <div className="space-y-1">
             <Label>棚卸担当者</Label>
@@ -125,6 +157,30 @@ export function StocktakeForm({
           <div>ズレ見込: <span className={cn("font-semibold tabular-nums", diffCount > 0 ? "text-red-600" : "text-green-600")}>{diffCount}</span></div>
         </div>
       </div>
+
+      {already && (
+        <p className="rounded-md bg-secondary/50 px-3 py-2 text-xs text-muted-foreground">
+          前回の数え間違いを直すときは「前回の棚卸日」に、今日あらためて数え直したときは「今日」のままにしてください。
+        </p>
+      )}
+
+      {countedOn && countedOn < todayJst && (
+        <div className="rounded-lg border-2 border-orange-300 bg-orange-50 px-4 py-3 text-sm text-orange-900">
+          棚卸日が <span className="font-bold">{countedOn}</span> になっています。
+          {txAfterCount > 0 ? (
+            <>
+              {" "}{countedOn}より後の取引 <span className="font-bold">{txAfterCount}件</span> は、
+              数えた数に<span className="font-bold">含まれていない</span>ものとして在庫に上乗せされます。
+            </>
+          ) : (
+            <> {countedOn}より後の取引はありません。</>
+          )}
+          <span className="mt-1 block text-xs">
+            実際に数えたのが今日なら、棚卸日を今日にしてください。
+            なお下の「理論在庫」は今日時点の数です（確定時のズレは棚卸日時点で計算します）。
+          </span>
+        </div>
+      )}
 
       <div className="overflow-x-auto rounded-lg border bg-card">
         <table className="w-full text-sm">

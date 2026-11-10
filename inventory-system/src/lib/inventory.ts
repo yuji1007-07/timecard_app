@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { computeStoreStocks, getStoreProducts } from "@/lib/stock";
 import { TX_SIGN } from "@/lib/constants";
-import { isAfterStocktake, type Baseline } from "@/lib/stock";
+import { isAfterStocktake, baselineOf, keepLatest, type Baseline } from "@/lib/stock";
 
 export type InventoryRow = {
   productId: string;
@@ -79,9 +79,10 @@ export async function getAllStoresInventorySummary() {
       select: {
         productId: true,
         actualQty: true,
+        countedOn: true,
+        confirmedAt: true,
         stocktake: { select: { storeId: true, confirmedAt: true, countedOn: true } },
       },
-      orderBy: { stocktake: { confirmedAt: "asc" } },
     }),
     prisma.transaction.findMany({
       select: { storeId: true, productId: true, type: true, quantity: true, date: true, createdAt: true },
@@ -102,15 +103,11 @@ export async function getAllStoresInventorySummary() {
     s.add(ps.productId);
   }
 
-  // 棚卸ベースライン（confirmedAt 昇順なので後勝ちで最新になる）
+  // 棚卸ベースライン（店舗×商品ごとに、棚卸日→確定時刻の順で最新のもの）
   const key = (storeId: string, productId: string) => `${storeId}|${productId}`;
   const baseline = new Map<string, Baseline>();
   for (const it of stItems) {
-    baseline.set(key(it.stocktake.storeId, it.productId), {
-      base: it.actualQty,
-      countedOn: it.stocktake.countedOn,
-      confirmedAt: it.stocktake.confirmedAt,
-    });
+    keepLatest(baseline, key(it.stocktake.storeId, it.productId), baselineOf(it, it.stocktake));
   }
 
   // 在庫 = ベースライン + それ以降の取引の符号付き合計

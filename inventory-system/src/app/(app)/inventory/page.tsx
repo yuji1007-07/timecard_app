@@ -108,7 +108,7 @@ export default async function InventoryPage({ searchParams }: { searchParams: Pr
       </div>
 
       {storeId ? (
-        <InventoryAccordion rows={rows} />
+        <InventoryAccordion rows={rows} storeId={storeId} />
       ) : (
         <Card className="p-6 text-center text-sm text-muted-foreground">店舗が割り当てられていません。</Card>
       )}

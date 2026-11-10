@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import { BrandBadge } from "@/components/badges";
 import { yen } from "@/lib/constants";
@@ -9,7 +10,8 @@ import type { InventoryRow } from "@/lib/inventory";
 
 type Group = { brandId: string; brandName: string; brandColor: string; rows: InventoryRow[] };
 
-export function InventoryAccordion({ rows }: { rows: InventoryRow[] }) {
+/** storeId を渡すと、在庫数が「在庫の内訳」画面へのリンクになる */
+export function InventoryAccordion({ rows, storeId }: { rows: InventoryRow[]; storeId?: string }) {
   // 在庫0は既定で非表示（在庫不足は0でも表示）。トグルで全表示に切替。
   const [showZero, setShowZero] = useState(false);
   const visible = showZero ? rows : rows.filter((r) => r.stock !== 0 || r.low);
@@ -37,13 +39,13 @@ export function InventoryAccordion({ rows }: { rows: InventoryRow[] }) {
           表示する在庫がありません{rows.length > 0 ? "（在庫0のみ。上のチェックで表示できます）" : ""}。
         </p>
       ) : (
-        groups.map((g) => <BrandGroup key={g.brandId} group={g} />)
+        groups.map((g) => <BrandGroup key={g.brandId} group={g} storeId={storeId} />)
       )}
     </div>
   );
 }
 
-function BrandGroup({ group }: { group: Group }) {
+function BrandGroup({ group, storeId }: { group: Group; storeId?: string }) {
   const [open, setOpen] = useState(true);
   const totalValue = group.rows.reduce((s, r) => s + r.stockValueWholesale, 0);
   const lowCount = group.rows.filter((r) => r.low).length;
@@ -99,7 +101,18 @@ function BrandGroup({ group }: { group: Group }) {
                     {r.category && <div className="mt-0.5 text-xs text-muted-foreground">{r.category}</div>}
                   </td>
                   <td className={cn("px-3 py-2.5 text-right font-semibold tabular-nums", r.low ? "text-red-600" : "text-navy")}>
-                    {r.stock}<span className="ml-0.5 text-xs font-normal text-muted-foreground">{r.unit}</span>
+                    {storeId ? (
+                      <Link
+                        href={`/inventory/breakdown?store=${storeId}&product=${r.productId}`}
+                        title="この在庫数の内訳を見る"
+                        className="underline decoration-dotted underline-offset-4 hover:decoration-solid"
+                      >
+                        {r.stock}
+                      </Link>
+                    ) : (
+                      r.stock
+                    )}
+                    <span className="ml-0.5 text-xs font-normal text-muted-foreground">{r.unit}</span>
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-xs text-muted-foreground">{r.minStock || "—"}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums">

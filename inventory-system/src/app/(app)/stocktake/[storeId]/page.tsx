@@ -30,15 +30,15 @@ export default async function StocktakeEntryPage({
   const store = await prisma.store.findUnique({ where: { id: storeId } });
   if (!store) notFound();
 
-  const [inv, existing, txPids, stPids] = await Promise.all([
+  const [inv, existing, storeTxs, stPids] = await Promise.all([
     getStoreInventory(storeId),
     // 既存の同月棚卸（あれば実数を初期表示）
     prisma.stocktake.findUnique({
       where: { storeId_targetMonth: { storeId, targetMonth: month } },
       include: { items: true },
     }),
-    // この店舗で取引記録が一度でもある商品
-    prisma.transaction.findMany({ where: { storeId }, select: { productId: true }, distinct: ["productId"] }),
+    // この店舗の取引（記録の有無・棚卸日以降の件数の算出に使う）
+    prisma.transaction.findMany({ where: { storeId }, select: { productId: true, date: true, createdAt: true } }),
     // この店舗で棚卸されたことがある商品
     prisma.stocktakeItem.findMany({
       where: { stocktake: { storeId } },
@@ -50,7 +50,7 @@ export default async function StocktakeEntryPage({
   const prevMap = new Map((existing?.items ?? []).map((i) => [i.productId, i.actualQty]));
 
   // 入荷も棚卸も一度も記録が無い商品＝「在庫0」ではなく「まだ登録しただけ」
-  const hasRecord = new Set([...txPids.map((t) => t.productId), ...stPids.map((s) => s.productId)]);
+  const hasRecord = new Set([...storeTxs.map((t) => t.productId), ...stPids.map((s) => s.productId)]);
 
   const rows = inv.map((r) => ({
     productId: r.productId,
@@ -64,35 +64,40 @@ export default async function StocktakeEntryPage({
     prevActual: prevMap.has(r.productId) ? prevMap.get(r.productId)! : null,
   }));
 
-  // 既に確定済みの場合、その棚卸より後として在庫に積み上がっている取引の件数
-  let txSince = 0;
-  if (existing) {
-    const base = {
-      base: 0,
-      countedOn: existing.countedOn,
-      confirmedAt: existing.confirmedAt,
-    };
-    const since = await prisma.transaction.findMany({
-      where: { storeId },
-      select: { date: true, createdAt: true },
-    });
-    txSince = since.filter((t) => isAfterStocktake(t, base)).length;
+  // 取引日ごとの件数（棚卸日を過去にしたとき「その後の取引◯件が上乗せされる」と示すため）
+  const txCountByDay: Record<string, number> = {};
+  for (const t of storeTxs) {
+    const d = jstDayKey(t.date);
+    txCountByDay[d] = (txCountByDay[d] ?? 0) + 1;
   }
 
-  const already = existing
-    ? {
-        countedOn: jstDayKey(existing.countedOn ?? existing.confirmedAt),
-        confirmedAt: new Date(existing.confirmedAt).toLocaleString("ja-JP", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-        assigneeName: existing.assigneeName,
-        txSince,
-      }
-    : null;
+  let already: {
+    countedDays: string[];
+    confirmedAt: string;
+    assigneeName: string | null;
+    txSince: number;
+  } | null = null;
+  if (existing) {
+    const base = { base: 0, countedOn: existing.countedOn, confirmedAt: existing.confirmedAt };
+    // この月の棚卸で使われている棚卸日（一部の商品だけ別の日に数え直していれば複数）
+    const days = new Set(
+      existing.items.map((i) => jstDayKey(i.countedOn ?? existing.countedOn ?? existing.confirmedAt))
+    );
+    if (days.size === 0) days.add(jstDayKey(existing.countedOn ?? existing.confirmedAt));
+    already = {
+      countedDays: [...days].sort(),
+      confirmedAt: new Date(existing.confirmedAt).toLocaleString("ja-JP", {
+        timeZone: "Asia/Tokyo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+      assigneeName: existing.assigneeName,
+      txSince: storeTxs.filter((t) => isAfterStocktake(t, base)).length,
+    };
+  }
 
   return (
     <div>
@@ -105,7 +110,8 @@ export default async function StocktakeEntryPage({
         month={month}
         rows={rows}
         assigneeDefault={user.name ?? ""}
-        countedOnDefault={already?.countedOn ?? jstDayKey(new Date())}
+        todayJst={jstDayKey(new Date())}
+        txCountByDay={txCountByDay}
         already={already}
       />
     </div>
