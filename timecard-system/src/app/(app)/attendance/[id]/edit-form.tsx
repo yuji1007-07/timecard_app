@@ -25,7 +25,9 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
 
   const recalc = (s: string, e: string) => {
     if (!s || !e) return;
-    const m = Math.round((new Date(e).getTime() - new Date(s).getTime()) / 60000);
+    const [sh, sm] = s.split(":").map(Number);
+    const [eh, em] = e.split(":").map(Number);
+    const m = eh * 60 + em - (sh * 60 + sm);
     if (!Number.isNaN(m) && m >= 0) setBreakMinutes(m);
   };
 
@@ -42,9 +44,9 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
         <Input type="datetime-local" step={300} name="clockOut" defaultValue={record.clockOut} />
       </div>
       <div className="space-y-1.5">
-        <Label>休憩開始</Label>
+        <Label>休憩開始（勤務日の時刻）</Label>
         <Input
-          type="datetime-local"
+          type="time"
           step={300}
           name="breakStart"
           value={breakStart}
@@ -55,9 +57,9 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
         />
       </div>
       <div className="space-y-1.5">
-        <Label>休憩終了</Label>
+        <Label>休憩終了（勤務日の時刻）</Label>
         <Input
-          type="datetime-local"
+          type="time"
           step={300}
           name="breakEnd"
           value={breakEnd}

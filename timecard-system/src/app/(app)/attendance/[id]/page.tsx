@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EditForm } from "./edit-form";
 import { deleteAttendance } from "../actions";
-import { toInputValue, weekdayJa } from "@/lib/time";
+import { toInputValue, toTimeValue, weekdayJa } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -44,8 +44,8 @@ export default async function EditAttendancePage({
             record={{
               id: record.id,
               clockIn: toInputValue(record.clockIn),
-              breakStart: toInputValue(record.breakStart),
-              breakEnd: toInputValue(record.breakEnd),
+              breakStart: toTimeValue(record.breakStart),
+              breakEnd: toTimeValue(record.breakEnd),
               clockOut: toInputValue(record.clockOut),
               breakMinutes: record.breakMinutes,
               note: record.note ?? "",

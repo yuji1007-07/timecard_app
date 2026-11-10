@@ -5,12 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { FilterForm } from "./filter-form";
+import { StaffTabs, filterByUser, staffOptions } from "./staff-tabs";
 import { queryAttendance, querySummary, resolveStoreScope } from "@/lib/attendance";
 import { fmtTime, minutesToHhmm, minutesToHoursText, monthLabel, thisMonthJst, weekdayJa } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-type SP = { month?: string; storeId?: string; msg?: string };
+type SP = { month?: string; storeId?: string; userId?: string; msg?: string };
 
 export default async function AttendancePage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireManager();
@@ -18,8 +19,11 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : thisMonthJst();
   const { stores, selectedStoreId, scopeIds, warning } = await resolveStoreScope(user, sp.storeId);
 
-  const [records, summary] = await Promise.all([queryAttendance(month, scopeIds), querySummary(month, scopeIds)]);
+  const [allRecords, summary] = await Promise.all([queryAttendance(month, scopeIds), querySummary(month, scopeIds)]);
   const qs = `month=${month}${selectedStoreId ? `&storeId=${selectedStoreId}` : ""}`;
+  const staff = staffOptions(allRecords);
+  const userId = sp.userId && staff.some((s) => s.id === sp.userId) ? sp.userId : "";
+  const records = filterByUser(allRecords, userId);
 
   return (
     <div>
@@ -90,6 +94,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
       <Card>
         <CardHeader>
           <CardTitle>打刻一覧（{records.length}件）</CardTitle>
+          <StaffTabs basePath="/attendance" qs={qs} staff={staff} userId={userId} />
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">

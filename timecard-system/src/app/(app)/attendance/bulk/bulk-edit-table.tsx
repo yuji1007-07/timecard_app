@@ -25,7 +25,9 @@ const cell = "h-9 rounded-md border border-input bg-background px-2 text-sm tabu
 
 function diffMinutes(a: string, b: string): number | null {
   if (!a || !b) return null;
-  const d = Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000);
+  const [ah, am] = a.split(":").map(Number);
+  const [bh, bm] = b.split(":").map(Number);
+  const d = bh * 60 + bm - (ah * 60 + am);
   return Number.isNaN(d) || d < 0 ? null : d;
 }
 
@@ -102,10 +104,10 @@ export function BulkEditTable({ rows: initial }: { rows: BulkRow[] }) {
                       <input type="datetime-local" step={300} name={`clockIn_${r.id}`} value={r.clockIn} onChange={(e) => set(r.id, { clockIn: e.target.value })} className={`${cell} w-44`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" step={300} name={`breakStart_${r.id}`} value={r.breakStart} onChange={(e) => set(r.id, { breakStart: e.target.value })} className={`${cell} w-44`} />
+                      <input type="time" step={300} name={`breakStart_${r.id}`} value={r.breakStart} onChange={(e) => set(r.id, { breakStart: e.target.value })} className={`${cell} w-28`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" step={300} name={`breakEnd_${r.id}`} value={r.breakEnd} onChange={(e) => set(r.id, { breakEnd: e.target.value })} className={`${cell} w-44`} />
+                      <input type="time" step={300} name={`breakEnd_${r.id}`} value={r.breakEnd} onChange={(e) => set(r.id, { breakEnd: e.target.value })} className={`${cell} w-28`} />
                     </td>
                     <td className="px-3 py-1.5">
                       <input type="datetime-local" step={300} name={`clockOut_${r.id}`} value={r.clockOut} onChange={(e) => set(r.id, { clockOut: e.target.value })} className={`${cell} w-44`} />

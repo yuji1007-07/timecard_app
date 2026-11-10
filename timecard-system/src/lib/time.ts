@@ -45,6 +45,29 @@ export function nowMinute(): Date {
   return d;
 }
 
+/** 5分単位で四捨五入（例: 9:27→9:25, 9:28→9:30）。秒以下は切り捨て */
+export function roundToNearest5(date: Date): Date {
+  const ms = 5 * 60 * 1000;
+  return new Date(Math.round(date.getTime() / ms) * ms);
+}
+
+/** <input type="time"> の value 用: 09:59（JST） */
+export function toTimeValue(date: Date | null | undefined): string {
+  if (!date) return "";
+  const p = jstParts(date);
+  return `${pad(p.hh)}:${pad(p.mm)}`;
+}
+
+/** 勤務日(YYYY-MM-DD) + 時刻(HH:mm, JST) を Date に。空なら null */
+export function fromTimeOnDate(workDate: string, time: string | null | undefined): Date | null {
+  const t = (time ?? "").trim();
+  if (!t) return null;
+  const m = /^(\d{2}):(\d{2})/.exec(t);
+  if (!m) return null;
+  const d = new Date(`${workDate}T${m[1]}:${m[2]}:00+09:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 /** 表示: 2026-07-18 09:59 */
 export function fmtDateTime(date: Date | null | undefined): string {
   if (!date) return "-";

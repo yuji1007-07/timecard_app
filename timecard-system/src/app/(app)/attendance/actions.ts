@@ -4,7 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canAccessStore, requireManager } from "@/lib/session";
-import { calcWorkMinutes, fromInputValue, toInputValue } from "@/lib/time";
+import { calcWorkMinutes, fromInputValue, fromTimeOnDate, toInputValue, toTimeValue } from "@/lib/time";
 
 const editSchema = z.object({
   id: z.string().min(1),
@@ -37,8 +37,8 @@ export async function updateAttendance(_prev: unknown, formData: FormData) {
     where: { id: d.id },
     data: {
       clockIn,
-      breakStart: fromInputValue(d.breakStart),
-      breakEnd: fromInputValue(d.breakEnd),
+      breakStart: fromTimeOnDate(record.workDate, d.breakStart),
+      breakEnd: fromTimeOnDate(record.workDate, d.breakEnd),
       clockOut,
       breakMinutes,
       workMinutes: calcWorkMinutes(clockIn, clockOut, breakMinutes),
@@ -61,8 +61,8 @@ export async function bulkUpdateAttendance(_prev: unknown, formData: FormData): 
     const g = (k: string) => String(formData.get(`${k}_${r.id}`) ?? "");
 
     const clockIn = fromInputValue(g("clockIn"));
-    const breakStart = fromInputValue(g("breakStart"));
-    const breakEnd = fromInputValue(g("breakEnd"));
+    const breakStart = fromTimeOnDate(r.workDate, g("breakStart"));
+    const breakEnd = fromTimeOnDate(r.workDate, g("breakEnd"));
     const clockOut = fromInputValue(g("clockOut"));
     const breakMinutesRaw = Number.parseInt(g("breakMinutes") || "0", 10);
     const breakMinutes = Number.isNaN(breakMinutesRaw) ? r.breakMinutes : Math.max(0, breakMinutesRaw);
@@ -70,8 +70,8 @@ export async function bulkUpdateAttendance(_prev: unknown, formData: FormData): 
 
     const same =
       toInputValue(clockIn) === toInputValue(r.clockIn) &&
-      toInputValue(breakStart) === toInputValue(r.breakStart) &&
-      toInputValue(breakEnd) === toInputValue(r.breakEnd) &&
+      toTimeValue(breakStart) === toTimeValue(r.breakStart) &&
+      toTimeValue(breakEnd) === toTimeValue(r.breakEnd) &&
       toInputValue(clockOut) === toInputValue(r.clockOut) &&
       breakMinutes === r.breakMinutes &&
       note === (r.note ?? null);

@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { requireUser } from "@/lib/session";
-import { calcWorkMinutes, nowMinute, todayJst } from "@/lib/time";
+import { calcWorkMinutes, nowMinute, roundToNearest5, todayJst } from "@/lib/time";
 
 type PunchAction = "clock_in" | "break_start" | "break_end" | "clock_out";
 export type PunchResult = { ok: boolean; message: string } | null;
@@ -19,7 +19,8 @@ export async function punch(action: PunchAction): Promise<PunchResult> {
   if (!user.storeId) return { ok: false, message: "所属店舗が設定されていません。管理者に連絡してください。" };
 
   const today = todayJst();
-  const now = nowMinute();
+  // 打刻時刻は5分単位で四捨五入（9:29→9:30, 9:27→9:25）
+  const now = roundToNearest5(nowMinute());
   const record = await prisma.attendance.findUnique({ where: { userId_workDate: { userId: user.id, workDate: today } } });
 
   if (action === "clock_in") {
