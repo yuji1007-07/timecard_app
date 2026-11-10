@@ -11,6 +11,7 @@ export function normalizeText(value: string | null | undefined): string {
 export function detectBrandAndStore(displayName: string): { brand: string; shortName: string } {
   const n = normalizeText(displayName);
 
+  if (n === "本部" || n.startsWith("本部")) return { brand: "本部", shortName: n };
   if (n.startsWith("鍼灸ラコンシェル")) return { brand: "鍼灸ラコンシェル", shortName: n.replace("鍼灸ラコンシェル", "").trim() };
   if (n.startsWith("ラコンシェル")) return { brand: "ラコンシェル", shortName: n.replace("ラコンシェル", "").trim() };
   if (n.startsWith("ラ・コンシェル")) return { brand: "ラコンシェル", shortName: n.replace("ラ・コンシェル", "").trim() };

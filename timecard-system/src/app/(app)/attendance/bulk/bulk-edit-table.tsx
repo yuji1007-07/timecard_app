@@ -6,6 +6,7 @@ import { bulkUpdateAttendance } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { weekdayJa } from "@/lib/time";
+import { BREAK_PRESETS } from "@/lib/constants";
 
 export type BulkRow = {
   id: string;
@@ -98,19 +99,31 @@ export function BulkEditTable({ rows: initial }: { rows: BulkRow[] }) {
                     <td className="whitespace-nowrap px-3 py-1.5">{r.storeName}</td>
                     <td className="whitespace-nowrap px-3 py-1.5">{r.userName}</td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" name={`clockIn_${r.id}`} value={r.clockIn} onChange={(e) => set(r.id, { clockIn: e.target.value })} className={`${cell} w-44`} />
+                      <input type="datetime-local" step={300} name={`clockIn_${r.id}`} value={r.clockIn} onChange={(e) => set(r.id, { clockIn: e.target.value })} className={`${cell} w-44`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" name={`breakStart_${r.id}`} value={r.breakStart} onChange={(e) => set(r.id, { breakStart: e.target.value })} className={`${cell} w-44`} />
+                      <input type="datetime-local" step={300} name={`breakStart_${r.id}`} value={r.breakStart} onChange={(e) => set(r.id, { breakStart: e.target.value })} className={`${cell} w-44`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" name={`breakEnd_${r.id}`} value={r.breakEnd} onChange={(e) => set(r.id, { breakEnd: e.target.value })} className={`${cell} w-44`} />
+                      <input type="datetime-local" step={300} name={`breakEnd_${r.id}`} value={r.breakEnd} onChange={(e) => set(r.id, { breakEnd: e.target.value })} className={`${cell} w-44`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="datetime-local" name={`clockOut_${r.id}`} value={r.clockOut} onChange={(e) => set(r.id, { clockOut: e.target.value })} className={`${cell} w-44`} />
+                      <input type="datetime-local" step={300} name={`clockOut_${r.id}`} value={r.clockOut} onChange={(e) => set(r.id, { clockOut: e.target.value })} className={`${cell} w-44`} />
                     </td>
                     <td className="px-3 py-1.5">
-                      <input type="number" min={0} name={`breakMinutes_${r.id}`} value={r.breakMinutes} onChange={(e) => set(r.id, { breakMinutes: Number(e.target.value) || 0 })} className={`${cell} w-16`} />
+                      <div className="flex items-center gap-1">
+                        <input type="number" min={0} step={5} name={`breakMinutes_${r.id}`} value={r.breakMinutes} onChange={(e) => set(r.id, { breakMinutes: Number(e.target.value) || 0 })} className={`${cell} w-16`} />
+                        {BREAK_PRESETS.map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            onClick={() => set(r.id, { breakMinutes: m })}
+                            className={`h-9 rounded-md border px-2 text-xs ${r.breakMinutes === m ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"}`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
                     </td>
                     <td className="px-3 py-1.5">
                       <input type="text" name={`note_${r.id}`} value={r.note} onChange={(e) => set(r.id, { note: e.target.value })} className={`${cell} w-40`} />

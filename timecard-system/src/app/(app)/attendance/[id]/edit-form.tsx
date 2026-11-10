@@ -5,6 +5,7 @@ import { updateAttendance } from "../actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { BREAK_PRESETS } from "@/lib/constants";
 
 type Rec = {
   id: string;
@@ -34,16 +35,17 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
       <input type="hidden" name="returnTo" value={returnTo} />
       <div className="space-y-1.5">
         <Label>出勤</Label>
-        <Input type="datetime-local" name="clockIn" defaultValue={record.clockIn} />
+        <Input type="datetime-local" step={300} name="clockIn" defaultValue={record.clockIn} />
       </div>
       <div className="space-y-1.5">
         <Label>退勤</Label>
-        <Input type="datetime-local" name="clockOut" defaultValue={record.clockOut} />
+        <Input type="datetime-local" step={300} name="clockOut" defaultValue={record.clockOut} />
       </div>
       <div className="space-y-1.5">
         <Label>休憩開始</Label>
         <Input
           type="datetime-local"
+          step={300}
           name="breakStart"
           value={breakStart}
           onChange={(e) => {
@@ -56,6 +58,7 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
         <Label>休憩終了</Label>
         <Input
           type="datetime-local"
+          step={300}
           name="breakEnd"
           value={breakEnd}
           onChange={(e) => {
@@ -66,8 +69,15 @@ export function EditForm({ record, returnTo }: { record: Rec; returnTo: string }
       </div>
       <div className="space-y-1.5">
         <Label>休憩合計（分）</Label>
-        <Input type="number" min={0} name="breakMinutes" value={breakMinutes} onChange={(e) => setBreakMinutes(Number(e.target.value) || 0)} />
-        <p className="text-xs text-muted-foreground">休憩開始・終了を入力すると自動計算されます。手入力で上書きもできます。</p>
+        <div className="flex items-center gap-2">
+          <Input type="number" min={0} step={5} name="breakMinutes" value={breakMinutes} onChange={(e) => setBreakMinutes(Number(e.target.value) || 0)} className="w-28" />
+          {BREAK_PRESETS.map((m) => (
+            <Button key={m} type="button" size="sm" variant={breakMinutes === m ? "default" : "outline"} onClick={() => setBreakMinutes(m)}>
+              {m}分
+            </Button>
+          ))}
+        </div>
+        <p className="text-xs text-muted-foreground">ボタンで60分/140分を入力できます。休憩開始・終了を入力した場合は自動計算されます。</p>
       </div>
       <div className="space-y-1.5">
         <Label>備考</Label>

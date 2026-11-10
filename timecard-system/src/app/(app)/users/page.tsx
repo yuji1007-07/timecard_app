@@ -1,6 +1,8 @@
 import { requireAdmin } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
+import { StoreFilter } from "./store-filter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,8 +10,11 @@ import { UserForm, EditUserToggle, BulkUserForm, DeleteUserButton } from "./user
 
 export const dynamic = "force-dynamic";
 
-export default async function UsersPage() {
+export default async function UsersPage({ searchParams }: { searchParams: Promise<{ brand?: string; storeId?: string }> }) {
   const me = await requireAdmin();
+  const sp = await searchParams;
+  const brand = sp.brand ?? "";
+  const storeId = sp.storeId ?? "";
   const [users, stores] = await Promise.all([
     prisma.user.findMany({
       include: { store: true, permissions: { include: { store: true } } },
@@ -18,6 +23,13 @@ export default async function UsersPage() {
     prisma.store.findMany({ where: { isActive: true }, orderBy: [{ brand: "asc" }, { sortOrder: "asc" }, { name: "asc" }] }),
   ]);
   const storeOpts = stores.map((s) => ({ id: s.id, name: s.name }));
+  const brands = [...new Set(stores.map((s) => s.brand))];
+  const filtered = users.filter((u) => {
+    if (storeId) return u.storeId === storeId;
+    if (brand) return u.store?.brand === brand;
+    return true;
+  });
+  const storesInBrand = brand ? stores.filter((s) => s.brand === brand) : stores;
 
   return (
     <div>
@@ -38,10 +50,28 @@ export default async function UsersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>スタッフ一覧（{users.length}名）</CardTitle>
+          <CardTitle>
+            スタッフ一覧（{filtered.length}名{filtered.length !== users.length ? ` / 全${users.length}名` : ""}）
+          </CardTitle>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Link href="/users" className={`rounded-full px-3 py-1 text-sm ${!brand && !storeId ? "bg-navy text-white" : "bg-muted hover:bg-muted/70"}`}>
+              すべて
+            </Link>
+            {brands.map((b) => (
+              <Link
+                key={b}
+                href={`/users?brand=${encodeURIComponent(b)}`}
+                className={`rounded-full px-3 py-1 text-sm ${brand === b && !storeId ? "bg-navy text-white" : "bg-muted hover:bg-muted/70"}`}
+              >
+                {b}
+              </Link>
+            ))}
+            <StoreFilter stores={storesInBrand.map((s) => ({ id: s.id, name: s.name, brand: s.brand }))} storeId={storeId} />
+          </div>
         </CardHeader>
         <CardContent className="space-y-2">
-          {users.map((u) => {
+          {filtered.length === 0 && <p className="py-6 text-center text-sm text-muted-foreground">該当するスタッフがいません。</p>}
+          {filtered.map((u) => {
             const isManager = u.role === "ADMIN" || u.permissions.length > 0;
             return (
               <div key={u.id} className="rounded-md border p-4">

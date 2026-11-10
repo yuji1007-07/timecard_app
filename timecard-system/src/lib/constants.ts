@@ -15,10 +15,15 @@ export function roleLabel(role: string, isManager: boolean): string {
   return isManager ? "店舗責任者" : "一般スタッフ";
 }
 
-export const BRANDS = ["からだラボ整骨院", "ラコンシェル", "鍼灸ラコンシェル"] as const;
+export const HQ_STORE_NAME = "本部";
+export const BRANDS = ["本部", "からだラボ整骨院", "ラコンシェル", "鍼灸ラコンシェル"] as const;
+
+/** 休憩時間のワンタッチ入力候補（分） */
+export const BREAK_PRESETS = [60, 140] as const;
 
 /** 初期登録する全店舗（旧システムと同じ） */
 export const ALL_STORES = [
+  "本部",
   "からだラボ整骨院 たまプラーザ院",
   "からだラボ整骨院 センター北院",
   "からだラボ整骨院 マプレ院",
