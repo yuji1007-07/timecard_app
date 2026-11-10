@@ -1,10 +1,9 @@
-import Link from "next/link";
-import type { AttendanceRow } from "@/lib/attendance";
+"use client";
 
 export type StaffOpt = { id: string; name: string; count: number };
 
 /** 一覧に含まれるスタッフの一覧（名前順） */
-export function staffOptions(records: AttendanceRow[]): StaffOpt[] {
+export function staffOptions(records: { user: { id: string; name: string } }[]): StaffOpt[] {
   const map = new Map<string, StaffOpt>();
   for (const r of records) {
     const cur = map.get(r.user.id);
@@ -14,25 +13,23 @@ export function staffOptions(records: AttendanceRow[]): StaffOpt[] {
   return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, "ja"));
 }
 
-export function filterByUser(records: AttendanceRow[], userId: string): AttendanceRow[] {
-  return userId ? records.filter((r) => r.user.id === userId) : records;
-}
-
-/** スタッフ別の絞り込みタブ */
-export function StaffTabs({ basePath, qs, staff, userId }: { basePath: string; qs: string; staff: StaffOpt[]; userId: string }) {
+/** スタッフ別の絞り込みタブ（クライアント側で即時切り替え） */
+export function StaffTabs({ staff, userId, onSelect }: { staff: StaffOpt[]; userId: string; onSelect: (id: string) => void }) {
   if (staff.length === 0) return null;
-  const pill = (active: boolean) =>
-    `rounded-full px-3 py-1 text-sm whitespace-nowrap ${active ? "bg-navy text-white" : "bg-muted hover:bg-muted/70"}`;
+  const cls = (active: boolean) =>
+    `h-11 rounded-lg border px-4 text-base font-medium whitespace-nowrap transition-colors ${
+      active ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
+    }`;
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
-      <Link href={`${basePath}?${qs}`} className={pill(!userId)}>
+    <div className="flex flex-wrap items-center gap-2">
+      <button type="button" className={cls(!userId)} onClick={() => onSelect("")}>
         全員
-      </Link>
+      </button>
       {staff.map((s) => (
-        <Link key={s.id} href={`${basePath}?${qs}&userId=${s.id}`} className={pill(userId === s.id)}>
+        <button key={s.id} type="button" className={cls(userId === s.id)} onClick={() => onSelect(s.id)}>
           {s.name}
-          <span className="ml-1 text-xs opacity-70">{s.count}</span>
-        </Link>
+          <span className="ml-1.5 text-xs opacity-70">{s.count}</span>
+        </button>
       ))}
     </div>
   );

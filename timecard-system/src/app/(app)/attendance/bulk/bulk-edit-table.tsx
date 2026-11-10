@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { weekdayJa } from "@/lib/time";
 import { BREAK_PRESETS } from "@/lib/constants";
+import { StaffTabs, staffOptions } from "../staff-tabs";
 
 export type BulkRow = {
   id: string;
   workDate: string;
   storeName: string;
+  userId: string;
   userName: string;
   clockIn: string;
   breakStart: string;
@@ -34,6 +36,9 @@ function diffMinutes(a: string, b: string): number | null {
 export function BulkEditTable({ rows: initial }: { rows: BulkRow[] }) {
   const [rows, setRows] = useState(initial);
   const [state, action, pending] = useActionState(bulkUpdateAttendance, null);
+  const [userId, setUserId] = useState("");
+  const staff = staffOptions(rows.map((r) => ({ user: { id: r.userId, name: r.userName } })));
+  const visibleCount = userId ? rows.filter((r) => r.userId === userId).length : rows.length;
   const router = useRouter();
   useEffect(() => setRows(initial), [initial]);
   useEffect(() => {
@@ -68,11 +73,14 @@ export function BulkEditTable({ rows: initial }: { rows: BulkRow[] }) {
           {state.message}
         </div>
       )}
+      <div className="mb-3">
+        <StaffTabs staff={staff} userId={userId} onSelect={setUserId} />
+      </div>
       <div className="mb-3 flex items-center gap-3">
         <Button type="submit" disabled={pending}>
           {pending ? "保存中..." : "まとめて保存"}
         </Button>
-        <span className="text-sm text-muted-foreground">{rows.length} 件</span>
+        <span className="text-sm text-muted-foreground">{visibleCount} 件{userId ? "（他のスタッフの変更も一緒に保存されます）" : ""}</span>
       </div>
       <Card>
         <CardContent className="p-0">
@@ -93,7 +101,7 @@ export function BulkEditTable({ rows: initial }: { rows: BulkRow[] }) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t even:bg-muted/30">
+                  <tr key={r.id} className={`border-t even:bg-muted/30 ${userId && r.userId !== userId ? "hidden" : ""}`}>
                     <td className="whitespace-nowrap px-3 py-1.5 tabular-nums">
                       {r.workDate.slice(5)}（{weekdayJa(r.workDate)}）
                       <input type="hidden" name="recordIds" value={r.id} />

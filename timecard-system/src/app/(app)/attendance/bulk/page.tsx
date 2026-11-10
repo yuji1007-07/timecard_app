@@ -7,27 +7,24 @@ import { FilterForm } from "../filter-form";
 import { BulkEditTable } from "./bulk-edit-table";
 import { queryAttendance, resolveStoreScope } from "@/lib/attendance";
 import { monthLabel, thisMonthJst, toInputValue, toTimeValue } from "@/lib/time";
-import { StaffTabs, filterByUser, staffOptions } from "../staff-tabs";
 
 export const dynamic = "force-dynamic";
 
-type SP = { month?: string; storeId?: string; userId?: string; msg?: string };
+type SP = { month?: string; storeId?: string; msg?: string };
 
 export default async function BulkEditPage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireManager();
   const sp = await searchParams;
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : thisMonthJst();
   const { stores, selectedStoreId, scopeIds, warning } = await resolveStoreScope(user, sp.storeId);
-  const allRecords = await queryAttendance(month, scopeIds);
+  const records = await queryAttendance(month, scopeIds);
   const qs = `month=${month}${selectedStoreId ? `&storeId=${selectedStoreId}` : ""}`;
-  const staff = staffOptions(allRecords);
-  const userId = sp.userId && staff.some((s) => s.id === sp.userId) ? sp.userId : "";
-  const records = filterByUser(allRecords, userId);
 
   const rows = records.map((r) => ({
     id: r.id,
     workDate: r.workDate,
     storeName: r.store.name,
+    userId: r.user.id,
     userName: r.user.name,
     clockIn: toInputValue(r.clockIn),
     breakStart: toTimeValue(r.breakStart),
@@ -57,7 +54,6 @@ export default async function BulkEditPage({ searchParams }: { searchParams: Pro
         </CardContent>
       </Card>
 
-      <StaffTabs basePath="/attendance/bulk" qs={qs} staff={staff} userId={userId} />
       <BulkEditTable rows={rows} />
     </div>
   );

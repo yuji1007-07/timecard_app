@@ -5,13 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { FilterForm } from "./filter-form";
-import { StaffTabs, filterByUser, staffOptions } from "./staff-tabs";
+import { AttendanceTable } from "./attendance-table";
 import { queryAttendance, querySummary, resolveStoreScope } from "@/lib/attendance";
 import { fmtTime, minutesToHhmm, minutesToHoursText, monthLabel, thisMonthJst, weekdayJa } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-type SP = { month?: string; storeId?: string; userId?: string; msg?: string };
+type SP = { month?: string; storeId?: string; msg?: string };
 
 export default async function AttendancePage({ searchParams }: { searchParams: Promise<SP> }) {
   const user = await requireManager();
@@ -19,11 +19,22 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
   const month = /^\d{4}-\d{2}$/.test(sp.month ?? "") ? sp.month! : thisMonthJst();
   const { stores, selectedStoreId, scopeIds, warning } = await resolveStoreScope(user, sp.storeId);
 
-  const [allRecords, summary] = await Promise.all([queryAttendance(month, scopeIds), querySummary(month, scopeIds)]);
+  const [records, summary] = await Promise.all([queryAttendance(month, scopeIds), querySummary(month, scopeIds)]);
   const qs = `month=${month}${selectedStoreId ? `&storeId=${selectedStoreId}` : ""}`;
-  const staff = staffOptions(allRecords);
-  const userId = sp.userId && staff.some((s) => s.id === sp.userId) ? sp.userId : "";
-  const records = filterByUser(allRecords, userId);
+  const listRows = records.map((r) => ({
+    id: r.id,
+    workDate: r.workDate,
+    weekday: weekdayJa(r.workDate),
+    storeName: r.store.name,
+    user: { id: r.user.id, name: r.user.name },
+    clockIn: fmtTime(r.clockIn),
+    breakStart: fmtTime(r.breakStart),
+    breakEnd: fmtTime(r.breakEnd),
+    clockOut: fmtTime(r.clockOut),
+    breakText: minutesToHhmm(r.breakMinutes),
+    workText: r.workMinutes != null ? minutesToHhmm(r.workMinutes) : "-",
+    note: r.note ?? "",
+  }));
 
   return (
     <div>
@@ -91,65 +102,7 @@ export default async function AttendancePage({ searchParams }: { searchParams: P
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>打刻一覧（{records.length}件）</CardTitle>
-          <StaffTabs basePath="/attendance" qs={qs} staff={staff} userId={userId} />
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>日付</TableHead>
-                  <TableHead>店舗</TableHead>
-                  <TableHead>スタッフ</TableHead>
-                  <TableHead>出勤</TableHead>
-                  <TableHead>休憩開始</TableHead>
-                  <TableHead>休憩終了</TableHead>
-                  <TableHead>退勤</TableHead>
-                  <TableHead>休憩</TableHead>
-                  <TableHead>実働</TableHead>
-                  <TableHead>備考</TableHead>
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground">
-                      該当データがありません。
-                    </TableCell>
-                  </TableRow>
-                )}
-                {records.map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap tabular-nums">
-                      {r.workDate.slice(5)}（{weekdayJa(r.workDate)}）
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap">{r.store.name}</TableCell>
-                    <TableCell className="whitespace-nowrap">{r.user.name}</TableCell>
-                    <TableCell className="tabular-nums">{fmtTime(r.clockIn)}</TableCell>
-                    <TableCell className="tabular-nums">{fmtTime(r.breakStart)}</TableCell>
-                    <TableCell className="tabular-nums">{fmtTime(r.breakEnd)}</TableCell>
-                    <TableCell className="tabular-nums">{fmtTime(r.clockOut)}</TableCell>
-                    <TableCell className="tabular-nums">{minutesToHhmm(r.breakMinutes)}</TableCell>
-                    <TableCell className="tabular-nums">{r.workMinutes != null ? minutesToHhmm(r.workMinutes) : "-"}</TableCell>
-                    <TableCell className="max-w-[12rem] truncate text-muted-foreground">{r.note ?? ""}</TableCell>
-                    <TableCell>
-                      <Link href={`/attendance/${r.id}?${qs}`}>
-                        <Button variant="outline" size="sm">
-                          編集
-                        </Button>
-                      </Link>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
+      <AttendanceTable rows={listRows} qs={qs} />
     </div>
   );
 }
