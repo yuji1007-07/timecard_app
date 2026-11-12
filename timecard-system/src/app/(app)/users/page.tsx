@@ -36,7 +36,14 @@ export default async function UsersPage({ searchParams }: { searchParams: Promis
       <PageHeader
         title="スタッフ管理"
         description="スタッフの追加・編集・削除ができます。「担当店舗」を1つ以上設定すると店舗責任者として勤怠管理画面を使えます。"
-        action={<UserForm stores={storeOpts} />}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <a href={`/api/export/users?brand=${encodeURIComponent(brand)}&storeId=${storeId}`}>
+              <Button variant="outline">スタッフCSV出力{brand || storeId ? "（絞り込み分）" : ""}</Button>
+            </a>
+            <UserForm stores={storeOpts} />
+          </div>
+        }
       />
 
       <Card className="mb-6">
