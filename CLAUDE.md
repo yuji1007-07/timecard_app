@@ -11,6 +11,7 @@
 | `inventory-system/` | 在庫管理システム | 稼働中（Vercel） |
 | `timecard-system/` | 勤怠管理システム（Next.js版） | 標準構成に移行済み。旧 Flask 版（ルート直下の `app.py` + Render）から置き換え |
 | `moushikomi-system/` | 会員申込書システム（Next.js版） | 標準構成に移行済み。旧 静的HTML版（`moushikomi_app/`）から置き換え |
+| `training-system/` | 研修動画管理システム | 標準構成で新規作成（ポート 3004、スキーマ `training`）。Vercel 公開待ち |
 | `lacshell_site/` | 町田店ホームページ（静的サイト） | 一般公開サイトのため業務アプリの標準構成の対象外 |
 | ルート直下 `app.py`, `templates/`, `static/`, `moushikomi_api.py`, `moushikomi_app/` | 旧システム（Flask / 静的HTML） | 移行完了後に削除予定。新機能はここに追加しない |
 
@@ -23,7 +24,7 @@
 - **Tailwind CSS + shadcn/ui 風の自前コンポーネント**（`src/components/ui/`）
 - **Prisma 5 + PostgreSQL（Supabase）**。1つの Supabase プロジェクトを全アプリで共有し、アプリごとに専用スキーマを使う
   - `generator client { previewFeatures = ["multiSchema"] }`、`datasource db { url = env("DATABASE_URL"), directUrl = env("DIRECT_URL"), schemas = ["<アプリ名>"] }`、全モデルに `@@schema("<アプリ名>")`
-  - 例: `inventory`, `timecard`, `moushikomi`
+  - 例: `inventory`, `timecard`, `moushikomi`, `training`
 - **Auth.js (NextAuth v5 beta) Credentials + JWT セッション + bcryptjs**
 - **Vercel にデプロイ**（Root Directory = アプリのフォルダ）。Render / Netlify / GitHub Pages は業務アプリには使わない（無料プランのスリープで起動が遅くなるため）
 - バージョンは既存アプリと揃える: `next ^15.5.19`, `react ^19.2.7`, `next-auth 5.0.0-beta.25`, `prisma ^5.22.0`, `zod ^3`, `lucide-react`
