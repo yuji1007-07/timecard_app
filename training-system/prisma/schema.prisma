@@ -1,0 +1,205 @@
+// 株式会社まごころグループ 研修動画管理システム
+// Prisma schema (PostgreSQL)。列挙値は String + コメントで表現（他アプリと同じ流儀）。
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
+}
+
+// 他の業務アプリと同じ Supabase プロジェクトを共有できるよう、専用スキーマ "training" を使う
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["training"]
+}
+
+// ===== ユーザー =====
+// role: ADMIN(本部) | STAFF(店舗スタッフ)
+// position（役職）: MANAGER(店長) | SUBMANAGER(副店長) | LEADER(リーダー) | STAFF(スタッフ)
+//   役職は権限ではない。「責任者向け」動画の対象判定と、店長への自店舗進捗の表示だけに使う。
+model User {
+  id           String   @id @default(cuid())
+  loginId      String   @unique // ログイン用のユーザーID（勤怠管理システムと同じIDにそろえる）
+  passwordHash String
+  name         String
+  role         String   @default("STAFF")
+  position     String   @default("STAFF")
+  storeId      String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  store       Store?         @relation(fields: [storeId], references: [id])
+  progresses  ViewProgress[]
+  attempts    QuizAttempt[]
+  reflections Reflection[]
+  inquiries   Inquiry[]
+
+  @@schema("training")
+}
+
+// ===== 店舗 =====
+// brand: 本部 | からだラボ整骨院 | ラコンシェル | 鍼灸ラコンシェル（店舗名から自動判定）
+model Store {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  brand     String
+  shortName String
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+
+  @@schema("training")
+}
+
+// ===== 研修動画 =====
+// category: COMMON(全部門共通) | SEIKOTSU(整骨) | ESTHE(エステ) | SHINKYU(鍼灸)
+// audience（対象役職）: ALL(全員) | LEADERS(責任者＝店長・副店長・リーダー)
+// requiredScope（必修の範囲）: NONE(なし) | ALL(対象者全員) | LEADERS(責任者のみ)
+model Video {
+  id            String   @id @default(cuid())
+  title         String
+  youtubeUrl    String   @default("") // 限定公開URL。空なら「準備中」
+  durationSec   Int      @default(0)
+  category      String   @default("COMMON")
+  audience      String   @default("ALL")
+  requiredScope String   @default("NONE")
+  dueDate       String? // 期限（日本時間 YYYY-MM-DD）
+  description   String   @default("")
+  sortOrder     Int      @default(0)
+  isPublished   Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  questions   QuizQuestion[]
+  progresses  ViewProgress[]
+  attempts    QuizAttempt[]
+  reflections Reflection[]
+  inquiries   Inquiry[]
+
+  @@schema("training")
+}
+
+// ===== 理解度テストの問題（4択） =====
+model QuizQuestion {
+  id           String   @id @default(cuid())
+  videoId      String
+  sortOrder    Int      @default(0)
+  text         String
+  choices      String[] // 選択肢4つ
+  correctIndex Int      @default(0) // choices の何番目が正解か（0始まり）
+  explanation  String   @default("")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  video   Video        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@index([videoId])
+  @@schema("training")
+}
+
+// ===== 視聴記録（1人×1動画で1件） =====
+// segments: 実際に再生した区間 [[開始秒, 終了秒], ...]（重なりはまとめて保存）
+model ViewProgress {
+  id           String    @id @default(cuid())
+  userId       String
+  videoId      String
+  segments     Json      @default("[]")
+  watchedSec   Float     @default(0)
+  percent      Int       @default(0)
+  lastPosition Float     @default(0) // 続きから再生する位置（秒）
+  viewCount    Int       @default(0)
+  completedAt  DateTime? // 初回の視聴完了日時
+  lastViewedAt DateTime?
+  lastSavedAt  DateTime? // 早送り対策（経過時間より多い再生量を受け付けない）
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@schema("training")
+}
+
+// ===== テストの受験（1回ごとに1件） =====
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  videoId   String
+  correct   Int
+  total     Int
+  percent   Int
+  passed    Boolean
+  createdAt DateTime @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video   Video        @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  answers QuizAnswer[]
+
+  @@index([userId, videoId])
+  @@index([videoId])
+  @@schema("training")
+}
+
+// ===== 受験ごとの問題別の回答 =====
+model QuizAnswer {
+  id            String  @id @default(cuid())
+  attemptId     String
+  questionId    String
+  selectedIndex Int
+  isCorrect     Boolean
+
+  attempt  QuizAttempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([questionId])
+  @@index([attemptId])
+  @@schema("training")
+}
+
+// ===== ふりかえり（1人×1動画で1件。書き直すと上書き） =====
+model Reflection {
+  id         String   @id @default(cuid())
+  userId     String
+  videoId    String
+  selfRating Int // 自己評価 1〜5
+  action     String // 明日からやること（1行）
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, videoId])
+  @@index([videoId])
+  @@schema("training")
+}
+
+// ===== 質問（動画ページから投稿 → 本部が回答 → Q&A として表示） =====
+model Inquiry {
+  id           String    @id @default(cuid())
+  userId       String
+  videoId      String
+  positionSec  Int       @default(0) // 投稿時の再生位置
+  body         String
+  showName     Boolean   @default(false) // Q&A に投稿者名を出すか
+  answer       String?
+  answeredAt   DateTime?
+  answeredById String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId])
+  @@index([answeredAt])
+  @@schema("training")
+}
