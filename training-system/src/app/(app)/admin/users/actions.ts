@@ -109,11 +109,14 @@ export type BulkResult = { success: true; created: number; errors: string[] } | 
 /**
  * スタッフの CSV 一括登録。
  * 列: 氏名, ユーザーID, 店舗名, 役職, 初期パスワード（1行目が見出しなら読み飛ばす）
+ * 初期パスワードの列が空の行には、画面の「共通の初期パスワード」を使う。
  * 既にあるユーザーIDは上書きせずスキップする（既存データは変えない）。
  */
 export async function bulkCreateUsers(_prev: unknown, formData: FormData): Promise<BulkResult> {
   await requireAdmin();
-  const text = String(formData.get("bulkText") ?? "").replace(/^﻿/, "");
+  const text = String(formData.get("bulkText") ?? "").replace(/^\uFEFF/, "");
+  // 初期パスワードの列が空の行に使う、共通の初期パスワード（画面で入力。CSVに書かなくてよい）
+  const defaultPassword = String(formData.get("defaultPassword") ?? "").trim();
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return { error: "CSV の内容が空です。" };
   if (lines.length > 500) return { error: "一度に登録できるのは500行までです。" };
@@ -127,7 +130,8 @@ export async function bulkCreateUsers(_prev: unknown, formData: FormData): Promi
     const cols = splitCsvLine(lines[i]);
     if (i === 0 && (cols[0] === "氏名" || /ユーザーID/i.test(cols[1] ?? ""))) continue; // 見出し行
     const no = i + 1;
-    const [nameRaw, loginIdRaw, storeRaw, positionRaw, password] = [cols[0] ?? "", cols[1] ?? "", cols[2] ?? "", cols[3] ?? "", cols[4] ?? ""];
+    const [nameRaw, loginIdRaw, storeRaw, positionRaw] = [cols[0] ?? "", cols[1] ?? "", cols[2] ?? "", cols[3] ?? ""];
+    const password = cols[4] || defaultPassword;
     const name = normalizeText(nameRaw);
     const loginId = loginIdRaw.normalize("NFKC").trim();
     if (!name || !loginId) {
@@ -149,7 +153,7 @@ export async function bulkCreateUsers(_prev: unknown, formData: FormData): Promi
       continue;
     }
     if (password.length < 4) {
-      errors.push(`${no}行目（${name}）: 初期パスワードは4文字以上にしてください。`);
+      errors.push(`${no}行目（${name}）: 初期パスワードは4文字以上にしてください（CSVの5列目か「共通の初期パスワード」欄に入力）。`);
       continue;
     }
     await prisma.user.create({

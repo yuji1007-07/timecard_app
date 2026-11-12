@@ -277,6 +277,10 @@ export function BulkUserForm() {
         placeholder={"氏名,ユーザーID,店舗名,役職,初期パスワード\n河原 太郎,kawahara,からだラボ整骨院 溝の口院,店長,pass1234\n岩村 花子,iwamura,ラコンシェル町田店,スタッフ,pass1234"}
         className="font-mono text-xs"
       />
+      <div className="max-w-sm space-y-1.5">
+        <Label htmlFor="defaultPassword">共通の初期パスワード（CSVの5列目が空の人に使います）</Label>
+        <Input id="defaultPassword" name="defaultPassword" type="text" placeholder="4文字以上。5列目に書いてあれば不要" autoComplete="off" />
+      </div>
       <p className="text-xs text-muted-foreground">
         役職は 店長／副店長／リーダー／スタッフ（空欄はスタッフ）。すでに登録済みのユーザーIDは上書きせずスキップします。
       </p>
