@@ -65,6 +65,9 @@ export function useStaffFilter(users: ProgressMatrix["users"], showStoreTabs: bo
   return { filtered, tabs };
 }
 
+/** 2026-11-12 → 11/12 */
+const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}`;
+
 /** 進捗表：スタッフ×動画 */
 export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatrix; showStoreTabs: boolean }) {
   const { filtered, tabs } = useStaffFilter(matrix.users, showStoreTabs);
@@ -135,7 +138,13 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
                             最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
                           </div>
                         )}
-                        {c.completedOn && <div className="text-xs text-muted-foreground">完了 {c.completedOn.slice(5).replace("-", "/")}</div>}
+                        {c.completedOn && <div className="text-xs text-muted-foreground">初回完了 {md(c.completedOn)}</div>}
+                        {c.viewCount > 0 && (
+                          <div className="text-xs text-muted-foreground" data-testid="view-info">
+                            視聴 <span className={`font-semibold ${c.viewCount >= 2 ? "text-navy" : ""}`}>{c.viewCount}回</span>
+                            {c.lastViewedOn && <>・最終 {md(c.lastViewedOn)}</>}
+                          </div>
+                        )}
                       </td>
                     );
                   })}
