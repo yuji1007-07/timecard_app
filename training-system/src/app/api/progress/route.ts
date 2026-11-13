@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { isVideoVisibleTo } from "@/lib/videos";
+import { getAssignment } from "@/lib/assignments";
 import { mergeSegments, sanitizeSegments, totalSeconds, type Segment } from "@/lib/segments";
 import { WATCH_COMPLETE_RATIO } from "@/lib/constants";
 
@@ -29,7 +30,8 @@ export async function POST(req: Request) {
   const videoId = typeof body.videoId === "string" ? body.videoId : "";
   const video = videoId ? await prisma.video.findUnique({ where: { id: videoId } }) : null;
   if (!video) return NextResponse.json({ error: "動画が見つかりません。" }, { status: 404 });
-  if (!isVideoVisibleTo(video, { role: user.role, position: user.position, brand: user.storeBrand })) {
+  const assigned = !!(await getAssignment(user.id, videoId));
+  if (!isVideoVisibleTo(video, { role: user.role, position: user.position, brand: user.storeBrand }, assigned)) {
     return NextResponse.json({ error: "この動画は対象外です。" }, { status: 403 });
   }
   const duration = video.durationSec;

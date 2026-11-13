@@ -132,6 +132,7 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
                         <div className="flex flex-wrap items-center gap-1">
                           <StatusBadge status={c.status} percent={c.percent} />
                           {c.required && !c.done && <Badge variant="bad">必修</Badge>}
+                          {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
                         </div>
                         {c.bestScore !== null && (
                           <div className="mt-1 text-xs text-muted-foreground">
@@ -168,9 +169,12 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
     .flatMap((u) =>
       matrix.videos
         .filter((v) => (!videoId || v.id === videoId) && matrix.cells[u.id][v.id].required && !matrix.cells[u.id][v.id].done)
-        .map((v) => ({ u, v, c: matrix.cells[u.id][v.id], overdue: !!v.dueDate && v.dueDate < today }))
+        .map((v) => {
+          const c = matrix.cells[u.id][v.id];
+          return { u, v, c, due: c.dueDate, overdue: !!c.dueDate && c.dueDate < today };
+        })
     )
-    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.v.dueDate ?? "9999").localeCompare(b.v.dueDate ?? "9999"));
+    .sort((a, b) => Number(b.overdue) - Number(a.overdue) || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   const overdueCount = rows.filter((r) => r.overdue).length;
 
   return (
@@ -201,7 +205,7 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ u, v, c, overdue }) => (
+              {rows.map(({ u, v, c, due, overdue }) => (
                 <tr key={`${u.id}:${v.id}`} className={`border-b last:border-0 ${overdue ? "bg-red-50" : ""}`} data-testid="incomplete-row">
                   <td className="px-3 py-2.5">
                     <div className="font-medium">{u.name}</div>
@@ -210,9 +214,12 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
                       {label(POSITIONS, u.position)}
                     </div>
                   </td>
-                  <td className="px-3 py-2.5">{v.title}</td>
+                  <td className="px-3 py-2.5">
+                    {v.title}
+                    {c.assigned && <Badge className="ml-1.5 border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
+                  </td>
                   <td className={`whitespace-nowrap px-3 py-2.5 ${overdue ? "font-bold text-red-600" : ""}`}>
-                    {v.dueDate ? fmtDueDate(v.dueDate) : "期限なし"}
+                    {due ? fmtDueDate(due) : "期限なし"}
                     {overdue && <span className="block text-xs">期限切れ</span>}
                   </td>
                   <td className="px-3 py-2.5">

@@ -3,7 +3,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { POSITION_ORDER } from "@/lib/constants";
-import { isDone, isRequiredFor, isVideoVisibleTo, statusOf, type ProgressStatus } from "@/lib/videos";
+import { effectiveDueDate, isDone, isRequiredFor, isVideoVisibleTo, statusOf, type ProgressStatus } from "@/lib/videos";
+import { getAssignmentsForUsers } from "@/lib/assignments";
 import { fmtDate } from "@/lib/time";
 
 export type MatrixUser = {
@@ -27,6 +28,8 @@ export type MatrixVideo = {
 export type MatrixCell = {
   target: boolean; // この人が対象の動画か
   required: boolean;
+  assigned: boolean; // 個人指定されているか
+  dueDate: string | null; // その人にとっての期限（個人の期限 → 無ければ動画の期限）
   status: ProgressStatus;
   done: boolean; // 研修として完了（テストがあれば合格、無ければ視聴完了）
   percent: number; // 視聴％
@@ -74,6 +77,8 @@ export async function getProgressMatrix(scope: { storeId?: string } = {}): Promi
     distinct: ["userId", "videoId"],
   });
 
+  const assignmentMap = await getAssignmentsForUsers(userIds);
+
   const key = (u: string, v: string) => `${u}:${v}`;
   const progressMap = new Map(progresses.map((p) => [key(p.userId, p.videoId), p]));
   const attemptMap = new Map(attempts.map((a) => [key(a.userId, a.videoId), a]));
@@ -97,10 +102,13 @@ export async function getProgressMatrix(scope: { storeId?: string } = {}): Promi
       const p = progressMap.get(key(u.id, v.id));
       const a = attemptMap.get(key(u.id, v.id));
       const hasQuiz = v._count.questions > 0;
+      const asg = assignmentMap.get(key(u.id, v.id)) ?? null;
       const status = statusOf(p, passedSet.has(key(u.id, v.id)));
       cells[u.id][v.id] = {
-        target: isVideoVisibleTo(v, viewer),
-        required: isRequiredFor(v, viewer),
+        target: isVideoVisibleTo(v, viewer, !!asg),
+        required: isRequiredFor(v, viewer, asg),
+        assigned: !!asg,
+        dueDate: effectiveDueDate(v, asg),
         status,
         done: isDone(status, hasQuiz),
         percent: p?.percent ?? 0,

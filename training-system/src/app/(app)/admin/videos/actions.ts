@@ -114,6 +114,52 @@ export async function saveQuestion(_prev: unknown, formData: FormData) {
   return { success: true, message: "問題を追加しました。" };
 }
 
+const assignSchema = z.object({
+  videoId: z.string().min(1),
+  userIds: z.array(z.string().min(1)).min(1, "指定するスタッフを1人以上選んでください").max(200),
+  required: z.boolean(),
+  dueDate: z.string().trim(),
+});
+
+/** 動画の個人指定（選んだスタッフにこの動画を見せる）。既に指定済みの人は、必修・期限を上書きする */
+export async function assignUsers(_prev: unknown, formData: FormData) {
+  await requireAdmin();
+  const parsed = assignSchema.safeParse({
+    videoId: formData.get("videoId"),
+    userIds: formData.getAll("userIds").map(String),
+    required: formData.get("required") === "on",
+    dueDate: String(formData.get("dueDate") ?? ""),
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const { videoId, userIds, required } = parsed.data;
+  if (parsed.data.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(parsed.data.dueDate)) return { error: "期限の日付が正しくありません。" };
+  const dueDate = parsed.data.dueDate || null;
+
+  const video = await prisma.video.findUnique({ where: { id: videoId } });
+  if (!video) return { error: "動画が見つかりません。" };
+  const users = await prisma.user.findMany({ where: { id: { in: userIds }, role: "STAFF" }, select: { id: true } });
+  if (users.length === 0) return { error: "スタッフが見つかりません。" };
+
+  for (const u of users) {
+    await prisma.videoAssignment.upsert({
+      where: { videoId_userId: { videoId, userId: u.id } },
+      create: { videoId, userId: u.id, required, dueDate },
+      update: { required, dueDate },
+    });
+  }
+  return { success: true, message: `${users.length}名を指定しました。` };
+}
+
+/** 個人指定の解除（視聴・テストの記録は残る） */
+export async function unassignUser(_prev: unknown, formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const row = await prisma.videoAssignment.findUnique({ where: { id } });
+  if (!row) return { error: "指定が見つかりません。" };
+  await prisma.videoAssignment.delete({ where: { id } });
+  return { success: true, message: "指定を解除しました。" };
+}
+
 /** テスト問題の削除（この問題への回答記録も消える） */
 export async function deleteQuestion(_prev: unknown, formData: FormData) {
   await requireAdmin();

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_ADMIN_LOGIN_ID, DEFAULT_ADMIN_PASSWORD, seedDatabase } from "@/lib/seed-data";
 import { SCHEMA_SQL } from "@/lib/schema-sql";
+import { UPGRADE_SQL } from "@/lib/schema-upgrades";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -47,6 +48,10 @@ export async function GET(req: Request) {
       }
       steps.push(`schema: ${statements.length}件作成`);
     }
+
+    // 公開後に追加したテーブルを足す（既にあれば何もしない。データは消さない）
+    for (const u of UPGRADE_SQL) await prisma.$executeRawUnsafe(u.sql);
+    steps.push(`upgrade: ${UPGRADE_SQL.length}件確認`);
 
     const counts = await seedDatabase(prisma);
     steps.push(`seed: 店舗 ${counts.stores} 件追加、動画 ${counts.videos} 本追加${counts.admin ? "、admin 作成" : ""}`);

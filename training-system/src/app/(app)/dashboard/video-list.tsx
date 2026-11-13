@@ -20,6 +20,7 @@ export type VideoItem = {
   ready: boolean;
   isPublished: boolean;
   required: boolean;
+  assigned: boolean;
   dueDate: string | null;
   dueState: DueState;
   status: ProgressStatus;
@@ -100,6 +101,7 @@ export function VideoList({ items }: { items: VideoItem[] }) {
                 <div className="space-y-2 p-4">
                   <div className="flex flex-wrap items-center gap-1.5">
                     {v.required && <Badge variant="bad">必修</Badge>}
+                    {v.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">あなたに指定</Badge>}
                     <Badge variant="outline">{label(CATEGORIES, v.category)}</Badge>
                     {!v.isPublished && <Badge variant="muted">非公開</Badge>}
                     {!v.ready && <Badge variant="muted">準備中</Badge>}

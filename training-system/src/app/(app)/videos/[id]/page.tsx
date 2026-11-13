@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
 import { CATEGORIES, QUIZ_PASS_RATIO, WATCH_COMPLETE_RATIO, label } from "@/lib/constants";
-import { dueStateOf, isRequiredFor, isVideoVisibleTo, statusOf } from "@/lib/videos";
+import { dueStateOf, effectiveDueDate, isRequiredFor, isVideoVisibleTo, statusOf } from "@/lib/videos";
+import { getAssignment } from "@/lib/assignments";
 import { fmtDueDate, fmtDuration, todayJst } from "@/lib/time";
 import { youtubeId } from "@/lib/youtube";
 import { VideoPlayer } from "./player";
@@ -33,7 +34,8 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
 
   const video = await prisma.video.findUnique({ where: { id }, include: { questions: { orderBy: { sortOrder: "asc" } } } });
   // 対象外の動画は「存在しない」扱い（URL を直接開いても見られない）
-  if (!video || !isVideoVisibleTo(video, viewer)) notFound();
+  const assignment = video ? await getAssignment(user.id, id) : null;
+  if (!video || !isVideoVisibleTo(video, viewer, !!assignment)) notFound();
 
   // 自分の記録だけを読む
   const [progress, attempts, reflection, inquiries] = await Promise.all([
@@ -54,8 +56,9 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   const passed = attempts.some((a) => a.passed);
   const status = statusOf(progress, passed);
   const bestScore = attempts.length ? Math.max(...attempts.map((a) => a.percent)) : null;
-  const required = isRequiredFor(video, viewer);
-  const dueState = dueStateOf(video.dueDate, todayJst());
+  const required = isRequiredFor(video, viewer, assignment);
+  const dueDate = effectiveDueDate(video, assignment);
+  const dueState = dueStateOf(dueDate, todayJst());
   const hasQuiz = video.questions.length > 0;
   const completePercent = Math.round(WATCH_COMPLETE_RATIO * 100);
   const passPercent = Math.round(QUIZ_PASS_RATIO * 100);
@@ -92,6 +95,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
       <div className="mb-4">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           {required && <Badge variant="bad">必修</Badge>}
+          {assignment && <Badge className="border-transparent bg-purple-100 text-purple-800">あなたに指定</Badge>}
           <Badge variant="outline">{label(CATEGORIES, video.category)}</Badge>
           <StatusBadge status={status} percent={progress?.percent ?? 0} />
           {!video.isPublished && <Badge variant="muted">非公開</Badge>}
@@ -99,9 +103,9 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
         <h1 className="text-xl font-bold leading-snug text-navy md:text-2xl">{video.title}</h1>
         <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
           <span>長さ {fmtDuration(video.durationSec)}</span>
-          {video.dueDate && (
+          {dueDate && (
             <span className={status === "PASSED" ? "" : dueState === "OVERDUE" ? "font-medium text-red-600" : dueState === "SOON" ? "font-medium text-yellow-700" : ""}>
-              期限 {fmtDueDate(video.dueDate)}
+              期限 {fmtDueDate(dueDate)}
             </span>
           )}
           {progress?.viewCount ? <span>視聴 {progress.viewCount}回</span> : null}

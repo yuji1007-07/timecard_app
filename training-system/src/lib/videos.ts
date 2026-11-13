@@ -17,10 +17,18 @@ export type Viewer = {
   brand: string | null; // 所属店舗のブランド
 };
 
-/** その人の一覧にこの動画を出すか（本部は全部見られる） */
-export function isVideoVisibleTo(video: VideoRule, viewer: Viewer): boolean {
+/** 個人指定（その人だけに付けた「見せる」設定） */
+export type AssignmentRule = { required: boolean; dueDate: string | null };
+
+/**
+ * その人の一覧にこの動画を出すか（本部は全部見られる）。
+ * assigned = その人が個人指定されているか。個人指定されていれば、ブランド・役職に関係なく見られる。
+ */
+export function isVideoVisibleTo(video: VideoRule, viewer: Viewer, assigned: boolean = false): boolean {
   if (viewer.role === "ADMIN") return true;
   if (!video.isPublished) return false;
+  if (assigned) return true;
+  if (video.audience === "ASSIGNED") return false; // 個人指定した人だけの動画
   // 本部所属のスタッフは部門を問わず見られる。店舗スタッフは「全部門共通」と自分のブランドだけ
   if (video.category !== "COMMON" && viewer.brand !== "本部") {
     if (!viewer.brand || BRAND_CATEGORY[viewer.brand] !== video.category) return false;
@@ -29,13 +37,22 @@ export function isVideoVisibleTo(video: VideoRule, viewer: Viewer): boolean {
   return true;
 }
 
-/** その人にとって必修か */
-export function isRequiredFor(video: VideoRule, viewer: Viewer): boolean {
+/** その人にとって必修か（個人指定で「必修」にされていれば必修） */
+export function isRequiredFor(video: VideoRule, viewer: Viewer, assignment: AssignmentRule | null = null): boolean {
   if (viewer.role === "ADMIN") return false;
-  if (!isVideoVisibleTo(video, viewer)) return false;
+  if (!isVideoVisibleTo(video, viewer, !!assignment)) return false;
+  if (assignment?.required) return true;
+  // 個人指定だけで見えている人（本来は対象外の人）は、指定したときの「必修／任意」に従う。
+  // 動画側の「対象者全員が必修」は、ブランド・役職で対象になっている人だけに効く。
+  if (!isVideoVisibleTo(video, viewer, false)) return false;
   if (video.requiredScope === "ALL") return true;
   if (video.requiredScope === "LEADERS") return LEADER_POSITIONS.includes(viewer.position);
   return false;
+}
+
+/** その人にとっての期限（個人の期限があればそれ、無ければ動画の期限） */
+export function effectiveDueDate(video: { dueDate: string | null }, assignment: AssignmentRule | null = null): string | null {
+  return assignment?.dueDate ?? video.dueDate;
 }
 
 export type ProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "PASSED";

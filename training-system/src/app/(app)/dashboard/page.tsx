@@ -1,7 +1,8 @@
 import { requireUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
-import { dueStateOf, isDone, isRequiredFor, isVideoVisibleTo, statusOf } from "@/lib/videos";
+import { dueStateOf, effectiveDueDate, isDone, isRequiredFor, isVideoVisibleTo, statusOf } from "@/lib/videos";
+import { getAssignmentsForUser } from "@/lib/assignments";
 import { todayJst } from "@/lib/time";
 import { youtubeThumbnail } from "@/lib/youtube";
 import { VideoList, type VideoItem } from "./video-list";
@@ -14,18 +15,19 @@ export default async function DashboardPage() {
   const today = todayJst();
 
   // 自分の記録だけを読む（userId は必ずログイン中の本人）
-  const [videos, progresses, attempts] = await Promise.all([
+  const [videos, progresses, attempts, assignments] = await Promise.all([
     prisma.video.findMany({
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: { _count: { select: { questions: true } } },
     }),
     prisma.viewProgress.findMany({ where: { userId: user.id } }),
     prisma.quizAttempt.findMany({ where: { userId: user.id }, select: { videoId: true, percent: true, passed: true } }),
+    getAssignmentsForUser(user.id),
   ]);
   const progressMap = new Map(progresses.map((p) => [p.videoId, p]));
 
   const items: VideoItem[] = videos
-    .filter((v) => isVideoVisibleTo(v, viewer))
+    .filter((v) => isVideoVisibleTo(v, viewer, assignments.has(v.id)))
     .map((v) => {
       const mine = attempts.filter((a) => a.videoId === v.id);
       const passed = mine.some((a) => a.passed);
@@ -33,8 +35,10 @@ export default async function DashboardPage() {
       const status = statusOf(p, passed);
       const hasQuiz = v._count.questions > 0;
       const done = isDone(status, hasQuiz);
-      const required = isRequiredFor(v, viewer);
-      const dueState = dueStateOf(v.dueDate, today);
+      const assignment = assignments.get(v.id) ?? null;
+      const required = isRequiredFor(v, viewer, assignment);
+      const dueDate = effectiveDueDate(v, assignment);
+      const dueState = dueStateOf(dueDate, today);
       // 期限が過ぎた・近い必修（未完了）を一番上に出す
       const priority = required && !done ? (dueState === "OVERDUE" ? 0 : dueState === "SOON" ? 1 : 2) : done ? 4 : 3;
       return {
@@ -46,7 +50,8 @@ export default async function DashboardPage() {
         ready: !!youtubeThumbnail(v.youtubeUrl) && v.durationSec > 0,
         isPublished: v.isPublished,
         required,
-        dueDate: v.dueDate,
+        assigned: !!assignment,
+        dueDate,
         dueState,
         status,
         percent: p?.percent ?? 0,

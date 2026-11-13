@@ -4,13 +4,15 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireUser, type CurrentUser } from "@/lib/session";
 import { isVideoVisibleTo } from "@/lib/videos";
+import { getAssignment } from "@/lib/assignments";
 import { QUIZ_PASS_RATIO } from "@/lib/constants";
 
 /** ログイン中の本人が見られる動画だけ返す（対象外なら null） */
 async function loadVisibleVideo(user: CurrentUser, videoId: string) {
   const video = await prisma.video.findUnique({ where: { id: videoId } });
   if (!video) return null;
-  if (!isVideoVisibleTo(video, { role: user.role, position: user.position, brand: user.storeBrand })) return null;
+  const assigned = !!(await getAssignment(user.id, videoId));
+  if (!isVideoVisibleTo(video, { role: user.role, position: user.position, brand: user.storeBrand }, assigned)) return null;
   return video;
 }
 

@@ -65,6 +65,7 @@ function Fields({ video }: { video?: EditableVideo }) {
             </option>
           ))}
         </select>
+        <p className="text-xs text-muted-foreground">「個人指定した人だけ」にすると、下の「個人指定」で選んだスタッフにしか表示されません。</p>
       </div>
       <div className="space-y-1.5">
         <Label>必修の範囲 *</Label>

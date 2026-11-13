@@ -41,6 +41,7 @@ export const BRAND_CATEGORY: Record<string, Category> = {
 export const AUDIENCES = {
   ALL: "全員",
   LEADERS: "責任者（店長・副店長・リーダー）",
+  ASSIGNED: "個人指定した人だけ",
 } as const;
 
 /** 必修の範囲 */

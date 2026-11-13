@@ -10,6 +10,9 @@ import { QUIZ_PASS_RATIO } from "@/lib/constants";
 import { fmtDuration } from "@/lib/time";
 import { EditVideoForm } from "../video-form";
 import { NewQuestionForm, QuestionEditor } from "./question-form";
+import { AssignmentPanel } from "./assignment-panel";
+import { POSITIONS, label } from "@/lib/constants";
+import { fmtDueDate } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +21,11 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
   const { id } = await params;
   const video = await prisma.video.findUnique({ where: { id }, include: { questions: { orderBy: { sortOrder: "asc" } } } });
   if (!video) notFound();
+
+  const [assignments, staff] = await Promise.all([
+    prisma.videoAssignment.findMany({ where: { videoId: id }, include: { user: { include: { store: true } } }, orderBy: { createdAt: "asc" } }),
+    prisma.user.findMany({ where: { role: "STAFF", isActive: true }, include: { store: true }, orderBy: [{ store: { sortOrder: "asc" } }, { name: "asc" }] }),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -56,6 +64,35 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
                 sortOrder: video.sortOrder,
                 isPublished: video.isPublished,
               }}
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>個人指定（{assignments.length}名）</CardTitle>
+            <CardDescription>
+              ブランド・役職の対象とは別に、この動画を見てほしいスタッフを1人ずつ指定できます。指定された人には、対象外の動画でも一覧に表示されます。
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AssignmentPanel
+              videoId={video.id}
+              assigned={assignments.map((a) => ({
+                id: a.id,
+                userId: a.userId,
+                name: a.user.name,
+                sub: `${a.user.store?.name ?? "（店舗なし）"} / ${label(POSITIONS, a.user.position)}`,
+                required: a.required,
+                due: a.dueDate ? fmtDueDate(a.dueDate) : null,
+              }))}
+              staff={staff.map((u) => ({
+                id: u.id,
+                name: u.name,
+                position: label(POSITIONS, u.position),
+                storeId: u.storeId ?? "",
+                storeName: u.store?.name ?? "（店舗なし）",
+              }))}
             />
           </CardContent>
         </Card>

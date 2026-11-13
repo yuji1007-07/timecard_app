@@ -35,6 +35,7 @@ model User {
   attempts    QuizAttempt[]
   reflections Reflection[]
   inquiries   Inquiry[]
+  assignments VideoAssignment[]
 
   @@schema("training")
 }
@@ -58,7 +59,7 @@ model Store {
 
 // ===== 研修動画 =====
 // category: COMMON(全部門共通) | SEIKOTSU(整骨) | ESTHE(エステ) | SHINKYU(鍼灸)
-// audience（対象役職）: ALL(全員) | LEADERS(責任者＝店長・副店長・リーダー)
+// audience（対象役職）: ALL(全員) | LEADERS(責任者＝店長・副店長・リーダー) | ASSIGNED(個人指定した人だけ)
 // requiredScope（必修の範囲）: NONE(なし) | ALL(対象者全員) | LEADERS(責任者のみ)
 model Video {
   id            String   @id @default(cuid())
@@ -80,7 +81,28 @@ model Video {
   attempts    QuizAttempt[]
   reflections Reflection[]
   inquiries   Inquiry[]
+  assignments VideoAssignment[]
 
+  @@schema("training")
+}
+
+// ===== 動画の個人指定 =====
+// ブランド・役職の対象とは別に、「この人にも見せる」を1人ずつ指定する。
+// required: その人にとって必修にするか / dueDate: その人だけの期限（空なら動画の期限）
+model VideoAssignment {
+  id        String   @id @default(cuid())
+  videoId   String
+  userId    String
+  required  Boolean  @default(false)
+  dueDate   String? // 日本時間 YYYY-MM-DD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, userId])
+  @@index([userId])
   @@schema("training")
 }
 

@@ -16,7 +16,7 @@ export default async function AdminVideosPage() {
   await requireAdmin();
   const videos = await prisma.video.findMany({
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
-    include: { _count: { select: { questions: true } } },
+    include: { _count: { select: { questions: true, assignments: true } } },
   });
   return (
     <div>
@@ -35,7 +35,8 @@ export default async function AdminVideosPage() {
                 <div className="font-semibold text-navy">{v.title}</div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <Badge variant="outline">{label(CATEGORIES, v.category)}</Badge>
-                  <Badge variant="outline">対象: {v.audience === "ALL" ? "全員" : "責任者"}</Badge>
+                  <Badge variant="outline">対象: {v.audience === "ALL" ? "全員" : v.audience === "ASSIGNED" ? "個人指定のみ" : "責任者"}</Badge>
+                  {v._count.assignments > 0 && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定 {v._count.assignments}名</Badge>}
                   {v.requiredScope !== "NONE" && <Badge variant="bad">{label(REQUIRED_SCOPES, v.requiredScope)}</Badge>}
                   {youtubeId(v.youtubeUrl) ? <Badge variant="good">URL登録済み</Badge> : <Badge variant="warn">準備中（URL未登録）</Badge>}
                   {!v.isPublished && <Badge variant="muted">非公開</Badge>}

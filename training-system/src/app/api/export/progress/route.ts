@@ -29,7 +29,8 @@ export async function GET() {
         v.title,
         label(CATEGORIES, v.category),
         c.required ? "必修" : "",
-        v.dueDate ?? "",
+        c.assigned ? "個人指定" : "",
+        c.dueDate ?? "",
         STATUS_LABELS[c.status],
         c.percent,
         c.completedOn ?? "",
@@ -40,6 +41,6 @@ export async function GET() {
       ]);
     }
   }
-  const header = ["ブランド", "店舗", "氏名", "ユーザーID", "役職", "動画", "カテゴリ", "必修", "期限", "状態", "視聴%", "初回完了日", "最終視聴日", "視聴回数", "テスト最高点(%)", "受験回数"];
+  const header = ["ブランド", "店舗", "氏名", "ユーザーID", "役職", "動画", "カテゴリ", "必修", "個人指定", "期限", "状態", "視聴%", "初回完了日", "最終視聴日", "視聴回数", "テスト最高点(%)", "受験回数"];
   return csvResponse(`training_progress_${todayJst()}.csv`, buildCsv(header, rows));
 }
