@@ -7,8 +7,10 @@ import { PrintToolbar } from "../print-toolbar";
 
 export const dynamic = "force-dynamic";
 
-function fmtDate(d: Date): string {
-  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
+/** 日本時間の日付を「2026年11月1日」の形で出す */
+function fmtDay(d: Date): string {
+  const [y, m, day] = jstDayKey(d).split("-").map(Number);
+  return `${y}年${m}月${day}日`;
 }
 
 export default async function StocktakeReportPage({
@@ -60,7 +62,7 @@ export default async function StocktakeReportPage({
             <p className="mt-1 text-xs text-gray-500">まごころ在庫 — 販売品在庫管理</p>
           </div>
           <div className="text-right text-xs text-gray-600">
-            <div>出力日：{fmtDate(now)}</div>
+            <div>出力日：{fmtDay(now)}</div>
             <div className="mt-0.5">対象月：{month}</div>
           </div>
         </div>
@@ -79,7 +81,7 @@ export default async function StocktakeReportPage({
               <td className="border border-gray-300 px-3 py-2">{month}</td>
               <th className="border border-gray-300 bg-gray-50 px-3 py-2 text-left font-medium">棚卸日</th>
               <td className="border border-gray-300 px-3 py-2">
-                {fmtDate(new Date(`${jstDayKey(st.countedOn ?? st.confirmedAt)}T00:00:00.000Z`))}
+                {fmtDay(st.countedOn ?? st.confirmedAt)}
               </td>
             </tr>
           </tbody>

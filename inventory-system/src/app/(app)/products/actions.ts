@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireProductManager } from "@/lib/session";
 import { resolvePrices, type Rounding } from "@/lib/pricing";
@@ -85,8 +84,6 @@ export async function autoSplitSizes(): Promise<string> {
       updated++;
     }
   }
-  revalidatePath("/products");
-  revalidatePath("/inventory");
   return `${updated}件の商品からサイズを自動分離しました。${products.length - updated}件はサイズ無しのままです。`;
 }
 
@@ -95,16 +92,12 @@ export async function createProduct(formData: FormData) {
   const data = await buildData(formData);
   const count = await prisma.product.count();
   await prisma.product.create({ data: { ...data, sortOrder: count } });
-  revalidatePath("/products");
-  revalidatePath("/inventory");
 }
 
 export async function updateProduct(id: string, formData: FormData) {
   await requireProductManager();
   const data = await buildData(formData);
   await prisma.product.update({ where: { id }, data });
-  revalidatePath("/products");
-  revalidatePath("/inventory");
 }
 
 export async function deleteProduct(formData: FormData) {
@@ -116,8 +109,6 @@ export async function deleteProduct(formData: FormData) {
   } else {
     await prisma.product.delete({ where: { id } });
   }
-  revalidatePath("/products");
-  revalidatePath("/inventory");
 }
 
 /**
@@ -196,8 +187,6 @@ export async function importCsv(_prev: string | undefined, formData: FormData): 
     }
   }
 
-  revalidatePath("/products");
-  revalidatePath("/inventory");
   let msg = `インポート完了: 新規${created}件 / 更新${updated}件 / スキップ${skipped}件`;
   if (errors.length) msg += ` / エラー${errors.length}件`;
   return msg;

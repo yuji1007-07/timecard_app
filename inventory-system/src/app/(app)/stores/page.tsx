@@ -7,6 +7,7 @@ import { BusinessTypeBadge, StoreStatusBadge } from "@/components/badges";
 import { StoreForm } from "./store-form";
 import { deleteStore } from "./actions";
 import { ConfirmSubmit } from "@/components/confirm-submit";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -49,12 +50,12 @@ export default async function StoresPage() {
                 <td className="px-3 py-2">
                   <div className="flex justify-end gap-2">
                     <StoreForm store={s} />
-                    <form action={deleteStore}>
+                    <ActionForm action={deleteStore}>
                       <input type="hidden" name="id" value={s.id} />
                       <ConfirmSubmit message={`「${s.name}」を削除しますか？（取引履歴がある場合は閉院扱いになります）`}>
                         削除
                       </ConfirmSubmit>
-                    </form>
+                    </ActionForm>
                   </div>
                 </td>
               </tr>

@@ -7,6 +7,7 @@ import { ROLES, label } from "@/lib/constants";
 import { ConfirmSubmit, SubmitButton } from "@/components/confirm-submit";
 import { UserForm } from "./user-form";
 import { updateUserLine, resetPassword, deleteUser } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -41,24 +42,24 @@ export default async function UsersPage() {
                 <td className="px-3 py-2">{label(ROLES, u.role)}</td>
                 <td className="px-3 py-2 text-muted-foreground">{u.store?.name ?? (u.role === "AREA_MANAGER" ? "全店" : "-")}</td>
                 <td className="px-3 py-2">
-                  <form action={updateUserLine} className="flex items-center gap-1">
+                  <ActionForm action={updateUserLine} className="flex items-center gap-1">
                     <input type="hidden" name="id" value={u.id} />
                     <Input name="lineUserId" defaultValue={u.lineUserId ?? ""} placeholder="未設定" className="h-8 w-32" />
                     <SubmitButton size="sm" variant="outline">保存</SubmitButton>
-                  </form>
+                  </ActionForm>
                 </td>
                 <td className="px-3 py-2">
                   <div className="flex flex-wrap justify-end gap-2">
-                    <form action={resetPassword} className="flex items-center gap-1">
+                    <ActionForm action={resetPassword} className="flex items-center gap-1">
                       <input type="hidden" name="id" value={u.id} />
                       <Input name="password" type="password" placeholder="新PW" className="h-8 w-24" />
                       <SubmitButton size="sm" variant="outline">PW再設定</SubmitButton>
-                    </form>
+                    </ActionForm>
                     {u.id !== me.id && (
-                      <form action={deleteUser}>
+                      <ActionForm action={deleteUser}>
                         <input type="hidden" name="id" value={u.id} />
                         <ConfirmSubmit message={`${u.name} を削除しますか？`}>削除</ConfirmSubmit>
-                      </form>
+                      </ActionForm>
                     )}
                   </div>
                 </td>

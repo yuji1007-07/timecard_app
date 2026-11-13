@@ -2,9 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { appendRows, SHEET_NAMES } from "@/lib/integrations/sheets";
 import { TX_TYPES, TX_SIGN, label } from "@/lib/constants";
 import { getStoreInventory } from "@/lib/inventory";
+import { jstDayKey } from "@/lib/stock";
 
 function fmtDate(d: Date): string {
-  return new Date(d).toISOString().slice(0, 10);
+  return jstDayKey(new Date(d)); // 日本時間の日付
 }
 
 /** 取引を1件（移動はグループID）スプレッドシートへ出力。OFF/未設定ならドライランで何もしない。 */
@@ -35,11 +36,21 @@ export async function syncTransaction(idOrGroup: string) {
   await appendRows(SHEET_NAMES.TRANSACTIONS, rows).catch(() => {});
 }
 
-/** 棚卸確定をスプレッドシートへ出力。 */
-export async function syncStocktake(stocktakeId: string) {
+/**
+ * 棚卸確定をスプレッドシートへ出力。
+ * productIds を渡すと、今回数量を入れた商品だけを追記する
+ * （やり直しのたびに全商品を重複して追記しないため）。
+ */
+export async function syncStocktake(stocktakeId: string, productIds?: string[]) {
   const st = await prisma.stocktake.findUnique({
     where: { id: stocktakeId },
-    include: { store: true, items: { include: { product: { include: { brand: true } } } } },
+    include: {
+      store: true,
+      items: {
+        where: productIds ? { productId: { in: productIds } } : undefined,
+        include: { product: { include: { brand: true } } },
+      },
+    },
   });
   if (!st) return;
   const rows = st.items.map((it) => [

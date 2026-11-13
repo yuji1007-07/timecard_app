@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,7 @@ type Store = {
 
 export function StoreForm({ store }: { store?: Store }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   const editing = !!store;
   const action = editing
     ? updateStore.bind(null, store!.id)
@@ -44,6 +46,7 @@ export function StoreForm({ store }: { store?: Store }) {
       action={async (fd) => {
         await action(fd);
         setOpen(false);
+        router.refresh();
       }}
       className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-2"
     >

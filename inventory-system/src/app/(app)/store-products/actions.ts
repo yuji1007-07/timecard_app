@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireProductManager, canAccessStore } from "@/lib/session";
 
@@ -20,8 +19,6 @@ export async function setProductEnabled(storeId: string, productId: string, enab
       update: {},
     });
   }
-  revalidatePath("/store-products");
-  revalidatePath("/inventory");
 }
 
 /** この店舗の全商品をオンに戻す。 */
@@ -30,6 +27,4 @@ export async function enableAllForStore(formData: FormData) {
   const storeId = String(formData.get("storeId") ?? "");
   if (!storeId || !canAccessStore(user, storeId)) return;
   await prisma.storeProductDisable.deleteMany({ where: { storeId } });
-  revalidatePath("/store-products");
-  revalidatePath("/inventory");
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,13 +11,17 @@ import { createUser } from "./actions";
 
 export function UserForm({ stores }: { stores: { id: string; name: string }[] }) {
   const [open, setOpen] = useState(false);
-  const [result, action] = useActionState(createUser, undefined);
+  const [state, action] = useActionState(createUser, null);
   const [role, setRole] = useState("STORE_STAFF");
+  const router = useRouter();
 
-  if (result === "OK" && open) {
-    // 作成成功後フォームを閉じる
-    setTimeout(() => setOpen(false), 0);
-  }
+  // 作成に成功したらフォームを閉じて一覧を更新する
+  useEffect(() => {
+    if (state?.success) {
+      setOpen(false);
+      router.refresh();
+    }
+  }, [state, router]);
 
   if (!open) return <Button size="sm" onClick={() => setOpen(true)}>＋ ユーザーを追加</Button>;
 
@@ -65,7 +70,7 @@ export function UserForm({ stores }: { stores: { id: string; name: string }[] })
       <div className="flex items-center gap-2 md:col-span-2">
         <SubmitButton>追加</SubmitButton>
         <Button type="button" variant="ghost" onClick={() => setOpen(false)}>キャンセル</Button>
-        {result && result !== "OK" && <span className="text-sm text-destructive">{result}</span>}
+        {state?.error && <span className="text-sm text-destructive">{state.error}</span>}
       </div>
     </form>
   );

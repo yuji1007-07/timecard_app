@@ -9,6 +9,7 @@ import { ProductForm } from "./product-form";
 import { CsvImport } from "./csv-import";
 import { SizeSplitButton } from "./size-split-button";
 import { deleteProduct } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -63,10 +64,10 @@ export default async function ProductsPage() {
                 <td className="px-3 py-2">
                   <div className="flex justify-end gap-2">
                     <ProductForm brands={brands} categories={catNames} product={p} />
-                    <form action={deleteProduct}>
+                    <ActionForm action={deleteProduct}>
                       <input type="hidden" name="id" value={p.id} />
                       <ConfirmSubmit message={`「${p.name}」を削除しますか？（取引履歴がある場合は無効化されます）`}>削除</ConfirmSubmit>
-                    </form>
+                    </ActionForm>
                   </div>
                 </td>
               </tr>

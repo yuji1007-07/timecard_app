@@ -2,7 +2,6 @@
 
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAreaManager } from "@/lib/session";
 
@@ -17,7 +16,9 @@ const schema = z.object({
 // 店舗に所属する権限（本部以外）
 const STORE_SCOPED_ROLES = ["STORE_MANAGER", "STORE_STAFF"];
 
-export async function createUser(_prev: string | undefined, formData: FormData): Promise<string | undefined> {
+export type UserFormState = { success?: boolean; error?: string } | null;
+
+export async function createUser(_prev: UserFormState, formData: FormData): Promise<UserFormState> {
   await requireAreaManager();
   const parsed = schema.safeParse({
     name: formData.get("name"),
@@ -26,12 +27,12 @@ export async function createUser(_prev: string | undefined, formData: FormData):
     storeId: formData.get("storeId") || undefined,
     lineUserId: formData.get("lineUserId") || undefined,
   });
-  if (!parsed.success) return "入力内容を確認してください。";
+  if (!parsed.success) return { error: "入力内容を確認してください。" };
   const password = String(formData.get("password") ?? "");
-  if (password.length < 6) return "パスワードは6文字以上にしてください。";
+  if (password.length < 6) return { error: "パスワードは6文字以上にしてください。" };
 
   const exists = await prisma.user.findUnique({ where: { email: parsed.data.email } });
-  if (exists) return "このメールアドレスは既に登録されています。";
+  if (exists) return { error: "このメールアドレスは既に登録されています。" };
 
   await prisma.user.create({
     data: {
@@ -43,15 +44,13 @@ export async function createUser(_prev: string | undefined, formData: FormData):
       passwordHash: await bcrypt.hash(password, 10),
     },
   });
-  revalidatePath("/users");
-  return "OK";
+  return { success: true };
 }
 
 export async function updateUserLine(formData: FormData) {
   await requireAreaManager();
   const id = String(formData.get("id"));
   await prisma.user.update({ where: { id }, data: { lineUserId: String(formData.get("lineUserId") ?? "") || null } });
-  revalidatePath("/users");
 }
 
 export async function resetPassword(formData: FormData) {
@@ -60,12 +59,10 @@ export async function resetPassword(formData: FormData) {
   const pw = String(formData.get("password") ?? "");
   if (pw.length < 6) return;
   await prisma.user.update({ where: { id }, data: { passwordHash: await bcrypt.hash(pw, 10) } });
-  revalidatePath("/users");
 }
 
 export async function deleteUser(formData: FormData) {
   await requireAreaManager();
   const id = String(formData.get("id"));
   await prisma.user.delete({ where: { id } });
-  revalidatePath("/users");
 }

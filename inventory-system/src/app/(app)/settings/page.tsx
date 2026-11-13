@@ -9,6 +9,7 @@ import { isLineConfigured } from "@/lib/integrations/line";
 import { isSheetsConfigured } from "@/lib/integrations/sheets";
 import { ROUNDING, DIFF_BASIS } from "@/lib/constants";
 import { saveSettings } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
   return (
     <div>
       <PageHeader title="通知・連携設定" description="棚卸締め日・ズレ閾値・税計算・LINE/Sheets連携を設定します。" />
-      <form action={saveSettings} className="space-y-4">
+      <ActionForm action={saveSettings} className="space-y-4">
         {/* 棚卸・アラート */}
         <Card>
           <CardHeader><CardTitle className="text-base">棚卸・アラート</CardTitle></CardHeader>
@@ -106,7 +107,7 @@ export default async function SettingsPage() {
         </Card>
 
         <Button type="submit">設定を保存</Button>
-      </form>
+      </ActionForm>
     </div>
   );
 }

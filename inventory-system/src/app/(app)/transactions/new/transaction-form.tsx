@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,14 +33,7 @@ const FORM_TYPES: { key: string; label: string }[] = [
   { key: "GIFT", label: TX_TYPES.GIFT },
 ];
 
-export function TransactionForm({
-  products,
-  stores,
-  fixedStoreId,
-  defaultType,
-  lastStocktakeDay,
-  todayJst,
-}: {
+type FormProps = {
   products: ProductOpt[];
   stores: StoreOpt[];
   fixedStoreId: string | null;
@@ -48,17 +42,59 @@ export function TransactionForm({
   lastStocktakeDay: Record<string, string>;
   /** 日本時間の今日（YYYY-MM-DD） */
   todayJst: string;
-}) {
+};
+
+/**
+ * 取引記録フォーム。
+ * 「続けて記録する」で中身を作り直す（key を変える）ことで、入力内容・送信結果・
+ * 二重登録防止の番号をまとめて新しくする。種別と店舗だけは引き継ぐ。
+ */
+export function TransactionForm(props: FormProps) {
+  const [round, setRound] = useState(0);
+  const [keep, setKeep] = useState<{ type?: string; storeId?: string }>({});
+  return (
+    <TransactionFormInner
+      key={round}
+      {...props}
+      defaultType={keep.type ?? props.defaultType}
+      defaultStoreId={keep.storeId}
+      onAgain={(type, storeId) => {
+        setKeep({ type, storeId });
+        setRound((n) => n + 1);
+      }}
+    />
+  );
+}
+
+function newRequestId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function TransactionFormInner({
+  products,
+  stores,
+  fixedStoreId,
+  defaultType,
+  defaultStoreId,
+  lastStocktakeDay,
+  todayJst,
+  onAgain,
+}: FormProps & { defaultStoreId?: string; onAgain: (type: string, storeId: string) => void }) {
   const router = useRouter();
   const [type, setType] = useState(defaultType ?? "ORDER");
-  const [storeId, setStoreId] = useState(fixedStoreId ?? stores[0]?.id ?? "");
+  const [storeId, setStoreId] = useState(fixedStoreId ?? defaultStoreId ?? stores[0]?.id ?? "");
+  // 二重登録防止の番号。同じフォームから何度送っても、サーバーは1件しか記録しない。
+  // （サーバー描画と値がずれないよう、画面に出てから発行する）
+  const [requestId, setRequestId] = useState("");
+  useEffect(() => setRequestId(newRequestId()), []);
   const [productId, setProductId] = useState("");
   const [brandId, setBrandId] = useState(""); // 大項目（ブランド）
   const [baseName, setBaseName] = useState(""); // 品名（サイズ違いをまとめた共通名）
   const [size, setSize] = useState(""); // サイズ
   const [q, setQ] = useState(""); // 品名キーワード
   const [price, setPrice] = useState<number | "">("");
-  const [result, action] = useActionState(createTransaction, undefined);
+  const [state, action] = useActionState(createTransaction, null);
 
   const product = useMemo(() => products.find((p) => p.id === productId), [products, productId]);
   const [date, setDate] = useState(todayJst);
@@ -138,10 +174,10 @@ export function TransactionForm({
     }
   }
 
-  if (result === "OK") {
-    router.push("/transactions");
-    router.refresh();
-  }
+  // 記録できたら、他の画面（在庫一覧など）の表示も最新にしておく
+  useEffect(() => {
+    if (state?.success) router.refresh();
+  }, [state, router]);
 
   function onSelectType(t: string) {
     setType(t);
@@ -156,9 +192,33 @@ export function TransactionForm({
   const exclPreview = showPrice && price && product ? exclFromIncl(Number(price), product.taxRate) : null;
   const sel = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 
+  // 記録できたことを画面で必ず示す（フォームのまま残ると、記録できていないと思って押し直してしまう）
+  if (state?.success) {
+    return (
+      <div className="space-y-4">
+        <div className="rounded-lg border border-green-300 bg-green-50 p-5">
+          <p className="text-lg font-bold text-green-700">記録しました ✓</p>
+          <p className="mt-1 text-sm text-green-800">{state.message}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" onClick={() => onAgain(type, storeId)}>
+            続けて記録する
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/transactions">取引履歴を見る</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/inventory">在庫一覧を見る</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <form action={action} className="space-y-5">
       <input type="hidden" name="type" value={type} />
+      <input type="hidden" name="requestId" value={requestId} />
 
       {/* 取引種別 */}
       <div className="flex flex-wrap gap-2">
@@ -312,7 +372,7 @@ export function TransactionForm({
         </div>
       </div>
 
-      {result && result !== "OK" && <p className="text-sm text-destructive">{result}</p>}
+      {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
       <div className="flex gap-2">
         <SubmitButton>記録する</SubmitButton>
         <Button type="button" variant="ghost" onClick={() => router.push("/transactions")}>キャンセル</Button>

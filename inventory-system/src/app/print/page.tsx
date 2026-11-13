@@ -3,6 +3,7 @@ import { requireAreaManager } from "@/lib/session";
 import { getStoreInventory } from "@/lib/inventory";
 import { TX_TYPES, label, yen } from "@/lib/constants";
 import { PrintToolbar } from "./print-toolbar";
+import { jstDayKey } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -55,7 +56,7 @@ export default async function PrintPage({ searchParams }: { searchParams: Promis
 
       <div className="mb-6">
         <h1 className="text-xl font-bold">まごころ在庫 — {typeLabel}バックアップ</h1>
-        <p className="text-sm text-gray-600">期間: {descr}｜出力日: {new Date().toISOString().slice(0, 10)}</p>
+        <p className="text-sm text-gray-600">期間: {descr}｜出力日: {jstDayKey(new Date())}</p>
       </div>
 
       {stores.map((store, idx) => (
@@ -122,7 +123,7 @@ async function StoreSection({
         <tbody>
           {txs.map((t) => (
             <tr key={t.id}>
-              <td>{new Date(t.date).toISOString().slice(0, 10)}</td>
+              <td>{jstDayKey(new Date(t.date))}</td>
               <td>{label(TX_TYPES, t.type)}</td>
               <td>{t.product.brand.name}</td>
               <td>{t.product.name}{t.product.size ? `（${t.product.size}）` : ""}</td>
@@ -148,7 +149,7 @@ async function StoreSection({
       {sts.map((st) => (
         <div key={st.id} className="mb-4">
           <h3 className="mb-1 text-sm font-semibold">
-            {st.targetMonth}（確定 {new Date(st.confirmedAt).toISOString().slice(0, 10)}／担当 {st.assigneeName ?? "-"}）
+            {st.targetMonth}（確定 {jstDayKey(new Date(st.confirmedAt))}／担当 {st.assigneeName ?? "-"}）
             ｜ズレ {st.diffCount}件 / {yen(st.diffAmount)}
           </h3>
           <table className="print-table">

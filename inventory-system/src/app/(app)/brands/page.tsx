@@ -7,6 +7,7 @@ import { BrandBadge } from "@/components/badges";
 import { ConfirmSubmit, SubmitButton } from "@/components/confirm-submit";
 import { BrandEditForm } from "./brand-form";
 import { createBrand, deleteBrand, createCategory, deleteCategory } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -29,11 +30,11 @@ export default async function BrandsPage() {
             <CardTitle>ブランド（{brands.length}）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <form action={createBrand} className="flex flex-wrap items-center gap-2">
+            <ActionForm action={createBrand} className="flex flex-wrap items-center gap-2">
               <Input name="name" placeholder="新しいブランド名" className="h-9 w-44" required />
               <input name="colorHex" type="color" defaultValue="#1e3a5f" className="h-9 w-10 rounded border" />
               <SubmitButton size="sm">＋ 追加</SubmitButton>
-            </form>
+            </ActionForm>
             <div className="divide-y">
               {brands.map((b) => (
                 <div key={b.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
@@ -44,10 +45,10 @@ export default async function BrandsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <BrandEditForm brand={b} />
-                    <form action={deleteBrand}>
+                    <ActionForm action={deleteBrand}>
                       <input type="hidden" name="id" value={b.id} />
                       <ConfirmSubmit message={`「${b.name}」を削除しますか？（商品がある場合は無効化されます）`}>削除</ConfirmSubmit>
-                    </form>
+                    </ActionForm>
                   </div>
                 </div>
               ))}
@@ -61,18 +62,18 @@ export default async function BrandsPage() {
             <CardTitle>カテゴリ（{categories.length}）</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <form action={createCategory} className="flex items-center gap-2">
+            <ActionForm action={createCategory} className="flex items-center gap-2">
               <Input name="name" placeholder="新しいカテゴリ名" className="h-9 w-44" required />
               <SubmitButton size="sm">＋ 追加</SubmitButton>
-            </form>
+            </ActionForm>
             <div className="flex flex-wrap gap-2">
               {categories.map((c) => (
                 <div key={c.id} className="flex items-center gap-1 rounded-full border bg-secondary/50 py-1 pl-3 pr-1 text-sm">
                   {c.name}
-                  <form action={deleteCategory}>
+                  <ActionForm action={deleteCategory}>
                     <input type="hidden" name="id" value={c.id} />
                     <ConfirmSubmit message={`カテゴリ「${c.name}」を削除しますか？`} variant="ghost" size="sm" className="h-6 px-2 text-muted-foreground">×</ConfirmSubmit>
-                  </form>
+                  </ActionForm>
                 </div>
               ))}
             </div>

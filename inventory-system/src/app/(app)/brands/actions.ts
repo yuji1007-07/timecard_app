@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireProductManager } from "@/lib/session";
 
@@ -11,7 +10,6 @@ export async function createBrand(formData: FormData) {
   const colorHex = String(formData.get("colorHex") ?? "#1e3a5f");
   const count = await prisma.brand.count();
   await prisma.brand.create({ data: { name, colorHex, sortOrder: count } });
-  revalidatePath("/brands");
 }
 
 export async function updateBrand(id: string, formData: FormData) {
@@ -24,7 +22,6 @@ export async function updateBrand(id: string, formData: FormData) {
       active: formData.get("active") === "on",
     },
   });
-  revalidatePath("/brands");
 }
 
 export async function deleteBrand(formData: FormData) {
@@ -36,7 +33,6 @@ export async function deleteBrand(formData: FormData) {
   } else {
     await prisma.brand.delete({ where: { id } });
   }
-  revalidatePath("/brands");
 }
 
 export async function createCategory(formData: FormData) {
@@ -49,12 +45,10 @@ export async function createCategory(formData: FormData) {
     create: { name, sortOrder: count },
     update: {},
   });
-  revalidatePath("/brands");
 }
 
 export async function deleteCategory(formData: FormData) {
   await requireProductManager();
   const id = String(formData.get("id"));
   await prisma.category.delete({ where: { id } });
-  revalidatePath("/brands");
 }

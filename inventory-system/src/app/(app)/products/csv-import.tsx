@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/confirm-submit";
 import { importCsv } from "./actions";
@@ -12,6 +13,10 @@ ReFa,ReFa グレイス ヘッドスパ,,49800,,30000,10,美容機器,個
 export function CsvImport() {
   const [open, setOpen] = useState(false);
   const [result, action] = useActionState(importCsv, undefined);
+  const router = useRouter();
+  useEffect(() => {
+    if (result) router.refresh();
+  }, [result, router]);
 
   if (!open) return <Button variant="outline" size="sm" onClick={() => setOpen(true)}>CSVインポート</Button>;
 

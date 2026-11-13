@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireUser, canAccessStore, realUserId } from "@/lib/session";
 import { getStoreInventory } from "@/lib/inventory";
@@ -132,12 +131,9 @@ export async function confirmStocktake(
   );
 
   // 連携・通知（未設定/OFFならドライランで何もしない）
-  await syncStocktake(st.id);
+  await syncStocktake(st.id, enteredIds);
   const notify = await notifyStockDiff(storeId).catch(() => null);
 
-  revalidatePath("/stocktake");
-  revalidatePath("/inventory");
-  revalidatePath("/dashboard");
 
   const note = notify && notify.sent > 0 ? `（本部へLINE通知 ${notify.sent}件）` : "";
   return {

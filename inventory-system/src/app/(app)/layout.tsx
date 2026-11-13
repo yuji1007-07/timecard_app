@@ -15,6 +15,7 @@ const AREA_NAV: NavItem[] = [
   { href: "/store-products", label: "店舗別 取扱設定", icon: "toggle" },
   { href: "/brands", label: "ブランド・カテゴリ", icon: "brand" },
   { href: "/users", label: "ユーザー管理", icon: "users" },
+  { href: "/diagnostics", label: "在庫診断", icon: "stocktake" },
   { href: "/backup", label: "PDFバックアップ", icon: "print" },
   { href: "/settings", label: "通知・連携設定", icon: "settings" },
   { href: "/account", label: "アカウント設定", icon: "account" },

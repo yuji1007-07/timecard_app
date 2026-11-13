@@ -7,6 +7,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { StoreSelect } from "./store-select";
 import { ProductToggle } from "./toggle";
 import { enableAllForStore } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -72,12 +73,12 @@ export default async function StoreProductsPage({ searchParams }: { searchParams
           全{products.length}点中 <span className="font-medium text-foreground">{products.length - offCount}</span> 点オン / {offCount} 点オフ
         </span>
         {offCount > 0 && (
-          <form action={enableAllForStore}>
+          <ActionForm action={enableAllForStore}>
             <input type="hidden" name="storeId" value={selectedStoreId} />
             <ConfirmSubmit variant="ghost" size="sm" message={`${selectedStore.name} の全商品をオンに戻しますか？`}>
               全てオンに戻す
             </ConfirmSubmit>
-          </form>
+          </ActionForm>
         )}
       </div>
 

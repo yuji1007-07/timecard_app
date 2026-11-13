@@ -10,6 +10,7 @@ import { InventoryAccordion } from "@/components/inventory-accordion";
 import { DiffTrendChart } from "@/components/inventory-charts";
 import { BusinessTypeBadge, StoreStatusBadge, TxTypeBadge, BrandBadge } from "@/components/badges";
 import { yen } from "@/lib/constants";
+import { jstDayKey } from "@/lib/stock";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +54,7 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
           <CardContent className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-muted-foreground">業態</span><BusinessTypeBadge type={store.businessType} /></div>
             <div className="flex justify-between"><span className="text-muted-foreground">院長・責任者</span><span>{store.directorName ?? "-"}</span></div>
-            <div className="flex justify-between"><span className="text-muted-foreground">開院日</span><span>{store.openDate ? new Date(store.openDate).toISOString().slice(0, 10) : "-"}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">開院日</span><span>{store.openDate ? jstDayKey(new Date(store.openDate)) : "-"}</span></div>
             <div className="flex justify-between"><span className="text-muted-foreground">ステータス</span><StoreStatusBadge status={store.status} /></div>
           </CardContent>
         </Card>
@@ -89,7 +90,7 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
               {[...stocktakes].reverse().map((s) => (
                 <tr key={s.id} className="border-t">
                   <td className="px-3 py-2 font-medium">{s.targetMonth}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{new Date(s.confirmedAt).toISOString().slice(0, 10)}</td>
+                  <td className="px-3 py-2 text-muted-foreground">{jstDayKey(new Date(s.confirmedAt))}</td>
                   <td className="px-3 py-2 text-muted-foreground">{s.assigneeName ?? "-"}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${s.diffCount > 0 ? "text-red-600" : ""}`}>{s.diffCount}</td>
                   <td className={`px-3 py-2 text-right tabular-nums ${s.diffAmount !== 0 ? "text-red-600" : ""}`}>{yen(s.diffAmount)}</td>
@@ -118,7 +119,7 @@ export default async function StoreKartePage({ params }: { params: Promise<{ id:
             <tbody>
               {txs.map((t) => (
                 <tr key={t.id} className="border-t">
-                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{new Date(t.date).toISOString().slice(0, 10)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">{jstDayKey(new Date(t.date))}</td>
                   <td className="px-3 py-2"><TxTypeBadge type={t.type} /></td>
                   <td className="px-3 py-2"><div className="flex items-center gap-2"><BrandBadge name={t.product.brand.name} color={t.product.brand.colorHex} />{t.product.name}{t.product.size && <span className="rounded bg-navy/10 px-1.5 py-0.5 text-xs font-semibold text-navy">{t.product.size}</span>}</div></td>
                   <td className="px-3 py-2 text-right tabular-nums">{t.quantity}</td>

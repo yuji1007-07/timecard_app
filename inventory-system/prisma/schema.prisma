@@ -178,6 +178,9 @@ model Transaction {
   memo          String?
   toStoreId     String? // 店舗間移動の移動先（TRANSFER_OUT側に保持）
   transferGroupId String? // 移動の OUT/IN ペアを紐づける
+  // 二重登録の防止用。記録フォームを開いたときに発行した番号で、同じ番号の2回目は作らない
+  // （画面が変わらず押し直しても1件にしかならない）。店舗間移動の入庫側は「番号:in」
+  requestId     String?  @unique
   createdAt     DateTime @default(now())
 
   store     Store    @relation("StoreTransactions", fields: [storeId], references: [id], onDelete: Cascade)

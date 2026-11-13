@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { updateBrand } from "./actions";
 
 export function BrandEditForm({ brand }: { brand: { id: string; name: string; colorHex: string; active: boolean } }) {
   const [open, setOpen] = useState(false);
+  const router = useRouter();
   if (!open) {
     return <Button variant="outline" size="sm" onClick={() => setOpen(true)}>編集</Button>;
   }
@@ -16,6 +18,7 @@ export function BrandEditForm({ brand }: { brand: { id: string; name: string; co
       action={async (fd) => {
         await updateBrand(brand.id, fd);
         setOpen(false);
+        router.refresh();
       }}
       className="flex flex-wrap items-center gap-2"
     >

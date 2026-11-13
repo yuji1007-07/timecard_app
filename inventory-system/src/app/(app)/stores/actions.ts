@@ -1,7 +1,6 @@
 "use server";
 
 import { z } from "zod";
-import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { requireAreaManager } from "@/lib/session";
 
@@ -50,7 +49,6 @@ export async function createStore(formData: FormData) {
       sortOrder: d.sortOrder ?? 0,
     },
   });
-  revalidatePath("/stores");
 }
 
 export async function updateStore(id: string, formData: FormData) {
@@ -71,7 +69,6 @@ export async function updateStore(id: string, formData: FormData) {
       sortOrder: d.sortOrder ?? 0,
     },
   });
-  revalidatePath("/stores");
 }
 
 export async function deleteStore(formData: FormData) {
@@ -84,5 +81,4 @@ export async function deleteStore(formData: FormData) {
   } else {
     await prisma.store.delete({ where: { id } });
   }
-  revalidatePath("/stores");
 }

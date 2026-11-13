@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -92,6 +93,7 @@ export function ProductForm({
   categories: string[];
   product?: Product;
 }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const editing = !!product;
   const [taxRate, setTaxRate] = useState(product?.taxRate ?? 10);
@@ -117,6 +119,7 @@ export function ProductForm({
       action={async (fd) => {
         await action(fd);
         setOpen(false);
+        router.refresh();
       }}
       className="grid gap-3 rounded-lg border bg-card p-4 md:grid-cols-2"
     >

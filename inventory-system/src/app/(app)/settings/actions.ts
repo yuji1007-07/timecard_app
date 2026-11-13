@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { requireAreaManager } from "@/lib/session";
 import { setSetting } from "@/lib/settings";
 
@@ -23,5 +22,4 @@ export async function saveSettings(formData: FormData): Promise<void> {
   for (const k of BOOL_KEYS) {
     await setSetting(k, formData.get(k) === "on" ? "true" : "false");
   }
-  revalidatePath("/settings");
 }

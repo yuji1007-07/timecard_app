@@ -9,6 +9,7 @@ import { ConfirmSubmit } from "@/components/confirm-submit";
 import { TX_TYPES, TX_SIGN, yen } from "@/lib/constants";
 import { jstDayKey } from "@/lib/stock";
 import { cancelTransaction } from "./actions";
+import { ActionForm } from "@/components/action-form";
 
 export const dynamic = "force-dynamic";
 
@@ -112,7 +113,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
               return (
                 <tr key={t.id} className="border-t align-top">
                   <td className="px-3 py-2 whitespace-nowrap text-muted-foreground">
-                    {new Date(t.date).toISOString().slice(0, 10)}
+                    {jstDayKey(new Date(t.date))}
                     {jstDayKey(t.date) !== jstDayKey(t.createdAt) && (
                       <div
                         title="取引日より後に入力された記録です。棚卸日より前の日付の取引は、現在の在庫数には反映されません。"
@@ -148,10 +149,10 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                   </td>
                   <td className="px-3 py-2">
                     <div className="flex justify-end">
-                      <form action={cancelTransaction}>
+                      <ActionForm action={cancelTransaction}>
                         <input type="hidden" name="id" value={t.id} />
                         <ConfirmSubmit message="この取引を取り消しますか？在庫が自動補正されます。" size="sm">取消</ConfirmSubmit>
-                      </form>
+                      </ActionForm>
                     </div>
                   </td>
                 </tr>
