@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { TX_SIGN } from "@/lib/constants";
-import { baselineOf, keepLatest, isAfterStocktake, jstDayKey, stocktakeDay, type Baseline } from "@/lib/stock";
+import { baselineOf, keepLatest, isAfterStocktake, isLateOrder, jstDayKey, stocktakeDay, type Baseline } from "@/lib/stock";
 import { isSheetsConfigured } from "@/lib/integrations/sheets";
 
 /**
@@ -49,6 +49,7 @@ export type StoreDiagnosis = {
   stocktakes: StocktakeRow[];
   backdated: BackdatedRow[];
   backdatedNet: number; // 過去日付のため足していない取引の合計（符号つき）
+  lateOrders: BackdatedRow[]; // 棚卸の後に入力された、棚卸日より前の日付の入荷（在庫に足している）
   negatives: NegativeRow[];
   transferOrderPairs: PairRow[];
 };
@@ -63,6 +64,7 @@ export type Diagnostics = {
     duplicateExtra: number;
     suspiciousStocktakes: number;
     backdated: number;
+    lateOrders: number;
     negatives: number;
     transferOrderPairs: number;
     duplicateProducts: number;
@@ -224,6 +226,25 @@ export async function getDiagnostics(): Promise<Diagnostics> {
     }
     backdated.sort((a, b) => (a.enteredAt < b.enteredAt ? 1 : -1));
 
+    // ③' 棚卸の確定後に入力された、棚卸日より前の日付の入荷。在庫に足している。
+    //    棚卸のときにもう棚にあった分なら二重になるので、確認できるように一覧する
+    const lateOrders: BackdatedRow[] = [];
+    for (const t of mine) {
+      const b = baseline.get(key(s.id, t.productId));
+      if (!b || !isLateOrder(t, b)) continue;
+      lateOrders.push({
+        productId: t.productId,
+        productName: nameOf(t.productId),
+        type: t.type,
+        signed: (TX_SIGN[t.type] ?? 0) * t.quantity,
+        date: jstDayKey(t.date),
+        enteredAt: t.createdAt.toISOString(),
+        stocktakeDay: stocktakeDay(b),
+        memo: t.memo,
+      });
+    }
+    lateOrders.sort((a, b) => (a.enteredAt < b.enteredAt ? 1 : -1));
+
     // ④ マイナス在庫
     const negatives: NegativeRow[] = [];
     for (const [k, v] of stock) {
@@ -264,6 +285,7 @@ export async function getDiagnostics(): Promise<Diagnostics> {
       stocktakes: stocktakeRows,
       backdated,
       backdatedNet,
+      lateOrders,
       negatives,
       transferOrderPairs,
     });
@@ -292,6 +314,7 @@ export async function getDiagnostics(): Promise<Diagnostics> {
       duplicateExtra: result.reduce((n, s) => n + s.duplicates.reduce((m, d) => m + d.count - 1, 0), 0),
       suspiciousStocktakes: result.reduce((n, s) => n + s.stocktakes.filter((x) => x.suspicious).length, 0),
       backdated: result.reduce((n, s) => n + s.backdated.length, 0),
+      lateOrders: result.reduce((n, s) => n + s.lateOrders.length, 0),
       negatives: result.reduce((n, s) => n + s.negatives.length, 0),
       transferOrderPairs: result.reduce((n, s) => n + s.transferOrderPairs.length, 0),
       duplicateProducts: duplicateProducts.length,

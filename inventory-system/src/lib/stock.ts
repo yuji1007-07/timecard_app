@@ -7,6 +7,10 @@ import { TX_SIGN } from "@/lib/constants";
  *
  * - 基準より後かどうかは「取引日(date)」で判定する。入力日時(createdAt)で判定すると、
  *   あとから遡って入力した取引が、すでに実地カウントに含まれているのに再度積み上がる。
+ * - ただし入荷（発注）だけは、棚卸を確定した後に入力されたものを日付にかかわらず積み上げる。
+ *   入荷は「届いてから、発注日の日付で」入力されることが多く、取引日だけで判定すると
+ *   棚卸の後に届いた荷物が在庫に入らない（本番で実際に起きた: 棚卸 10/26 → 10/30 に
+ *   10/20 付の入荷 +40 を入力 → 在庫が 40 少ないまま）。
  * - 基準の日付（棚卸日・確定時刻）は商品ごとに持つ。棚卸のやり直しで一部の商品だけ
  *   別の日に数え直すことがあるため。空の既存明細は棚卸全体の日付を使う。
  * - 「最新の基準」は棚卸日→確定時刻の順で選ぶ。確定し直した時刻で選ぶと、
@@ -61,6 +65,23 @@ export function keepLatest(map: Map<string, Baseline>, key: string, b: Baseline)
   if (!cur || isNewerBaseline(b, cur)) map.set(key, b);
 }
 
+/** 在庫計算に使う取引の最小限の形。 */
+type TxLike = { type: string; date: Date; createdAt: Date };
+
+/**
+ * 棚卸を確定した後に入力された入荷（発注）で、取引日が棚卸日より前のもの。
+ * 取引日だけ見れば棚卸に含まれる扱いになるが、入荷は届いてから発注日で入力されることが
+ * 多いので、在庫に積み上げる（isAfterStocktake の例外）。
+ * 棚卸日と同じ日付のものは、通常の規則（確定後の入力なら積み上げる）で足されるので含めない。
+ */
+export function isLateOrder(tx: TxLike, b: Baseline): boolean {
+  return (
+    tx.type === "ORDER" &&
+    tx.createdAt.getTime() > b.confirmedAt.getTime() &&
+    jstDayKey(tx.date) < stocktakeDay(b)
+  );
+}
+
 /**
  * この取引を棚卸ベースラインに積み上げるか。
  *
@@ -68,8 +89,10 @@ export function keepLatest(map: Map<string, Baseline>, key: string, b: Baseline)
  * - 棚卸日より前の日付の取引 → 実地カウントに含まれているので無視
  * - 棚卸日と同じ日付の取引   → 確定ボタンより後に入力されたものだけ積み上げる
  *   （確定後にその日のうちに記録した販売を落とさないため）
+ * - 入荷（発注）は、確定より後に入力されたものなら日付にかかわらず積み上げる（isLateOrder）
  */
-export function isAfterStocktake(tx: { date: Date; createdAt: Date }, b: Baseline): boolean {
+export function isAfterStocktake(tx: TxLike, b: Baseline): boolean {
+  if (isLateOrder(tx, b)) return true;
   const txDay = jstDayKey(tx.date);
   const cntDay = stocktakeDay(b);
   if (txDay !== cntDay) return txDay > cntDay;
@@ -96,6 +119,7 @@ export type BreakdownTx = {
   createdAt: Date;
   counted: boolean; // 在庫に反映したか
   reason: string | null; // 反映していない理由
+  note: string | null; // 反映しているが、注意して見てほしい点（棚卸後に入力した過去日付の入荷）
   assignee: string | null;
   counterpart: string | null;
   supplier: string | null;
@@ -148,6 +172,10 @@ export async function getStockBreakdown(storeId: string, productId: string): Pro
     const signed = (TX_SIGN[t.type] ?? 0) * t.quantity;
     let counted = true;
     let reason: string | null = null;
+    let note: string | null = null;
+    if (latest && isLateOrder(t, latest)) {
+      note = `棚卸（${stocktakeDay(latest)}）の後に入力された入荷のため、日付が棚卸日より前でも足しています。棚卸のときにもう棚にあった分なら、取り消してください`;
+    }
     if (latest && !isAfterStocktake(t, latest)) {
       counted = false;
       const cnt = stocktakeDay(latest);
@@ -165,6 +193,7 @@ export async function getStockBreakdown(storeId: string, productId: string): Pro
       createdAt: t.createdAt,
       counted,
       reason,
+      note,
       assignee: t.assignee,
       counterpart: t.counterpart,
       supplier: t.supplier,

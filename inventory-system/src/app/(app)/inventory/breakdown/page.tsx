@@ -146,7 +146,10 @@ export default async function StockBreakdownPage({
                 </td>
                 <td className="px-3 py-2 text-xs">
                   {t.counted ? (
-                    <span className="font-medium text-foreground">反映</span>
+                    <>
+                      <span className="font-medium text-foreground">反映</span>
+                      {t.note && <div className="text-amber-700">{t.note}</div>}
+                    </>
                   ) : (
                     <>
                       <span className="font-medium">足していない</span>

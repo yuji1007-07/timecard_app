@@ -35,6 +35,7 @@ export default async function DiagnosticsPage() {
     (s) =>
       s.duplicates.length ||
       s.backdated.length ||
+      s.lateOrders.length ||
       s.negatives.length ||
       s.transferOrderPairs.length ||
       s.stocktakes.some((x) => x.suspicious)
@@ -65,7 +66,8 @@ export default async function DiagnosticsPage() {
         <ul className="list-disc space-y-1 pl-5">
           <li><span className="font-medium text-foreground">二重登録の疑い</span>：同じ商品・種別・数量・取引日の記録が2分以内に続けて入力されています。余分なものは取引履歴から「取消」できます。</li>
           <li><span className="font-medium text-foreground">商品数が減った棚卸</span>：それ以前の月より棚卸した商品数が半分未満の月です。やり直しで他の商品の数が消えた可能性があります。</li>
-          <li><span className="font-medium text-foreground">過去日付で足していない取引</span>：棚卸を確定した後に、棚卸日以前の日付で入力された取引です。棚卸で数えた数に含まれている扱いのため、在庫には足していません。</li>
+          <li><span className="font-medium text-foreground">過去日付で足していない取引</span>：棚卸を確定した後に、棚卸日以前の日付で入力された消耗・社販・プレゼント・移動です。棚卸で数えた数に含まれている扱いのため、在庫には足していません。</li>
+          <li><span className="font-medium text-foreground">棚卸後に入力した過去日付の入荷</span>（全店 {t.lateOrders}件）：入荷は届いてから発注日で入力されることが多いため、在庫に足しています。棚卸のときにもう棚にあった分なら、取引履歴から「取消」してください。</li>
           <li><span className="font-medium text-foreground">移動と発注の重なり</span>：店舗間移動で入庫が付いた商品に、同じ数量の発注（入荷）も記録されています。同じ荷物を2回数えている可能性があります。</li>
           <li>スプレッドシート連携：{d.sheetsConfigured ? "有効（「棚卸」シートに過去の棚卸の数が残っています）" : "未設定"}</li>
         </ul>
@@ -181,6 +183,33 @@ export default async function DiagnosticsPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+
+            {s.lateOrders.length > 0 && (
+              <details className="px-4 py-3">
+                <summary className="cursor-pointer text-sm font-semibold text-amber-700">
+                  棚卸後に入力した過去日付の入荷（{s.lateOrders.length}件・在庫に足しています）
+                </summary>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-xs text-muted-foreground">
+                      <tr><th className={th}>取引日</th><th className={th}>入力日時</th><th className={th}>棚卸日</th><th className={th}>商品</th><th className={th}>数量</th><th className={th}>メモ</th></tr>
+                    </thead>
+                    <tbody>
+                      {s.lateOrders.map((b, i) => (
+                        <tr key={i} className="border-t">
+                          <td className={`${td} whitespace-nowrap`}>{b.date}</td>
+                          <td className={`${td} text-xs text-muted-foreground`}>{jst(b.enteredAt)}</td>
+                          <td className={`${td} whitespace-nowrap`}>{b.stocktakeDay}</td>
+                          <td className={`${td} min-w-40`}><Link className="underline decoration-dotted" href={`/inventory/breakdown?store=${s.storeId}&product=${b.productId}`}>{b.productName}</Link></td>
+                          <td className={`${td} tabular-nums`}>{signed(b.signed)}</td>
+                          <td className={`${td} text-xs text-muted-foreground`}>{b.memo ?? ""}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             )}
 
             {s.backdated.length > 0 && (

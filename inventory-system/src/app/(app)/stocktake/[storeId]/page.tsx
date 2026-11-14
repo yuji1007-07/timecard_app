@@ -38,7 +38,7 @@ export default async function StocktakeEntryPage({
       include: { items: true },
     }),
     // この店舗の取引（記録の有無・棚卸日以降の件数の算出に使う）
-    prisma.transaction.findMany({ where: { storeId }, select: { productId: true, date: true, createdAt: true } }),
+    prisma.transaction.findMany({ where: { storeId }, select: { productId: true, type: true, date: true, createdAt: true } }),
     // この店舗で棚卸されたことがある商品
     prisma.stocktakeItem.findMany({
       where: { stocktake: { storeId } },

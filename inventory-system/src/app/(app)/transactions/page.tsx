@@ -116,7 +116,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
                     {jstDayKey(new Date(t.date))}
                     {jstDayKey(t.date) !== jstDayKey(t.createdAt) && (
                       <div
-                        title="取引日より後に入力された記録です。棚卸日より前の日付の取引は、現在の在庫数には反映されません。"
+                        title="取引日より後に入力された記録です。棚卸日以前の日付の取引は、現在の在庫数には反映されません（入荷は、棚卸の後に入力したものなら反映されます）。"
                         className="text-[10px] text-amber-700"
                       >
                         入力: {jstDayKey(t.createdAt).slice(5).replace("-", "/")}
