@@ -15,7 +15,7 @@ export default async function AdminProgressPage() {
     <div>
       <PageHeader
         title="進捗表"
-        description="スタッフ×動画の視聴・テストの状況です。視聴回数（何回見たか）と最終視聴日も確認できます。対象外の動画は「対象外」と表示されます。"
+        description="店舗ごとの完了人数をまとめて表示します。店舗名を押すと、スタッフごとの視聴・テストの状況（視聴回数・最終視聴日）が開きます。"
         action={
           <div className="flex flex-wrap gap-2">
             <Button asChild variant="outline">

@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import { FilterTabs } from "@/components/filter-tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
@@ -62,7 +63,7 @@ export function useStaffFilter(users: ProgressMatrix["users"], showStoreTabs: bo
       />
     </>
   );
-  return { filtered, tabs };
+  return { filtered, tabs, storeId };
 }
 
 /** 2026-11-12 → 11/12 */
@@ -70,11 +71,72 @@ const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8,
 
 /** 進捗表：スタッフ×動画 */
 export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatrix; showStoreTabs: boolean }) {
-  const { filtered, tabs } = useStaffFilter(matrix.users, showStoreTabs);
+  const { filtered, tabs, storeId } = useStaffFilter(matrix.users, showStoreTabs);
   const [videoId, setVideoId] = useState("");
   const videos = videoId ? matrix.videos.filter((v) => v.id === videoId) : matrix.videos;
   // 動画で絞ったときは、その動画が対象の人だけ表示
   const rows = videoId ? filtered.filter((u) => matrix.cells[u.id][videoId]?.target) : filtered;
+
+  // 店舗を1つに絞っていないときは、店舗ごとにまとめて表示する（店舗名の行を押すとスタッフが開く）
+  const grouped = showStoreTabs && !storeId;
+  const [opened, setOpened] = useState<Set<string>>(new Set());
+  const groups = useMemo(() => {
+    const map = new Map<string, { key: string; name: string; users: typeof rows }>();
+    for (const u of rows) {
+      const key = u.storeId ?? "none";
+      if (!map.has(key)) map.set(key, { key, name: u.storeName, users: [] });
+      map.get(key)!.users.push(u);
+    }
+    return [...map.values()];
+  }, [rows]);
+  const allOpen = groups.length > 0 && groups.every((g) => opened.has(g.key));
+  const toggle = (key: string) =>
+    setOpened((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+
+  const staffRow = (u: (typeof rows)[number]) => (
+    <tr key={u.id} className="border-b last:border-0" data-testid="progress-row">
+      <td className={`sticky left-0 z-10 max-w-[11rem] bg-card py-2.5 pr-3 align-top ${grouped ? "pl-9" : "pl-3"}`}>
+        <div className="font-medium">{u.name}</div>
+        <div className="text-xs text-muted-foreground">{label(POSITIONS, u.position)}</div>
+      </td>
+      {videos.map((v) => {
+        const c = matrix.cells[u.id][v.id];
+        if (!c.target) {
+          return (
+            <td key={v.id} className="bg-muted/30 px-3 py-2.5 text-center text-xs text-muted-foreground">
+              対象外
+            </td>
+          );
+        }
+        return (
+          <td key={v.id} className="px-3 py-2.5 align-top">
+            <div className="flex flex-wrap items-center gap-1">
+              <StatusBadge status={c.status} percent={c.percent} />
+              {c.required && !c.done && <Badge variant="bad">必修</Badge>}
+              {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
+            </div>
+            {c.bestScore !== null && (
+              <div className="mt-1 text-xs text-muted-foreground">
+                最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
+              </div>
+            )}
+            {c.completedOn && <div className="text-xs text-muted-foreground">初回完了 {md(c.completedOn)}</div>}
+            {c.viewCount > 0 && (
+              <div className="text-xs text-muted-foreground" data-testid="view-info">
+                視聴 <span className={`font-semibold ${c.viewCount >= 2 ? "text-navy" : ""}`}>{c.viewCount}回</span>
+                {c.lastViewedOn && <>・最終 {md(c.lastViewedOn)}</>}
+              </div>
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
 
   return (
     <div className="space-y-4">
@@ -88,8 +150,20 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
         />
       </div>
 
-      <div className="text-sm text-muted-foreground" data-testid="progress-count">
-        表示 {rows.length}名{rows.length !== matrix.users.length ? ` / 全${matrix.users.length}名` : ""}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm text-muted-foreground" data-testid="progress-count">
+          表示 {rows.length}名{rows.length !== matrix.users.length ? ` / 全${matrix.users.length}名` : ""}
+          {grouped && groups.length > 0 && <span>（{groups.length}店舗。店舗名を押すとスタッフが開きます）</span>}
+        </div>
+        {grouped && groups.length > 0 && (
+          <button
+            type="button"
+            className="h-9 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
+            onClick={() => setOpened(allOpen ? new Set() : new Set(groups.map((g) => g.key)))}
+          >
+            {allOpen ? "すべて閉じる" : "すべて開く"}
+          </button>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -99,7 +173,7 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
           <table className="w-full min-w-max border-collapse text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-left">
-                <th className="sticky left-0 z-10 bg-muted px-3 py-2.5 font-medium">スタッフ</th>
+                <th className="sticky left-0 z-10 bg-muted px-3 py-2.5 font-medium">{grouped ? "店舗 / スタッフ" : "スタッフ"}</th>
                 {videos.map((v) => (
                   <th key={v.id} className="min-w-[9.5rem] max-w-[13rem] px-3 py-2.5 align-top font-medium">
                     <div className="whitespace-normal leading-snug">{v.title}</div>
@@ -109,48 +183,54 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
               </tr>
             </thead>
             <tbody>
-              {rows.map((u) => (
-                <tr key={u.id} className="border-b last:border-0" data-testid="progress-row">
-                  <td className="sticky left-0 z-10 max-w-[11rem] bg-card px-3 py-2.5 align-top">
-                    <div className="font-medium">{u.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {showStoreTabs && <span className="block truncate">{u.storeName}</span>}
-                      {label(POSITIONS, u.position)}
-                    </div>
-                  </td>
-                  {videos.map((v) => {
-                    const c = matrix.cells[u.id][v.id];
-                    if (!c.target) {
-                      return (
-                        <td key={v.id} className="bg-muted/30 px-3 py-2.5 text-center text-xs text-muted-foreground">
-                          対象外
+              {!grouped && rows.map(staffRow)}
+              {grouped &&
+                groups.map((g) => {
+                  const open = opened.has(g.key);
+                  return (
+                    <Fragment key={g.key}>
+                      <tr
+                        className="cursor-pointer border-b bg-slate-50 hover:bg-slate-100"
+                        onClick={() => toggle(g.key)}
+                        data-testid="store-row"
+                        aria-expanded={open}
+                      >
+                        <td className="sticky left-0 z-10 max-w-[13rem] bg-slate-50 px-3 py-3 align-middle">
+                          <div className="flex items-center gap-1.5 font-semibold text-navy">
+                            {open ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                            <span className="leading-snug">{g.name}</span>
+                          </div>
+                          <div className="pl-[1.375rem] text-xs text-muted-foreground">{g.users.length}名</div>
                         </td>
-                      );
-                    }
-                    return (
-                      <td key={v.id} className="px-3 py-2.5 align-top">
-                        <div className="flex flex-wrap items-center gap-1">
-                          <StatusBadge status={c.status} percent={c.percent} />
-                          {c.required && !c.done && <Badge variant="bad">必修</Badge>}
-                          {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
-                        </div>
-                        {c.bestScore !== null && (
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
-                          </div>
-                        )}
-                        {c.completedOn && <div className="text-xs text-muted-foreground">初回完了 {md(c.completedOn)}</div>}
-                        {c.viewCount > 0 && (
-                          <div className="text-xs text-muted-foreground" data-testid="view-info">
-                            視聴 <span className={`font-semibold ${c.viewCount >= 2 ? "text-navy" : ""}`}>{c.viewCount}回</span>
-                            {c.lastViewedOn && <>・最終 {md(c.lastViewedOn)}</>}
-                          </div>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                        {videos.map((v) => {
+                          const targets = g.users.filter((u) => matrix.cells[u.id][v.id].target);
+                          const done = targets.filter((u) => matrix.cells[u.id][v.id].done).length;
+                          const reqLeft = targets.filter((u) => matrix.cells[u.id][v.id].required && !matrix.cells[u.id][v.id].done).length;
+                          if (targets.length === 0) {
+                            return (
+                              <td key={v.id} className="px-3 py-3 text-center text-xs text-muted-foreground">
+                                対象なし
+                              </td>
+                            );
+                          }
+                          const all = done === targets.length;
+                          return (
+                            <td key={v.id} className="px-3 py-3 align-middle">
+                              <div className={`text-sm font-semibold tabular-nums ${all ? "text-green-700" : "text-navy"}`}>
+                                完了 {done} / {targets.length}名
+                              </div>
+                              <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
+                                <div className={`h-full rounded-full ${all ? "bg-green-500" : "bg-navy"}`} style={{ width: `${(done / targets.length) * 100}%` }} />
+                              </div>
+                              {reqLeft > 0 && <div className="mt-1 text-xs font-medium text-red-600">必修の未完了 {reqLeft}名</div>}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                      {open && g.users.map(staffRow)}
+                    </Fragment>
+                  );
+                })}
             </tbody>
           </table>
         </div>
