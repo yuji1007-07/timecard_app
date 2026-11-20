@@ -63,7 +63,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <MobileMenu items={nav} userName={user.name ?? ""} roleName={sub} />
         </header>
-        <main className="flex-1 overflow-x-hidden bg-background p-4 md:p-6">{children}</main>
+        {/* overflow-x-clip: はみ出しは隠すが、中の「上で固定（sticky）」は効くようにする */}
+        <main className="flex-1 overflow-x-clip bg-background p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

@@ -98,6 +98,54 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
       return next;
     });
 
+  // ----- スマホ用（動画を1本だけ表示）。動画を選んでいなければ先頭の動画 -----
+  const mv = matrix.videos.find((v) => v.id === videoId) ?? matrix.videos[0] ?? null;
+  const mUsers = mv ? filtered.filter((u) => matrix.cells[u.id][mv.id].target) : [];
+  const mGroups = (() => {
+    const map = new Map<string, { key: string; name: string; users: typeof mUsers }>();
+    for (const u of mUsers) {
+      const key = u.storeId ?? "none";
+      if (!map.has(key)) map.set(key, { key, name: u.storeName, users: [] });
+      map.get(key)!.users.push(u);
+    }
+    return [...map.values()];
+  })();
+  const mDone = mv ? mUsers.filter((u) => matrix.cells[u.id][mv.id].done).length : 0;
+  const mReqLeft = mv ? mUsers.filter((u) => matrix.cells[u.id][mv.id].required && !matrix.cells[u.id][mv.id].done).length : 0;
+  const mAllOpen = mGroups.length > 0 && mGroups.every((g) => opened.has(g.key));
+  const hiddenStores = new Set(filtered.map((u) => u.storeId ?? "none")).size - mGroups.length;
+
+  const mobileStaff = (u: (typeof rows)[number]) => {
+    const c = matrix.cells[u.id][mv!.id];
+    return (
+      <div key={u.id} className="flex items-start gap-3 bg-card px-3 py-2.5" data-testid="mobile-staff">
+        <div className="min-w-0 flex-1">
+          <div className="font-medium">{u.name}</div>
+          <div className="text-xs text-muted-foreground">
+            {label(POSITIONS, u.position)}
+            {c.viewCount > 0 && (
+              <>
+                ・視聴 {c.viewCount}回{c.lastViewedOn && <>（最終 {md(c.lastViewedOn)}）</>}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <div className="flex flex-wrap justify-end gap-1">
+            {c.required && !c.done && <Badge variant="bad">必修</Badge>}
+            <StatusBadge status={c.status} percent={c.percent} />
+          </div>
+          {c.bestScore !== null && (
+            <div className="text-xs text-muted-foreground">
+              最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
+            </div>
+          )}
+          {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
+        </div>
+      </div>
+    );
+  };
+
   const staffRow = (u: (typeof rows)[number]) => (
     <tr key={u.id} className="border-b last:border-0" data-testid="progress-row">
       <td className={`sticky left-0 z-10 max-w-[11rem] bg-card py-2.5 pr-3 align-top ${grouped ? "pl-9" : "pl-3"}`}>
@@ -142,15 +190,104 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
     <div className="space-y-4">
       <div className="space-y-2">
         {tabs}
-        <FilterTabs
-          title="動画"
-          value={videoId}
-          onChange={setVideoId}
-          options={[{ value: "", label: "すべて" }, ...matrix.videos.map((v) => ({ value: v.id, label: v.title }))]}
-        />
+        <div className="hidden md:block">
+          <FilterTabs
+            title="動画"
+            value={videoId}
+            onChange={setVideoId}
+            options={[{ value: "", label: "すべて" }, ...matrix.videos.map((v) => ({ value: v.id, label: v.title }))]}
+          />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      {/* ===== スマホ用: 動画を1本選んで、縦に並べる（横スクロールなし・動画の選択は上に固定） ===== */}
+      <div className="md:hidden" data-testid="mobile-progress">
+        {mv ? (
+          <>
+            <div className="sticky top-[57px] z-20 -mx-5 border-y bg-card px-5 pb-2 pt-2 shadow-sm">
+              <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5">
+                {matrix.videos.map((v) => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    aria-pressed={mv.id === v.id}
+                    onClick={() => setVideoId(v.id)}
+                    className={`h-10 shrink-0 whitespace-nowrap rounded-lg border px-3 text-sm font-medium ${
+                      mv.id === v.id ? "border-navy bg-navy text-white" : "border-input bg-background"
+                    }`}
+                  >
+                    {v.title}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="min-w-0 text-xs text-muted-foreground" data-testid="mobile-summary">
+                  <span className="font-semibold text-navy">
+                    完了 {mDone} / {mUsers.length}名
+                  </span>
+                  {mReqLeft > 0 && <span className="ml-2 font-medium text-red-600">必修の未完了 {mReqLeft}名</span>}
+                  {mv.dueDate && <span className="ml-2">期限 {fmtDueDate(mv.dueDate)}</span>}
+                </div>
+                {grouped && mGroups.length > 0 && (
+                  <button
+                    type="button"
+                    className="h-8 shrink-0 rounded-md border border-input bg-background px-2.5 text-xs font-medium"
+                    onClick={() => setOpened(mAllOpen ? new Set() : new Set(mGroups.map((g) => g.key)))}
+                  >
+                    {mAllOpen ? "すべて閉じる" : "すべて開く"}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {mUsers.length === 0 ? (
+              <div className="mt-3 rounded-lg border p-6 text-center text-sm text-muted-foreground">この動画が対象のスタッフはいません。</div>
+            ) : grouped ? (
+              <div className="mt-3 space-y-2">
+                {mGroups.map((g) => {
+                  const open = opened.has(g.key);
+                  const done = g.users.filter((u) => matrix.cells[u.id][mv.id].done).length;
+                  const reqLeft = g.users.filter((u) => matrix.cells[u.id][mv.id].required && !matrix.cells[u.id][mv.id].done).length;
+                  const all = done === g.users.length;
+                  return (
+                    <div key={g.key} className="overflow-hidden rounded-lg border">
+                      <button
+                        type="button"
+                        onClick={() => toggle(g.key)}
+                        aria-expanded={open}
+                        data-testid="mobile-store"
+                        className="flex w-full items-center gap-2 bg-slate-50 px-3 py-3 text-left"
+                      >
+                        {open ? <ChevronDown className="h-4 w-4 shrink-0 text-navy" /> : <ChevronRight className="h-4 w-4 shrink-0 text-navy" />}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-semibold leading-snug text-navy">{g.name}</span>
+                          {reqLeft > 0 && <span className="text-xs font-medium text-red-600">必修の未完了 {reqLeft}名</span>}
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className={`block text-sm font-semibold tabular-nums ${all ? "text-green-700" : "text-navy"}`}>
+                            {done} / {g.users.length}名
+                          </span>
+                          <span className="mt-1 block h-1.5 w-16 overflow-hidden rounded-full bg-slate-200">
+                            <span className={`block h-full rounded-full ${all ? "bg-green-500" : "bg-navy"}`} style={{ width: `${(done / g.users.length) * 100}%` }} />
+                          </span>
+                        </span>
+                      </button>
+                      {open && <div className="divide-y">{g.users.map((u) => mobileStaff(u))}</div>}
+                    </div>
+                  );
+                })}
+                {hiddenStores > 0 && <p className="px-1 text-xs text-muted-foreground">この動画の対象者がいない店舗（{hiddenStores}店舗）は表示していません。</p>}
+              </div>
+            ) : (
+              <div className="mt-3 divide-y rounded-lg border">{mUsers.map((u) => mobileStaff(u))}</div>
+            )}
+          </>
+        ) : (
+          <div className="rounded-lg border p-6 text-center text-sm text-muted-foreground">公開中の動画がありません。</div>
+        )}
+      </div>
+
+      <div className="hidden flex-wrap items-center justify-between gap-2 md:flex">
         <div className="text-sm text-muted-foreground" data-testid="progress-count">
           表示 {rows.length}名{rows.length !== matrix.users.length ? ` / 全${matrix.users.length}名` : ""}
           {grouped && groups.length > 0 && <span>（{groups.length}店舗。店舗名を押すとスタッフが開きます）</span>}
@@ -167,9 +304,9 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">該当するスタッフはいません。</div>
+        <div className="hidden rounded-lg border p-8 text-center text-sm text-muted-foreground md:block">該当するスタッフはいません。</div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="hidden overflow-x-auto rounded-lg border md:block">
           <table className="w-full min-w-max border-collapse text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-left">
@@ -274,7 +411,31 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
       {rows.length === 0 ? (
         <div className="rounded-lg border p-8 text-center text-sm text-muted-foreground">必修動画の未完了者はいません。</div>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
+        <>
+        {/* スマホ用: カードで縦に並べる（横スクロールなし） */}
+        <div className="divide-y rounded-lg border md:hidden">
+          {rows.map(({ u, v, c, due, overdue }) => (
+            <div key={`${u.id}:${v.id}`} className={`px-3 py-2.5 ${overdue ? "bg-red-50" : "bg-card"}`} data-testid="incomplete-card">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="font-medium">{u.name}</div>
+                  <div className="text-xs text-muted-foreground">
+                    {showStoreTabs ? `${u.storeName} / ` : ""}
+                    {label(POSITIONS, u.position)}
+                  </div>
+                </div>
+                <StatusBadge status={c.status} percent={c.percent} className="shrink-0" />
+              </div>
+              <div className="mt-1 text-sm leading-snug">{v.title}</div>
+              <div className={`mt-0.5 text-xs ${overdue ? "font-bold text-red-600" : "text-muted-foreground"}`}>
+                {due ? `期限 ${fmtDueDate(due)}` : "期限なし"}
+                {overdue && "　期限切れ"}
+                {c.status === "COMPLETED" && v.hasQuiz && <span className="ml-2 font-normal text-muted-foreground">{c.attempts > 0 ? `テスト未合格（最高${c.bestScore}点）` : "テスト未受験"}</span>}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="hidden overflow-x-auto rounded-lg border md:block">
           <table className="w-full min-w-[40rem] text-sm">
             <thead>
               <tr className="border-b bg-muted/50 text-left">
@@ -313,6 +474,7 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

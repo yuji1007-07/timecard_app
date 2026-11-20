@@ -20,9 +20,10 @@ export function FilterTabs({
       active ? "border-navy bg-navy text-white" : "border-input bg-background hover:bg-muted"
     }`;
   return (
-    <div className="flex items-start gap-2">
+    <div className="flex min-w-0 items-start gap-2">
       {title && <div className="w-14 shrink-0 pt-3 text-xs font-medium text-muted-foreground">{title}</div>}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* スマホは1行で横スクロール（縦に場所を取らない）、PCは折り返し */}
+      <div className="no-scrollbar -mr-4 flex min-w-0 flex-1 items-center gap-2 overflow-x-auto pr-4 md:mr-0 md:flex-wrap md:overflow-visible md:pr-0">
         {options.map((o) => (
           <button key={o.value} type="button" aria-pressed={value === o.value} className={cls(value === o.value)} onClick={() => onChange(o.value)}>
             {o.label}
