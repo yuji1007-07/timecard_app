@@ -51,6 +51,16 @@ export const REQUIRED_SCOPES = {
   LEADERS: "責任者のみ必修",
 } as const;
 
+/**
+ * 理解度テスト（4択）を使うか。
+ * false の間はスタッフ画面・本部画面からテストを隠し、「視聴 → フィードバック提出」で完了とする。
+ * 問題と受験記録は DB に残してあるので、true に戻せばそのまま復活する。
+ */
+export const QUIZ_ENABLED = false;
+
+/** シリーズが未設定の動画の表示名 */
+export const NO_SERIES_LABEL = "その他";
+
 /** 再生した部分がこの割合以上で「視聴完了」 */
 export const WATCH_COMPLETE_RATIO = 0.9;
 /** テストの正答率がこの割合以上で「合格」 */

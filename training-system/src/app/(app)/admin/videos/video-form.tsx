@@ -17,6 +17,7 @@ const selectClass =
 export type EditableVideo = {
   id: string;
   title: string;
+  series: string;
   youtubeUrl: string;
   duration: string;
   category: string;
@@ -28,12 +29,24 @@ export type EditableVideo = {
   isPublished: boolean;
 };
 
-function Fields({ video }: { video?: EditableVideo }) {
+function Fields({ video, seriesOptions }: { video?: EditableVideo; seriesOptions: string[] }) {
   return (
     <>
       <div className="space-y-1.5 md:col-span-2">
         <Label>タイトル *</Label>
         <Input name="title" defaultValue={video?.title} required />
+      </div>
+      <div className="space-y-1.5 md:col-span-2">
+        <Label>シリーズ（まとめる単位）</Label>
+        <Input name="series" defaultValue={video?.series} list="series-options" placeholder="例: KPI、問診" autoComplete="off" maxLength={40} />
+        <datalist id="series-options">
+          {seriesOptions.map((s) => (
+            <option key={s} value={s} />
+          ))}
+        </datalist>
+        <p className="text-xs text-muted-foreground">
+          同じシリーズ名の動画は、一覧でタブにまとまります（例: 「KPI」「問診」）。すでにあるシリーズ名は候補から選べます。空欄だと「その他」に入ります。
+        </p>
       </div>
       <div className="space-y-1.5 md:col-span-2">
         <Label>YouTube の URL（限定公開）</Label>
@@ -100,7 +113,7 @@ function Fields({ video }: { video?: EditableVideo }) {
   );
 }
 
-export function NewVideoForm() {
+export function NewVideoForm({ seriesOptions }: { seriesOptions: string[] }) {
   const [open, setOpen] = useState(false);
   const [state, action, pending] = useActionState(createVideo, null);
   const router = useRouter();
@@ -118,7 +131,7 @@ export function NewVideoForm() {
         <Card className="mt-3 text-left">
           <CardContent className="pt-5">
             <form onSubmit={keepForm(action)} className="grid gap-4 md:grid-cols-2">
-              <Fields />
+              <Fields seriesOptions={seriesOptions} />
               <div className="flex items-center gap-3 md:col-span-2">
                 <Button type="submit" disabled={pending}>
                   {pending ? "登録中..." : "登録する"}
@@ -133,7 +146,7 @@ export function NewVideoForm() {
   );
 }
 
-export function EditVideoForm({ video }: { video: EditableVideo }) {
+export function EditVideoForm({ video, seriesOptions }: { video: EditableVideo; seriesOptions: string[] }) {
   const [state, action, pending] = useActionState(updateVideo, null);
   const router = useRouter();
   useEffect(() => {
@@ -142,7 +155,7 @@ export function EditVideoForm({ video }: { video: EditableVideo }) {
   return (
     <form onSubmit={keepForm(action)} className="grid gap-4 md:grid-cols-2">
       <input type="hidden" name="id" value={video.id} />
-      <Fields video={video} />
+      <Fields video={video} seriesOptions={seriesOptions} />
       <div className="flex items-center gap-3 md:col-span-2">
         <Button type="submit" disabled={pending}>
           {pending ? "保存中..." : "動画を更新する"}

@@ -67,6 +67,7 @@ model Video {
   youtubeUrl    String   @default("") // 限定公開URL。空なら「準備中」
   durationSec   Int      @default(0)
   category      String   @default("COMMON")
+  series        String   @default("") // シリーズ（例: KPI / 問診）。一覧をまとめるための分類。空は「その他」
   audience      String   @default("ALL")
   requiredScope String   @default("NONE")
   dueDate       String? // 期限（日本時間 YYYY-MM-DD）
@@ -186,13 +187,14 @@ model QuizAnswer {
   @@schema("training")
 }
 
-// ===== ふりかえり（1人×1動画で1件。書き直すと上書き） =====
+// ===== フィードバック（視聴後の「感想」と「今後の実用法」。1人×1動画で1件。書き直すと上書き） =====
 model Reflection {
   id         String   @id @default(cuid())
   userId     String
   videoId    String
-  selfRating Int // 自己評価 1〜5
-  action     String // 明日からやること（1行）
+  selfRating Int      @default(0) // 旧: 自己評価 1〜5（いまは使わない。0 = 未入力）
+  impression String   @default("") // 感想
+  action     String // 今後の実用法（どう活かすか）
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 

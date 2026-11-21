@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requireUser, type CurrentUser } from "@/lib/session";
 import { isVideoVisibleTo } from "@/lib/videos";
 import { getAssignment } from "@/lib/assignments";
-import { QUIZ_PASS_RATIO } from "@/lib/constants";
+import { QUIZ_ENABLED, QUIZ_PASS_RATIO } from "@/lib/constants";
 
 /** ログイン中の本人が見られる動画だけ返す（対象外なら null） */
 async function loadVisibleVideo(user: CurrentUser, videoId: string) {
@@ -30,6 +30,7 @@ export type QuizResult = {
 export async function submitQuiz(_prev: unknown, formData: FormData): Promise<QuizResult | { error: string }> {
   const user = await requireUser();
   const videoId = String(formData.get("videoId") ?? "");
+  if (!QUIZ_ENABLED) return { error: "現在、テストは行っていません。" };
   const video = await loadVisibleVideo(user, videoId);
   if (!video) return { error: "動画が見つかりません。" };
 
@@ -63,40 +64,42 @@ export async function submitQuiz(_prev: unknown, formData: FormData): Promise<Qu
   return { success: true, correct, total, percent, passed, results };
 }
 
-const reflectionSchema = z.object({
+const feedbackSchema = z.object({
   videoId: z.string().min(1),
-  selfRating: z.coerce.number().int().min(1, "自己評価を選んでください").max(5),
-  action: z.string().trim().min(1, "「明日からやること」を入力してください").max(200, "200文字以内で入力してください"),
+  impression: z.string().trim().min(1, "感想を入力してください").max(1000, "感想は1000文字以内で入力してください"),
+  action: z.string().trim().min(1, "今後の実用法を入力してください").max(1000, "今後の実用法は1000文字以内で入力してください"),
 });
 
-/** ふりかえり（自己評価と「明日からやること」）。テストを1回以上受けたあとに書ける */
-export async function saveReflection(_prev: unknown, formData: FormData) {
+/** フィードバック（感想と今後の実用法）。視聴完了後に書ける。提出すると研修として「完了」になる */
+export async function saveFeedback(_prev: unknown, formData: FormData) {
   const user = await requireUser();
-  const parsed = reflectionSchema.safeParse({
+  const parsed = feedbackSchema.safeParse({
     videoId: formData.get("videoId"),
-    selfRating: formData.get("selfRating") ?? 0,
+    impression: formData.get("impression") ?? "",
     action: formData.get("action") ?? "",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
-  const { videoId, selfRating } = parsed.data;
-  const action = parsed.data.action.replace(/\s*\n+\s*/g, " ");
+  const { videoId, impression, action } = parsed.data;
 
   const video = await loadVisibleVideo(user, videoId);
   if (!video) return { error: "動画が見つかりません。" };
-  const [attempts, questionCount, progress] = await Promise.all([
-    prisma.quizAttempt.count({ where: { userId: user.id, videoId } }),
-    prisma.quizQuestion.count({ where: { videoId } }),
-    prisma.viewProgress.findUnique({ where: { userId_videoId: { userId: user.id, videoId } } }),
-  ]);
+  const progress = await prisma.viewProgress.findUnique({ where: { userId_videoId: { userId: user.id, videoId } } });
   if (!progress?.completedAt) return { error: "動画の視聴が完了してから入力してください。" };
-  if (questionCount > 0 && attempts === 0) return { error: "先に理解度テストを受けてください。" };
+  if (QUIZ_ENABLED) {
+    const [attempts, questionCount] = await Promise.all([
+      prisma.quizAttempt.count({ where: { userId: user.id, videoId } }),
+      prisma.quizQuestion.count({ where: { videoId } }),
+    ]);
+    if (questionCount > 0 && attempts === 0) return { error: "先に理解度テストを受けてください。" };
+  }
 
+  // 自分の分だけを保存（userId は必ずログイン中の本人）
   await prisma.reflection.upsert({
     where: { userId_videoId: { userId: user.id, videoId } },
-    create: { userId: user.id, videoId, selfRating, action },
-    update: { selfRating, action },
+    create: { userId: user.id, videoId, impression, action },
+    update: { impression, action },
   });
-  return { success: true, message: "ふりかえりを保存しました。" };
+  return { success: true, message: "フィードバックを保存しました。" };
 }
 
 const inquirySchema = z.object({

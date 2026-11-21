@@ -5,7 +5,7 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { FilterTabs } from "@/components/filter-tabs";
 import { StatusBadge } from "@/components/status-badge";
 import { Badge } from "@/components/ui/badge";
-import { POSITIONS, POSITION_ORDER, label } from "@/lib/constants";
+import { NO_SERIES_LABEL, POSITIONS, POSITION_ORDER, QUIZ_ENABLED, label } from "@/lib/constants";
 import { fmtDueDate } from "@/lib/time";
 import type { ProgressMatrix } from "@/lib/progress";
 
@@ -72,8 +72,28 @@ const md = (date: string) => `${Number(date.slice(5, 7))}/${Number(date.slice(8,
 /** 進捗表：スタッフ×動画 */
 export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatrix; showStoreTabs: boolean }) {
   const { filtered, tabs, storeId } = useStaffFilter(matrix.users, showStoreTabs);
-  const [videoId, setVideoId] = useState("");
-  const videos = videoId ? matrix.videos.filter((v) => v.id === videoId) : matrix.videos;
+  // シリーズ（KPI・問診など）で動画をまとめる。2種類以上あるときだけタブを出す
+  const [series, setSeries] = useState("");
+  const seriesList = useMemo(() => [...new Set(matrix.videos.map((v) => v.series || NO_SERIES_LABEL))], [matrix.videos]);
+  const allVideos = useMemo(
+    () => (series ? matrix.videos.filter((v) => (v.series || NO_SERIES_LABEL) === series) : matrix.videos),
+    [matrix.videos, series]
+  );
+  const [pickedVideoId, setVideoId] = useState("");
+  const videoId = allVideos.some((v) => v.id === pickedVideoId) ? pickedVideoId : "";
+  const videos = videoId ? allVideos.filter((v) => v.id === videoId) : allVideos;
+  const seriesTabs =
+    seriesList.length > 1 ? (
+      <FilterTabs
+        title="シリーズ"
+        value={series}
+        onChange={(v) => {
+          setSeries(v);
+          setVideoId("");
+        }}
+        options={[{ value: "", label: "すべて", count: matrix.videos.length }, ...seriesList.map((sr) => ({ value: sr, label: sr, count: matrix.videos.filter((v) => (v.series || NO_SERIES_LABEL) === sr).length }))]}
+      />
+    ) : null;
   // 動画で絞ったときは、その動画が対象の人だけ表示
   const rows = videoId ? filtered.filter((u) => matrix.cells[u.id][videoId]?.target) : filtered;
 
@@ -99,7 +119,7 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
     });
 
   // ----- スマホ用（動画を1本だけ表示）。動画を選んでいなければ先頭の動画 -----
-  const mv = matrix.videos.find((v) => v.id === videoId) ?? matrix.videos[0] ?? null;
+  const mv = allVideos.find((v) => v.id === videoId) ?? allVideos[0] ?? null;
   const mUsers = mv ? filtered.filter((u) => matrix.cells[u.id][mv.id].target) : [];
   const mGroups = (() => {
     const map = new Map<string, { key: string; name: string; users: typeof mUsers }>();
@@ -135,11 +155,13 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
             {c.required && !c.done && <Badge variant="bad">必修</Badge>}
             <StatusBadge status={c.status} percent={c.percent} />
           </div>
-          {c.bestScore !== null && (
+          {QUIZ_ENABLED && c.bestScore !== null && (
             <div className="text-xs text-muted-foreground">
               最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
             </div>
           )}
+          {c.status === "COMPLETED" && !mv!.hasQuiz && <div className="text-xs font-medium text-blue-700">フィードバック未提出</div>}
+          {c.feedbackOn && <div className="text-xs text-muted-foreground">フィードバック {md(c.feedbackOn)}</div>}
           {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
         </div>
       </div>
@@ -168,12 +190,14 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
               {c.required && !c.done && <Badge variant="bad">必修</Badge>}
               {c.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定</Badge>}
             </div>
-            {c.bestScore !== null && (
+            {QUIZ_ENABLED && c.bestScore !== null && (
               <div className="mt-1 text-xs text-muted-foreground">
                 最高 <span className={`font-semibold ${c.status === "PASSED" ? "text-green-700" : "text-red-600"}`}>{c.bestScore}点</span>（{c.attempts}回）
               </div>
             )}
-            {c.completedOn && <div className="text-xs text-muted-foreground">初回完了 {md(c.completedOn)}</div>}
+            {c.status === "COMPLETED" && !v.hasQuiz && <div className="mt-1 text-xs font-medium text-blue-700">フィードバック未提出</div>}
+            {c.completedOn && <div className="text-xs text-muted-foreground">視聴完了 {md(c.completedOn)}</div>}
+            {c.feedbackOn && <div className="text-xs text-muted-foreground">フィードバック {md(c.feedbackOn)}</div>}
             {c.viewCount > 0 && (
               <div className="text-xs text-muted-foreground" data-testid="view-info">
                 視聴 <span className={`font-semibold ${c.viewCount >= 2 ? "text-navy" : ""}`}>{c.viewCount}回</span>
@@ -190,12 +214,13 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
     <div className="space-y-4">
       <div className="space-y-2">
         {tabs}
+        {seriesTabs}
         <div className="hidden md:block">
           <FilterTabs
             title="動画"
             value={videoId}
             onChange={setVideoId}
-            options={[{ value: "", label: "すべて" }, ...matrix.videos.map((v) => ({ value: v.id, label: v.title }))]}
+            options={[{ value: "", label: "すべて" }, ...allVideos.map((v) => ({ value: v.id, label: v.title }))]}
           />
         </div>
       </div>
@@ -206,7 +231,7 @@ export function ProgressTable({ matrix, showStoreTabs }: { matrix: ProgressMatri
           <>
             <div className="sticky top-[57px] z-20 -mx-5 border-y bg-card px-5 pb-2 pt-2 shadow-sm">
               <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5">
-                {matrix.videos.map((v) => (
+                {allVideos.map((v) => (
                   <button
                     key={v.id}
                     type="button"
@@ -430,7 +455,7 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
               <div className={`mt-0.5 text-xs ${overdue ? "font-bold text-red-600" : "text-muted-foreground"}`}>
                 {due ? `期限 ${fmtDueDate(due)}` : "期限なし"}
                 {overdue && "　期限切れ"}
-                {c.status === "COMPLETED" && v.hasQuiz && <span className="ml-2 font-normal text-muted-foreground">{c.attempts > 0 ? `テスト未合格（最高${c.bestScore}点）` : "テスト未受験"}</span>}
+                {c.status === "COMPLETED" && <span className="ml-2 font-normal text-muted-foreground">{!v.hasQuiz ? "フィードバック未提出" : c.attempts > 0 ? `テスト未合格（最高${c.bestScore}点）` : "テスト未受験"}</span>}
               </div>
             </div>
           ))}
@@ -465,8 +490,10 @@ export function IncompleteList({ matrix, showStoreTabs, today }: { matrix: Progr
                   </td>
                   <td className="px-3 py-2.5">
                     <StatusBadge status={c.status} percent={c.percent} />
-                    {c.status === "COMPLETED" && v.hasQuiz && (
-                      <div className="mt-1 text-xs text-muted-foreground">{c.attempts > 0 ? `テスト未合格（最高${c.bestScore}点）` : "テスト未受験"}</div>
+                    {c.status === "COMPLETED" && (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {!v.hasQuiz ? "フィードバック未提出" : c.attempts > 0 ? `テスト未合格（最高${c.bestScore}点）` : "テスト未受験"}
+                      </div>
                     )}
                   </td>
                 </tr>

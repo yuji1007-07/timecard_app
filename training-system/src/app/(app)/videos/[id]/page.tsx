@@ -6,14 +6,14 @@ import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { StatusBadge } from "@/components/status-badge";
-import { CATEGORIES, QUIZ_PASS_RATIO, WATCH_COMPLETE_RATIO, label } from "@/lib/constants";
+import { CATEGORIES, QUIZ_ENABLED, QUIZ_PASS_RATIO, WATCH_COMPLETE_RATIO, label } from "@/lib/constants";
 import { dueStateOf, effectiveDueDate, isRequiredFor, isVideoVisibleTo, statusOf } from "@/lib/videos";
 import { getAssignment } from "@/lib/assignments";
 import { fmtDueDate, fmtDuration, todayJst } from "@/lib/time";
 import { youtubeId } from "@/lib/youtube";
 import { VideoPlayer } from "./player";
 import { QuizSection, type QuizQuestionView } from "./quiz-section";
-import { ReflectionForm } from "./reflection-form";
+import { FeedbackForm } from "./feedback-form";
 import { InquiryForm } from "./inquiry-form";
 
 export const dynamic = "force-dynamic";
@@ -54,12 +54,12 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
   const ready = !!ytId && video.durationSec > 0;
   const completed = !!progress?.completedAt;
   const passed = attempts.some((a) => a.passed);
-  const status = statusOf(progress, passed);
+  const hasQuiz = QUIZ_ENABLED && video.questions.length > 0;
+  const status = statusOf(progress, { passed, hasQuiz, hasFeedback: !!reflection });
   const bestScore = attempts.length ? Math.max(...attempts.map((a) => a.percent)) : null;
   const required = isRequiredFor(video, viewer, assignment);
   const dueDate = effectiveDueDate(video, assignment);
   const dueState = dueStateOf(dueDate, todayJst());
-  const hasQuiz = video.questions.length > 0;
   const completePercent = Math.round(WATCH_COMPLETE_RATIO * 100);
   const passPercent = Math.round(QUIZ_PASS_RATIO * 100);
 
@@ -95,6 +95,7 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
       <div className="mb-4">
         <div className="mb-2 flex flex-wrap items-center gap-1.5">
           {required && <Badge variant="bad">必修</Badge>}
+          {video.series && <Badge className="border-transparent bg-navy/10 text-navy">{video.series}</Badge>}
           {assignment && <Badge className="border-transparent bg-purple-100 text-purple-800">あなたに指定</Badge>}
           <Badge variant="outline">{label(CATEGORIES, video.category)}</Badge>
           <StatusBadge status={status} percent={progress?.percent ?? 0} />
@@ -164,15 +165,24 @@ export default async function VideoPage({ params }: { params: Promise<{ id: stri
           </Card>
         )}
 
-        {/* 3. ふりかえり */}
-        {completed && (!hasQuiz || attempts.length > 0) && (
-          <Card id="reflection">
+        {/* 3. フィードバック（感想と今後の実用法）。提出すると研修として「完了」になる */}
+        {ready && (
+          <Card id="feedback" className={completed && !reflection ? "border-blue-300 ring-1 ring-blue-200" : ""}>
             <CardHeader>
-              <CardTitle>ふりかえり</CardTitle>
-              <CardDescription>自己評価と、明日からやることを1行で書いてください。</CardDescription>
+              <CardTitle>フィードバック{reflection ? "（提出済み）" : ""}</CardTitle>
+              <CardDescription>
+                動画を見た感想と、今後どう活かすかを書いてください。{reflection ? "書き直すこともできます。" : "提出すると「完了」になります。"}
+              </CardDescription>
             </CardHeader>
             <CardContent>
-              <ReflectionForm videoId={video.id} initialRating={reflection?.selfRating ?? null} initialAction={reflection?.action ?? ""} />
+              {completed && (!hasQuiz || attempts.length > 0) ? (
+                <FeedbackForm videoId={video.id} submitted={!!reflection} initialImpression={reflection?.impression ?? ""} initialAction={reflection?.action ?? ""} />
+              ) : (
+                <div className="flex items-center gap-3 rounded-lg bg-muted/60 p-4 text-sm text-muted-foreground" data-testid="feedback-locked">
+                  <Lock className="h-5 w-5 shrink-0" />
+                  {completed ? "先に理解度テストを受けてください。" : `動画を ${completePercent}%以上 視聴すると、フィードバックを書けます。`}
+                </div>
+              )}
             </CardContent>
           </Card>
         )}

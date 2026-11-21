@@ -36,11 +36,12 @@ export async function GET() {
         c.completedOn ?? "",
         c.lastViewedOn ?? "",
         c.viewCount,
+        c.feedbackOn ?? "",
         c.bestScore ?? "",
         c.attempts,
       ]);
     }
   }
-  const header = ["ブランド", "店舗", "氏名", "ユーザーID", "役職", "動画", "カテゴリ", "必修", "個人指定", "期限", "状態", "視聴%", "初回完了日", "最終視聴日", "視聴回数", "テスト最高点(%)", "受験回数"];
+  const header = ["ブランド", "店舗", "氏名", "ユーザーID", "役職", "動画", "カテゴリ", "必修", "個人指定", "期限", "状態", "視聴%", "初回完了日", "最終視聴日", "視聴回数", "フィードバック提出日", "テスト最高点(%)", "受験回数"];
   return csvResponse(`training_progress_${todayJst()}.csv`, buildCsv(header, rows));
 }

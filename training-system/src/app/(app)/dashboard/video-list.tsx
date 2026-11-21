@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FilterTabs } from "@/components/filter-tabs";
 import { StatusBadge } from "@/components/status-badge";
-import { CATEGORIES, label } from "@/lib/constants";
+import { CATEGORIES, NO_SERIES_LABEL, label } from "@/lib/constants";
 import { fmtDueDate, fmtDuration } from "@/lib/time";
 import type { DueState, ProgressStatus } from "@/lib/videos";
 
@@ -15,6 +15,7 @@ export type VideoItem = {
   id: string;
   title: string;
   category: string;
+  series: string;
   durationSec: number;
   thumbnail: string | null;
   ready: boolean;
@@ -31,8 +32,12 @@ export type VideoItem = {
   priority: number;
 };
 
-export function VideoList({ items }: { items: VideoItem[] }) {
+export function VideoList({ items: all }: { items: VideoItem[] }) {
   const [tab, setTab] = useState("all");
+  const [series, setSeries] = useState("");
+  // シリーズ（KPI・問診など）。2種類以上あるときだけタブを出す
+  const seriesList = useMemo(() => [...new Set(all.map((i) => i.series || NO_SERIES_LABEL))], [all]);
+  const items = useMemo(() => (series ? all.filter((i) => (i.series || NO_SERIES_LABEL) === series) : all), [all, series]);
   const counts = useMemo(
     () => ({
       all: items.length,
@@ -43,7 +48,7 @@ export function VideoList({ items }: { items: VideoItem[] }) {
     [items]
   );
   const shown = items.filter((i) => (tab === "required" ? i.required : tab === "todo" ? !i.done : tab === "done" ? i.done : true));
-  const urgent = items.filter((i) => i.required && !i.done && (i.dueState === "OVERDUE" || i.dueState === "SOON"));
+  const urgent = all.filter((i) => i.required && !i.done && (i.dueState === "OVERDUE" || i.dueState === "SOON"));
 
   return (
     <div className="space-y-4">
@@ -56,6 +61,13 @@ export function VideoList({ items }: { items: VideoItem[] }) {
         </div>
       )}
 
+      {seriesList.length > 1 && (
+        <FilterTabs
+          value={series}
+          onChange={setSeries}
+          options={[{ value: "", label: "すべて", count: all.length }, ...seriesList.map((s) => ({ value: s, label: s, count: all.filter((i) => (i.series || NO_SERIES_LABEL) === s).length }))]}
+        />
+      )}
       <FilterTabs
         value={tab}
         onChange={setTab}
@@ -102,6 +114,7 @@ export function VideoList({ items }: { items: VideoItem[] }) {
                   <div className="flex flex-wrap items-center gap-1.5">
                     {v.required && <Badge variant="bad">必修</Badge>}
                     {v.assigned && <Badge className="border-transparent bg-purple-100 text-purple-800">あなたに指定</Badge>}
+                    {v.series && <Badge className="border-transparent bg-navy/10 text-navy">{v.series}</Badge>}
                     <Badge variant="outline">{label(CATEGORIES, v.category)}</Badge>
                     {!v.isPublished && <Badge variant="muted">非公開</Badge>}
                     {!v.ready && <Badge variant="muted">準備中</Badge>}
@@ -109,6 +122,7 @@ export function VideoList({ items }: { items: VideoItem[] }) {
                   <div className="text-base font-semibold leading-snug text-navy">{v.title}</div>
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge status={v.status} percent={v.percent} />
+                    {v.status === "COMPLETED" && <span className="text-xs font-medium text-blue-700">フィードバックを書くと完了</span>}
                     {v.bestScore !== null && <span className="text-xs text-muted-foreground">テスト最高 {v.bestScore}点</span>}
                   </div>
                   {v.dueDate && (

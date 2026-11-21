@@ -42,4 +42,16 @@ export const UPGRADE_SQL: { name: string; sql: string }[] = [
       END IF;
     END $$`,
   },
+  {
+    name: "Video.series（シリーズ分類）",
+    sql: `ALTER TABLE "training"."Video" ADD COLUMN IF NOT EXISTS "series" TEXT NOT NULL DEFAULT ''`,
+  },
+  {
+    name: "Reflection.impression（感想）",
+    sql: `ALTER TABLE "training"."Reflection" ADD COLUMN IF NOT EXISTS "impression" TEXT NOT NULL DEFAULT ''`,
+  },
+  {
+    name: "Reflection.selfRating の初期値",
+    sql: `ALTER TABLE "training"."Reflection" ALTER COLUMN "selfRating" SET DEFAULT 0`,
+  },
 ];

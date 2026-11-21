@@ -11,6 +11,7 @@ const keys = <T extends Record<string, string>>(o: T) => Object.keys(o) as [keyo
 
 const videoSchema = z.object({
   title: z.string().trim().min(1, "タイトルは必須です").max(200),
+  series: z.string().trim().max(40, "シリーズ名は40文字以内にしてください"),
   youtubeUrl: z.string().trim().max(500),
   duration: z.string().trim().min(1, "動画の長さを入力してください（例: 5:15）"),
   category: z.enum(keys(CATEGORIES)),
@@ -25,6 +26,7 @@ const videoSchema = z.object({
 function parseVideo(formData: FormData) {
   const parsed = videoSchema.safeParse({
     title: formData.get("title") ?? "",
+    series: formData.get("series") ?? "",
     youtubeUrl: formData.get("youtubeUrl") ?? "",
     duration: formData.get("duration") ?? "",
     category: formData.get("category"),
@@ -44,6 +46,7 @@ function parseVideo(formData: FormData) {
   return {
     data: {
       title: d.title,
+      series: d.series,
       youtubeUrl: d.youtubeUrl,
       durationSec,
       category: d.category,
@@ -62,7 +65,7 @@ export async function createVideo(_prev: unknown, formData: FormData) {
   const r = parseVideo(formData);
   if ("error" in r) return { error: r.error };
   const video = await prisma.video.create({ data: r.data });
-  return { success: true, message: "動画を登録しました。続けてテスト問題を登録できます。", id: video.id };
+  return { success: true, message: "動画を登録しました。", id: video.id };
 }
 
 export async function updateVideo(_prev: unknown, formData: FormData) {

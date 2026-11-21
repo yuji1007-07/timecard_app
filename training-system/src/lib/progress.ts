@@ -2,7 +2,7 @@
 // 必ず呼び出し側で requireAdmin / requireStoreManager を通し、店長には storeId を固定して渡すこと。
 
 import { prisma } from "@/lib/prisma";
-import { POSITION_ORDER } from "@/lib/constants";
+import { POSITION_ORDER, QUIZ_ENABLED } from "@/lib/constants";
 import { effectiveDueDate, isDone, isRequiredFor, isVideoVisibleTo, statusOf, type ProgressStatus } from "@/lib/videos";
 import { getAssignmentsForUsers } from "@/lib/assignments";
 import { fmtDate } from "@/lib/time";
@@ -21,6 +21,7 @@ export type MatrixVideo = {
   id: string;
   title: string;
   category: string;
+  series: string;
   dueDate: string | null;
   hasQuiz: boolean;
 };
@@ -35,6 +36,7 @@ export type MatrixCell = {
   percent: number; // 視聴％
   bestScore: number | null; // テスト最高点（％）
   attempts: number;
+  feedbackOn: string | null; // フィードバック提出日
   completedOn: string | null; // 初回視聴完了日
   lastViewedOn: string | null;
   viewCount: number;
@@ -78,11 +80,13 @@ export async function getProgressMatrix(scope: { storeId?: string } = {}): Promi
   });
 
   const assignmentMap = await getAssignmentsForUsers(userIds);
+  const feedbacks = await prisma.reflection.findMany({ where: { userId: { in: userIds } }, select: { userId: true, videoId: true, updatedAt: true } });
 
   const key = (u: string, v: string) => `${u}:${v}`;
   const progressMap = new Map(progresses.map((p) => [key(p.userId, p.videoId), p]));
   const attemptMap = new Map(attempts.map((a) => [key(a.userId, a.videoId), a]));
   const passedSet = new Set(passedRows.map((a) => key(a.userId, a.videoId)));
+  const feedbackMap = new Map(feedbacks.map((f) => [key(f.userId, f.videoId), f.updatedAt]));
 
   const sortedUsers = [...users].sort((a, b) => {
     const sa = a.store?.sortOrder ?? 9999;
@@ -101,16 +105,18 @@ export async function getProgressMatrix(scope: { storeId?: string } = {}): Promi
     for (const v of videos) {
       const p = progressMap.get(key(u.id, v.id));
       const a = attemptMap.get(key(u.id, v.id));
-      const hasQuiz = v._count.questions > 0;
+      const hasQuiz = QUIZ_ENABLED && v._count.questions > 0;
+      const fb = feedbackMap.get(key(u.id, v.id)) ?? null;
       const asg = assignmentMap.get(key(u.id, v.id)) ?? null;
-      const status = statusOf(p, passedSet.has(key(u.id, v.id)));
+      const status = statusOf(p, { passed: passedSet.has(key(u.id, v.id)), hasQuiz, hasFeedback: !!fb });
       cells[u.id][v.id] = {
         target: isVideoVisibleTo(v, viewer, !!asg),
         required: isRequiredFor(v, viewer, asg),
         assigned: !!asg,
         dueDate: effectiveDueDate(v, asg),
         status,
-        done: isDone(status, hasQuiz),
+        done: isDone(status),
+        feedbackOn: fb ? fmtDate(fb) : null,
         percent: p?.percent ?? 0,
         bestScore: a?._max.percent ?? null,
         attempts: a?._count._all ?? 0,
@@ -135,8 +141,9 @@ export async function getProgressMatrix(scope: { storeId?: string } = {}): Promi
       id: v.id,
       title: v.title,
       category: v.category,
+      series: v.series,
       dueDate: v.dueDate,
-      hasQuiz: v._count.questions > 0,
+      hasQuiz: QUIZ_ENABLED && v._count.questions > 0,
     })),
     cells,
   };

@@ -6,6 +6,7 @@ import { getAssignmentsForUser } from "@/lib/assignments";
 import { todayJst } from "@/lib/time";
 import { youtubeThumbnail } from "@/lib/youtube";
 import { VideoList, type VideoItem } from "./video-list";
+import { QUIZ_ENABLED } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ export default async function DashboardPage() {
   const today = todayJst();
 
   // 自分の記録だけを読む（userId は必ずログイン中の本人）
-  const [videos, progresses, attempts, assignments] = await Promise.all([
+  const [videos, progresses, attempts, assignments, feedbacks] = await Promise.all([
     prisma.video.findMany({
       orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
       include: { _count: { select: { questions: true } } },
@@ -23,7 +24,9 @@ export default async function DashboardPage() {
     prisma.viewProgress.findMany({ where: { userId: user.id } }),
     prisma.quizAttempt.findMany({ where: { userId: user.id }, select: { videoId: true, percent: true, passed: true } }),
     getAssignmentsForUser(user.id),
+    prisma.reflection.findMany({ where: { userId: user.id }, select: { videoId: true } }),
   ]);
+  const feedbackSet = new Set(feedbacks.map((f) => f.videoId));
   const progressMap = new Map(progresses.map((p) => [p.videoId, p]));
 
   const items: VideoItem[] = videos
@@ -32,9 +35,9 @@ export default async function DashboardPage() {
       const mine = attempts.filter((a) => a.videoId === v.id);
       const passed = mine.some((a) => a.passed);
       const p = progressMap.get(v.id);
-      const status = statusOf(p, passed);
-      const hasQuiz = v._count.questions > 0;
-      const done = isDone(status, hasQuiz);
+      const hasQuiz = QUIZ_ENABLED && v._count.questions > 0;
+      const status = statusOf(p, { passed, hasQuiz, hasFeedback: feedbackSet.has(v.id) });
+      const done = isDone(status);
       const assignment = assignments.get(v.id) ?? null;
       const required = isRequiredFor(v, viewer, assignment);
       const dueDate = effectiveDueDate(v, assignment);
@@ -45,6 +48,7 @@ export default async function DashboardPage() {
         id: v.id,
         title: v.title,
         category: v.category,
+        series: v.series,
         durationSec: v.durationSec,
         thumbnail: youtubeThumbnail(v.youtubeUrl),
         ready: !!youtubeThumbnail(v.youtubeUrl) && v.durationSec > 0,
@@ -55,7 +59,7 @@ export default async function DashboardPage() {
         dueState,
         status,
         percent: p?.percent ?? 0,
-        bestScore: mine.length ? Math.max(...mine.map((a) => a.percent)) : null,
+        bestScore: QUIZ_ENABLED && mine.length ? Math.max(...mine.map((a) => a.percent)) : null,
         hasQuiz,
         done,
         priority,
@@ -70,7 +74,7 @@ export default async function DashboardPage() {
         description={
           user.isAdmin
             ? "本部はすべての動画を確認できます（スタッフには対象の動画だけが表示されます）。"
-            : "あなたが対象の動画です。視聴 → 理解度テスト → ふりかえり の順に進めてください。"
+            : "あなたが対象の動画です。視聴したあと、感想と今後の実用法（フィードバック）を書くと完了になります。"
         }
       />
       <VideoList items={items} />

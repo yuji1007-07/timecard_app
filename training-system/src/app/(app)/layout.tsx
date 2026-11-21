@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { SidebarNav, type NavItem } from "@/components/sidebar-nav";
 import { LogoutButton } from "@/components/logout-button";
 import { MobileMenu } from "@/components/mobile-menu";
-import { APP_NAME, COMPANY_NAME, POSITIONS, ROLES, label } from "@/lib/constants";
+import { APP_NAME, COMPANY_NAME, POSITIONS, QUIZ_ENABLED, ROLES, label } from "@/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -18,17 +18,22 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       { href: "/dashboard", label: "研修動画", icon: "video" },
       { href: "/admin/progress", label: "進捗表", icon: "progress" },
       { href: "/admin/incomplete", label: "必修の未完了者", icon: "alert" },
-      { href: "/admin/quiz-stats", label: "テストの正答率", icon: "quiz" },
-      { href: "/admin/reflections", label: "ふりかえり一覧", icon: "reflection" },
+      ...(QUIZ_ENABLED ? [{ href: "/admin/quiz-stats", label: "テストの正答率", icon: "quiz" } as NavItem] : []),
+      { href: "/admin/reflections", label: "フィードバック一覧", icon: "reflection" },
       { href: "/admin/inquiries", label: "質問箱", icon: "inbox", badge: unanswered },
-      { href: "/admin/videos", label: "動画・テスト管理", icon: "manage" },
+      { href: "/admin/videos", label: QUIZ_ENABLED ? "動画・テスト管理" : "動画管理", icon: "manage" },
       { href: "/admin/users", label: "スタッフ管理", icon: "users" },
       { href: "/account", label: "アカウント設定", icon: "account" },
     ];
   } else {
     nav = [
       { href: "/dashboard", label: "研修動画", icon: "video" },
-      ...(user.isStoreManager ? [{ href: "/store-progress", label: "自店舗の進捗", icon: "progress" } as NavItem] : []),
+      ...(user.isStoreManager
+        ? [
+            { href: "/store-progress", label: "自店舗の進捗", icon: "progress" } as NavItem,
+            { href: "/store-feedback", label: "自店舗のフィードバック", icon: "reflection" } as NavItem,
+          ]
+        : []),
       { href: "/account", label: "アカウント設定", icon: "account" },
     ];
   }

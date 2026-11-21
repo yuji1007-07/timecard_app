@@ -2,6 +2,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { LEADER_POSITIONS } from "@/lib/constants";
+import { ensureSchema } from "@/lib/ensure-schema";
 
 export type SessionUser = {
   id: string;
@@ -34,6 +35,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const su = await getSessionUser();
   if (!su) return null;
+  await ensureSchema();
   const dbUser = await prisma.user.findUnique({ where: { id: su.id }, include: { store: true } });
   if (!dbUser || !dbUser.isActive) return null;
   const isAdmin = dbUser.role === "ADMIN";

@@ -17,7 +17,7 @@ export default async function StoreProgressPage() {
     <div>
       <PageHeader
         title="自店舗の進捗"
-        description={`${user.storeName ?? ""} のスタッフの視聴・テストの状況です。未完了の方への声かけにお使いください。`}
+        description={`${user.storeName ?? ""} のスタッフの視聴・フィードバックの状況です。未完了の方への声かけにお使いください。`}
         action={
           <Button asChild variant="outline">
             <a href="/api/export/progress" download>

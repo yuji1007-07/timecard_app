@@ -55,27 +55,35 @@ export function effectiveDueDate(video: { dueDate: string | null }, assignment: 
   return assignment?.dueDate ?? video.dueDate;
 }
 
+// NOT_STARTED: 未視聴 / IN_PROGRESS: 視聴中 / COMPLETED: 視聴は完了（フィードバックやテストがまだ） / PASSED: 研修として完了
 export type ProgressStatus = "NOT_STARTED" | "IN_PROGRESS" | "COMPLETED" | "PASSED";
 
 export const STATUS_LABELS: Record<ProgressStatus, string> = {
   NOT_STARTED: "未視聴",
   IN_PROGRESS: "視聴中",
-  COMPLETED: "視聴完了",
-  PASSED: "テスト合格",
+  COMPLETED: "視聴完了（フィードバック待ち）",
+  PASSED: "完了",
 };
 
+/**
+ * 進捗の状態。研修の「完了」は、視聴完了 ＋ フィードバック提出（＋テストを使う動画は合格）。
+ *  - hasQuiz: その動画でテストを使うか（QUIZ_ENABLED が false なら常に false を渡す）
+ */
 export function statusOf(
   progress: { percent: number; completedAt: Date | string | null } | null | undefined,
-  passed: boolean
+  opts: { passed: boolean; hasQuiz: boolean; hasFeedback: boolean }
 ): ProgressStatus {
-  if (progress?.completedAt) return passed ? "PASSED" : "COMPLETED";
+  if (progress?.completedAt) {
+    if (opts.hasQuiz && !opts.passed) return "COMPLETED";
+    return opts.hasFeedback ? "PASSED" : "COMPLETED";
+  }
   if (progress && progress.percent > 0) return "IN_PROGRESS";
   return "NOT_STARTED";
 }
 
-/** 研修として「完了」か。テストがある動画は合格まで、無い動画は視聴完了まで */
-export function isDone(status: ProgressStatus, hasQuiz: boolean): boolean {
-  return hasQuiz ? status === "PASSED" : status === "COMPLETED" || status === "PASSED";
+/** 研修として「完了」か */
+export function isDone(status: ProgressStatus): boolean {
+  return status === "PASSED";
 }
 
 export type DueState = "OVERDUE" | "SOON" | "LATER" | "NONE";

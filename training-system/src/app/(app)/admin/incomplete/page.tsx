@@ -14,7 +14,7 @@ export default async function AdminIncompletePage() {
     <div>
       <PageHeader
         title="必修の未完了者"
-        description="必修動画がまだ完了していないスタッフです（テストがある動画は合格まで、無い動画は視聴完了までを「完了」とします）。期限切れは赤で表示します。"
+        description="必修動画がまだ完了していないスタッフです（動画を見て、フィードバックを提出するまでを「完了」とします）。期限切れは赤で表示します。"
       />
       <Card>
         <CardContent className="pt-5">

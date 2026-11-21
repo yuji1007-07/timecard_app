@@ -1,14 +1,11 @@
-import Link from "next/link";
 import { requireAdmin } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { AUDIENCES, CATEGORIES, REQUIRED_SCOPES, label } from "@/lib/constants";
+import { CATEGORIES, QUIZ_ENABLED, REQUIRED_SCOPES, label } from "@/lib/constants";
 import { fmtDueDate, fmtDuration } from "@/lib/time";
 import { youtubeId } from "@/lib/youtube";
 import { NewVideoForm } from "./video-form";
+import { VideoAdminList, type AdminVideoRow } from "./video-admin-list";
 
 export const dynamic = "force-dynamic";
 
@@ -18,44 +15,34 @@ export default async function AdminVideosPage() {
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
     include: { _count: { select: { questions: true, assignments: true } } },
   });
+  const seriesOptions = [...new Set(videos.map((v) => v.series).filter(Boolean))];
+  const rows: AdminVideoRow[] = videos.map((v) => ({
+    id: v.id,
+    title: v.title,
+    series: v.series,
+    categoryLabel: label(CATEGORIES, v.category),
+    audienceLabel: v.audience === "ALL" ? "全員" : v.audience === "ASSIGNED" ? "個人指定のみ" : "責任者",
+    requiredLabel: v.requiredScope !== "NONE" ? label(REQUIRED_SCOPES, v.requiredScope) : null,
+    assignments: v._count.assignments,
+    hasUrl: !!youtubeId(v.youtubeUrl),
+    isPublished: v.isPublished,
+    meta: [
+      `長さ ${fmtDuration(v.durationSec)}`,
+      ...(QUIZ_ENABLED ? [`テスト ${v._count.questions}問`] : []),
+      ...(v.dueDate ? [`期限 ${fmtDueDate(v.dueDate)}`] : []),
+      `並び順 ${v.sortOrder}`,
+    ].join("・"),
+  }));
   return (
     <div>
-      <PageHeader title="動画・テスト管理" description="研修動画とテスト問題の登録・編集ができます。YouTube の URL を入れると、スタッフが視聴できるようになります。" />
+      <PageHeader
+        title={QUIZ_ENABLED ? "動画・テスト管理" : "動画管理"}
+        description="研修動画の登録・編集ができます。YouTube の URL を入れると、スタッフが視聴できるようになります。「シリーズ」を付けると、一覧をタブでまとめられます。"
+      />
       <div className="mb-6">
-        <NewVideoForm />
+        <NewVideoForm seriesOptions={seriesOptions} />
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>動画一覧（{videos.length}本）</CardTitle>
-        </CardHeader>
-        <CardContent className="divide-y p-0">
-          {videos.map((v) => (
-            <div key={v.id} className="flex flex-wrap items-center gap-3 px-5 py-4" data-testid="admin-video-row">
-              <div className="min-w-0 flex-1 basis-64">
-                <div className="font-semibold text-navy">{v.title}</div>
-                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                  <Badge variant="outline">{label(CATEGORIES, v.category)}</Badge>
-                  <Badge variant="outline">対象: {v.audience === "ALL" ? "全員" : v.audience === "ASSIGNED" ? "個人指定のみ" : "責任者"}</Badge>
-                  {v._count.assignments > 0 && <Badge className="border-transparent bg-purple-100 text-purple-800">個人指定 {v._count.assignments}名</Badge>}
-                  {v.requiredScope !== "NONE" && <Badge variant="bad">{label(REQUIRED_SCOPES, v.requiredScope)}</Badge>}
-                  {youtubeId(v.youtubeUrl) ? <Badge variant="good">URL登録済み</Badge> : <Badge variant="warn">準備中（URL未登録）</Badge>}
-                  {!v.isPublished && <Badge variant="muted">非公開</Badge>}
-                </div>
-                <div className="mt-1.5 text-xs text-muted-foreground">
-                  長さ {fmtDuration(v.durationSec)}・テスト {v._count.questions}問{v.dueDate ? `・期限 ${fmtDueDate(v.dueDate)}` : ""}・並び順 {v.sortOrder}
-                  <span className="hidden">{label(AUDIENCES, v.audience)}</span>
-                </div>
-              </div>
-              <Button asChild variant="outline">
-                <Link href={`/admin/videos/${v.id}`} prefetch={false}>
-                  編集・テスト問題
-                </Link>
-              </Button>
-            </div>
-          ))}
-          {videos.length === 0 && <div className="p-8 text-center text-sm text-muted-foreground">動画がまだありません。</div>}
-        </CardContent>
-      </Card>
+      <VideoAdminList videos={rows} editLabel={QUIZ_ENABLED ? "編集・テスト問題" : "編集・個人指定"} />
     </div>
   );
 }

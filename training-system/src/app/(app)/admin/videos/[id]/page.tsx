@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { QUIZ_PASS_RATIO } from "@/lib/constants";
+import { QUIZ_ENABLED, QUIZ_PASS_RATIO } from "@/lib/constants";
 import { fmtDuration } from "@/lib/time";
 import { EditVideoForm } from "../video-form";
 import { NewQuestionForm, QuestionEditor } from "./question-form";
@@ -22,6 +22,8 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
   const video = await prisma.video.findUnique({ where: { id }, include: { questions: { orderBy: { sortOrder: "asc" } } } });
   if (!video) notFound();
 
+  const seriesRows = await prisma.video.findMany({ select: { series: true }, distinct: ["series"] });
+  const seriesOptions = seriesRows.map((r) => r.series).filter(Boolean);
   const [assignments, staff] = await Promise.all([
     prisma.videoAssignment.findMany({ where: { videoId: id }, include: { user: { include: { store: true } } }, orderBy: { createdAt: "asc" } }),
     prisma.user.findMany({ where: { role: "STAFF", isActive: true }, include: { store: true }, orderBy: [{ store: { sortOrder: "asc" } }, { name: "asc" }] }),
@@ -31,11 +33,11 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
     <div className="mx-auto max-w-4xl">
       <Link href="/admin/videos" prefetch={false} className="mb-3 inline-flex h-10 items-center gap-1 text-sm text-muted-foreground hover:text-navy">
         <ChevronLeft className="h-4 w-4" />
-        動画・テスト管理へ
+        動画の一覧へ
       </Link>
       <PageHeader
         title={video.title}
-        description="動画の内容とテスト問題を編集します。"
+        description="動画の内容と、個人指定を編集します。"
         action={
           <Button asChild variant="outline">
             <Link href={`/videos/${video.id}`} prefetch={false}>
@@ -51,9 +53,11 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
           </CardHeader>
           <CardContent>
             <EditVideoForm
+              seriesOptions={seriesOptions}
               video={{
                 id: video.id,
                 title: video.title,
+                series: video.series,
                 youtubeUrl: video.youtubeUrl,
                 duration: fmtDuration(video.durationSec),
                 category: video.category,
@@ -97,6 +101,7 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
           </CardContent>
         </Card>
 
+        {QUIZ_ENABLED && (
         <Card>
           <CardHeader>
             <CardTitle>テスト問題（{video.questions.length}問）</CardTitle>
@@ -116,6 +121,7 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
             <NewQuestionForm videoId={video.id} />
           </CardContent>
         </Card>
+        )}
       </div>
     </div>
   );
