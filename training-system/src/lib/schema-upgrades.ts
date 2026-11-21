@@ -55,3 +55,19 @@ export const UPGRADE_SQL: { name: string; sql: string }[] = [
     sql: `ALTER TABLE "training"."Reflection" ALTER COLUMN "selfRating" SET DEFAULT 0`,
   },
 ];
+
+/**
+ * 1回だけ実行するデータの手直し（依頼を受けて本番データをまとめて直すとき用）。
+ * 実行済みの id は "training"."AppliedFix" に記録され、二度と実行されない。
+ * 既存データを消す SQL は書かないこと。
+ */
+export const ONE_TIME_FIXES: { id: string; name: string; sql: string[] }[] = [
+  {
+    id: "2026-11-21-series-initial",
+    name: "シリーズ未設定の動画を振り分け（問診のコツ・初診フィードバック → 問診、それ以外 → KPI）",
+    sql: [
+      `UPDATE "training"."Video" SET "series" = '問診' WHERE "series" = '' AND ("title" LIKE '問診%' OR "title" LIKE '初診フィードバック%')`,
+      `UPDATE "training"."Video" SET "series" = 'KPI' WHERE "series" = ''`,
+    ],
+  },
+];
