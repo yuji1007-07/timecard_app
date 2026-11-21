@@ -25,7 +25,6 @@ export type EditableVideo = {
   requiredScope: string;
   dueDate: string;
   description: string;
-  sortOrder: number;
   isPublished: boolean;
 };
 
@@ -93,10 +92,6 @@ function Fields({ video, seriesOptions }: { video?: EditableVideo; seriesOptions
       <div className="space-y-1.5">
         <Label>期限</Label>
         <Input name="dueDate" type="date" defaultValue={video?.dueDate} />
-      </div>
-      <div className="space-y-1.5">
-        <Label>並び順（小さいほど上）</Label>
-        <Input name="sortOrder" type="number" defaultValue={video?.sortOrder ?? 0} />
       </div>
       <div className="space-y-1.5">
         <Label>公開 *</Label>

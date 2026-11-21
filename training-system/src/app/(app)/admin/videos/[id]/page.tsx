@@ -65,7 +65,6 @@ export default async function AdminVideoEditPage({ params }: { params: Promise<{
                 requiredScope: video.requiredScope,
                 dueDate: video.dueDate ?? "",
                 description: video.description,
-                sortOrder: video.sortOrder,
                 isPublished: video.isPublished,
               }}
             />

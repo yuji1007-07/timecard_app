@@ -19,7 +19,6 @@ const videoSchema = z.object({
   requiredScope: z.enum(keys(REQUIRED_SCOPES)),
   dueDate: z.string().trim(),
   description: z.string().trim().max(4000),
-  sortOrder: z.coerce.number().int().min(0).max(100000).catch(0),
   isPublished: z.enum(["1", "0"]),
 });
 
@@ -34,7 +33,6 @@ function parseVideo(formData: FormData) {
     requiredScope: formData.get("requiredScope"),
     dueDate: formData.get("dueDate") ?? "",
     description: formData.get("description") ?? "",
-    sortOrder: formData.get("sortOrder") ?? 0,
     isPublished: formData.get("isPublished") ?? "1",
   });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -54,7 +52,6 @@ function parseVideo(formData: FormData) {
       requiredScope: d.requiredScope,
       dueDate: d.dueDate || null,
       description: d.description,
-      sortOrder: d.sortOrder,
       isPublished: d.isPublished === "1",
     },
   };
@@ -64,7 +61,9 @@ export async function createVideo(_prev: unknown, formData: FormData) {
   await requireAdmin();
   const r = parseVideo(formData);
   if ("error" in r) return { error: r.error };
-  const video = await prisma.video.create({ data: r.data });
+  // 新しい動画は一覧の一番下に追加する（並び替えは一覧の ▲▼ で行う）
+  const last = await prisma.video.findFirst({ orderBy: { sortOrder: "desc" }, select: { sortOrder: true } });
+  const video = await prisma.video.create({ data: { ...r.data, sortOrder: (last?.sortOrder ?? 0) + 10 } });
   return { success: true, message: "動画を登録しました。", id: video.id };
 }
 
@@ -77,6 +76,30 @@ export async function updateVideo(_prev: unknown, formData: FormData) {
   if (!exists) return { error: "動画が見つかりません。" };
   await prisma.video.update({ where: { id }, data: r.data });
   return { success: true, message: "動画を更新しました。" };
+}
+
+/**
+ * 動画の並び替え（1つ上／1つ下へ）。
+ * series を渡すと、そのシリーズの中で隣の動画と入れ替える（シリーズのタブで絞り込んでいるとき用）。
+ * 入れ替えたあと、全動画の並び順を 10, 20, 30... に振り直す。
+ */
+export async function moveVideo(_prev: unknown, formData: FormData) {
+  await requireAdmin();
+  const id = String(formData.get("id") ?? "");
+  const dir = formData.get("dir") === "up" ? -1 : 1;
+  const series = formData.get("series");
+  const all = await prisma.video.findMany({ orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }], select: { id: true, series: true, sortOrder: true } });
+  const from = all.findIndex((v) => v.id === id);
+  if (from < 0) return { error: "動画が見つかりません。" };
+  // 入れ替える相手: 同じ絞り込みの中で、すぐ上（下）にある動画
+  let to = from + dir;
+  if (typeof series === "string") {
+    while (to >= 0 && to < all.length && all[to].series !== series) to += dir;
+  }
+  if (to < 0 || to >= all.length) return { success: true, message: "" }; // 端なので動かさない
+  [all[from], all[to]] = [all[to], all[from]];
+  await prisma.$transaction(all.map((v, i) => prisma.video.update({ where: { id: v.id }, data: { sortOrder: (i + 1) * 10 } })));
+  return { success: true, message: "" };
 }
 
 const questionSchema = z.object({

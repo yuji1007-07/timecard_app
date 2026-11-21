@@ -30,14 +30,13 @@ export default async function AdminVideosPage() {
       `長さ ${fmtDuration(v.durationSec)}`,
       ...(QUIZ_ENABLED ? [`テスト ${v._count.questions}問`] : []),
       ...(v.dueDate ? [`期限 ${fmtDueDate(v.dueDate)}`] : []),
-      `並び順 ${v.sortOrder}`,
     ].join("・"),
   }));
   return (
     <div>
       <PageHeader
         title={QUIZ_ENABLED ? "動画・テスト管理" : "動画管理"}
-        description="研修動画の登録・編集ができます。YouTube の URL を入れると、スタッフが視聴できるようになります。「シリーズ」を付けると、一覧をタブでまとめられます。"
+        description="研修動画の登録・編集ができます。YouTube の URL を入れると、スタッフが視聴できるようになります。「シリーズ」を付けると、一覧をタブでまとめられます。並び順は ▲▼ で入れ替えられます（スタッフの一覧も同じ順番になります）。"
       />
       <div className="mb-6">
         <NewVideoForm seriesOptions={seriesOptions} />
