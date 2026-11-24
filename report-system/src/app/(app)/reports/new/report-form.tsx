@@ -628,7 +628,8 @@ export function ReportForm({
             </div>
           ) : (
             <>
-              <div className={`hidden gap-2 border-b pb-2 text-xs font-medium text-muted-foreground md:grid ${isMonthly ? "md:grid-cols-[1.5fr_1fr_1fr_2fr]" : "md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]"}`}>
+              {/* スクロールしても列名が見えるよう画面上端に固定 */}
+              <div className={`hidden gap-2 border-b bg-card py-2 text-xs font-medium text-muted-foreground md:sticky md:top-0 md:z-10 md:grid ${isMonthly ? "md:grid-cols-[1.5fr_1fr_1fr_2fr]" : "md:grid-cols-[1.5fr_1fr_1fr_1fr_2fr]"}`}>
                 <div>KPI名</div>
                 {isMonthly ? (
                   <>

@@ -26,6 +26,11 @@ const KPI_CATEGORY_COLORS = [
   "bg-lime-100 text-lime-900",
 ];
 
+// 見出しの固定表示（PC・タブレット幅）。列名は画面上端、区分名はそのすぐ下に止まり、次の区分が来たら入れ替わる。
+// 背景を不透明にしないと下の行が透けて読みにくい。下線は sticky だと tr の罫線が付いてこないので影で描く
+const STICKY_HEAD = "md:sticky md:top-0 md:z-20 bg-muted shadow-[0_1px_0_hsl(var(--border))]";
+const STICKY_CATEGORY = "md:sticky md:top-10 md:z-10";
+
 type KpiValueRow = {
   id: string;
   kpiItemId: string;
@@ -156,22 +161,23 @@ export default async function ReportDetailPage({ params }: { params: Promise<{ i
             </p>
           </CardHeader>
           <CardContent className="p-0">
-            <Table>
+            {/* スクロールしても列名（先月実績・目標・現状…）と区分名が見えるよう、見出しを画面上端に固定する */}
+            <Table containerClassName="md:overflow-visible">
               <TableHeader>
                 <TableRow>
-                  <TableHead>KPI</TableHead>
-                  <TableHead className="text-right text-muted-foreground">先月実績</TableHead>
-                  <TableHead className="text-right">{isMonthly ? "予算" : "目標"}</TableHead>
-                  <TableHead className="text-right">{isMonthly ? "実績" : "現状"}</TableHead>
-                  {!isMonthly && <TableHead className="text-right">着地</TableHead>}
-                  <TableHead className="text-right">達成率</TableHead>
+                  <TableHead className={STICKY_HEAD}>KPI</TableHead>
+                  <TableHead className={`${STICKY_HEAD} text-right text-muted-foreground`}>先月実績</TableHead>
+                  <TableHead className={`${STICKY_HEAD} text-right`}>{isMonthly ? "予算" : "目標"}</TableHead>
+                  <TableHead className={`${STICKY_HEAD} text-right`}>{isMonthly ? "実績" : "現状"}</TableHead>
+                  {!isMonthly && <TableHead className={`${STICKY_HEAD} text-right`}>着地</TableHead>}
+                  <TableHead className={`${STICKY_HEAD} text-right`}>達成率</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {groupKpiValuesByCategory(report.kpiValues).map((g, gi) => (
                   <Fragment key={g.category}>
                     <TableRow className="border-0 hover:bg-transparent">
-                      <TableCell colSpan={isMonthly ? 5 : 6} className={`py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
+                      <TableCell colSpan={isMonthly ? 5 : 6} className={`${STICKY_CATEGORY} py-1.5 text-sm font-bold ${KPI_CATEGORY_COLORS[gi % KPI_CATEGORY_COLORS.length]}`}>
                         {g.category}
                       </TableCell>
                     </TableRow>

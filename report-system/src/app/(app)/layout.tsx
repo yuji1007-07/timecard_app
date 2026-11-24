@@ -57,7 +57,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </Link>
           <MobileMenu items={nav} userName={user.name ?? ""} roleName={label(ROLES, user.role)} />
         </header>
-        <main className="flex-1 overflow-x-hidden bg-background p-4 md:p-6">{children}</main>
+        {/* overflow-x-clip: 横のはみ出しは隠しつつ、表の見出しをスクロールに追従させる（hidden だと sticky が効かない） */}
+        <main className="flex-1 overflow-x-clip bg-background p-4 md:p-6">{children}</main>
       </div>
     </div>
   );
